@@ -3,55 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#10151c">
+  <meta name="theme-color" content="#10151c" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f1e8d6" media="(prefers-color-scheme: light)">
   <title>Waiting Games – KroxenStudios</title>
   <link rel="icon" href="Asphalt%20Arkade/images/asphalt_arkade.ico" sizes="any">
-  <style>
-    * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; }
-    body {
-      display: flex; flex-direction: column; align-items: center;
-      padding: 40px 16px 24px;
-      background: #2b2f34; color: #eceff2; font: 15px system-ui, sans-serif;
-    }
-    header { text-align: center; margin-bottom: 30px; }
-    .brand { color: #e10600; font-size: 14px; font-weight: 900; letter-spacing: 0.3em; text-transform: uppercase; }
-    h1 { margin: 6px 0 8px; font-size: clamp(30px, 6vw, 48px); color: #65e6a5; }
-    header p { margin: 0; color: #9eacba; font-size: 16px; }
-
-    .games {
-      width: 100%; max-width: 900px;
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;
-    }
-    .card {
-      display: flex; flex-direction: column; gap: 12px;
-      padding: 24px; border: 1px solid #2a2a2a; border-radius: 4px; background: #0a0a0a;
-      color: inherit; text-decoration: none;
-      transition: border-color .15s, transform .15s;
-    }
-    .card:hover, .card:focus-visible { border-color: #65e6a5; transform: translateY(-3px); outline: none; }
-    .thumb {
-      height: 130px; border-radius: 3px; border: 1px solid #2a2a2a;
-      display: grid; place-items: center; overflow: hidden;
-    }
-    .thumb img { height: 64px; width: auto; image-rendering: pixelated; border: 2px solid rgba(255,255,255,.2); }
-    .t-asphalt { background: linear-gradient(#5b5f64 0 38%, #a3a6a0 38% 46%, #49694d 46%); }
-    .t-matte   { background: linear-gradient(#7fa6bf, #cfdde3 55%, #49694d 55% 80%, #a3a6a0 80% 88%, #5b5f64 88%); }
-    .card h2 { margin: 0; font-size: 24px; color: #65e6a5; }
-    .card p { margin: 0; color: #9eacba; line-height: 1.45; flex: 1; }
-    .tags { display: flex; flex-wrap: wrap; gap: 6px; }
-    .tags span { padding: 2px 8px; border: 1px solid #2a2a2a; border-radius: 999px; font-size: 12px; color: #9eacba; }
-    .play {
-      margin-top: 4px; padding: 12px; text-align: center; font-weight: 800; letter-spacing: 0.04em;
-      background: #65e6a5; color: #0a0a0a; border-radius: 3px;
-    }
-    .card:hover .play { background: #8bf0be; }
-
-    footer { margin-top: 32px; font-size: 12px; color: #9eacba; opacity: .8; text-align: center; }
-    footer a { color: inherit; }
-  </style>
+  <link rel="stylesheet" href="styles.css">
+  <script>try { const t = localStorage.getItem("wg-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
+  <button class="theme-switch" id="themeSwitch" role="switch" aria-checked="false" aria-label="Farbschema wechseln"><span id="themeLabel">Dunkel</span><span class="track"></span></button>
   <header>
     <div class="brand">KroxenStudios</div>
     <h1>Waiting Games</h1>
@@ -62,7 +22,7 @@
     <a class="card" href="Asphalt%20Arkade/index.html">
       <div class="thumb t-asphalt"><img src="Asphalt%20Arkade/images/asphalt_arkade.png" alt=""></div>
       <h2>Asphalt Arkade</h2>
-      <p>Drifte durch eine riesige Stadt, sammle Geld, kaufe neue Autos und lass dich nicht von der Polizei erwischen.</p>
+      <p>Drifte durch eine riesige Stadt, sammle Geld, kaufe neue Autos und entkomme deinen Verfolgern.</p>
       <div class="tags"><span>Rennen</span><span>Drift</span><span>8 Autos</span></div>
       <div class="play">SPIELEN</div>
     </a>
@@ -70,8 +30,15 @@
     <a class="card" href="Mattenwurf/index.html">
       <div class="thumb t-matte"><img src="Mattenwurf/images/mattenwurf.png" alt=""></div>
       <h2>Mattenwurf</h2>
-      <p>Radle durch die Vorstadt und wirf Zeitungen auf die Fußmatte. Gartenzwerge und Fenster sind tabu – oder doch nicht?</p>
+      <p>Fahre durch die Vorstadt und liefer Zeitungen aus</p>
       <div class="tags"><span>Geschicklichkeit</span><span>Zielen</span><span>Upgrades</span></div>
+      <div class="play">SPIELEN</div>
+    </a>
+    <a class="card" href="e-scooter-klicker/index.html">
+      <div class="thumb t-scooter"><img src="e-scooter-klicker/images/escooter.png" alt=""></div>
+      <h2>E-Scooter Klicker</h2>
+      <p>Klicke den E-Scooter, baue deine Flotte auf und kaufe Power-ups</p>
+      <div class="tags"><span>Klicker</span><span>Idle</span><span>Power-ups</span></div>
       <div class="play">SPIELEN</div>
     </a>
   </main>
@@ -80,6 +47,28 @@
     © KroxenStudios · <a href="Asphalt%20Arkade/privacy.html">Datenschutz</a>
   </footer>
 
+  <script>
+    // Farbschema: Systemeinstellung als Vorgabe, Umschalter speichert die Wahl
+    (() => {
+      const root = document.documentElement, btn = document.getElementById('themeSwitch'), label = document.getElementById('themeLabel');
+      const mq = matchMedia('(prefers-color-scheme: light)');
+      const isLight = () => (root.dataset.theme || (mq.matches ? 'light' : 'dark')) === 'light';
+      const sync = () => {
+        const light = isLight();
+        btn.setAttribute('aria-checked', light);
+        label.textContent = light ? 'Beige' : 'Dunkelblau';
+        for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = light ? '#f1e8d6' : '#10151c';
+      };
+      btn.onclick = () => {
+        const t = isLight() ? 'dark' : 'light';
+        root.dataset.theme = t;
+        try { localStorage.setItem('wg-theme', t); } catch (e) {}
+        sync();
+      };
+      mq.addEventListener('change', sync);
+      sync();
+    })();
+  </script>
   <script>
     // GoatCounter: nur statisch ein Zaehlpixel fuer den Seitenaufruf (kein Skript, keine Cookies)
     (() => {

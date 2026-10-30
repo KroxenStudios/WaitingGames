@@ -36,7 +36,7 @@
         <span><kbd>F</kbd> Vollbild</span>
         <span><kbd>1–8</kbd> Auto</span>
       </div>
-      <p style="margin-top:14px;font-size:12px;opacity:.7"><a href="privacy.html" style="color:inherit">Datenschutz</a></p>
+      <p style="margin-top:14px;font-size:12px;opacity:.7"><a href="../index.html" style="color:inherit">← Spielauswahl (Esc)</a> · <a href="privacy.html" style="color:inherit">Datenschutz</a></p>
     </div>
   </div>
 
@@ -110,6 +110,7 @@
 
       <div class="settings-actions">
         <button id="settingsReset">Zurücksetzen</button>
+        <button id="settingsBack" onclick="location.href='../index.html'">Zur Spielauswahl</button>
         <button id="settingsClose" class="primary">Weiter (Esc)</button>
       </div>
     </div>
@@ -1511,6 +1512,7 @@
     addEventListener("keydown", event => {
       const key = event.key.toLowerCase();
 
+      if (key === "escape" && !started && !settingsOpen) { location.href = "../index.html"; return; }   // Startseite: zurück zur Spielauswahl
       if (key === "escape" || (key === "p" && started)) {
         if (started || settingsOpen) toggleSettings();
         return;

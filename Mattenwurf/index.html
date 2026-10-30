@@ -121,7 +121,7 @@ let state = 'menu', t = 0, shake = 0, camX = 0;
 let player = { x: 0 };
 let papers = [], popups = [], shards = [], parts = [], coinsFly = [], traffic = [];
 let left = 0, score = 0, streak = 0, coinsRound = 0, finishing = 0, trafficTimer = 0;
-let pending = null, hover = null, follow = 0, aimMsg = null, shout = null, voiceOn = false /* Sprachausgabe deaktiviert (Code bleibt erhalten) */, tickT = 0, birdT = 3;
+let pending = null, hover = null, follow = 0, aimMsg = null, shout = null, voiceOn = false /* Sprachausgabe deaktiviert (Code bleibt erhalten) */, tickT = 0, birdT = 3, escT = 0;
 let hudCoinPulse = 0;
 
 function startRound() {
@@ -218,7 +218,7 @@ function resolve(p) {
       if (w) {
         if (!w.broken) { w.broken = true; spawnShards(w.x, p.h, hs.zw); }
         sfx('glass'); award(-10, 'Fenster! -10', p, true); burst(p, '#bfe6ff', 10);
-        popups.push({ x: w.x, y: sy(hs.zw, 40) - 20, text: pick(Math.random, ['HEY!', 'Mein Fenster!', 'Na warte!', 'KLIRR!']), life: 1.6, good: false, bad: false });
+        popups.push({ x: w.x, y: sy(hs.zw, 40) - 20, text: pick(Math.random, ['HEY!', 'Mein Fenster!', 'Na warte!', 'KLIRR!', 'Oh, eine Zeitung', 'AAAAAHHH', 'Da ist ja meine Zeitung...', 'Ahh ein EINBRECHER!!!', 'Das wird Teuer', 'Warum immer ich?', '*Keine Reaktion*']), life: 1.6, good: false, bad: false });
         return true;
       }
       sfx('wall'); award(0, 'Wand', p, true); burst(p, '#f4f1e8', 5); return true;
@@ -261,9 +261,9 @@ function resolve(p) {
 }
 function award(pts, text, p, breaks) {
   if (breaks) { streak = 0; if (pts < 0) shake = 8; }
-  if (pts < 0) say(pick(Math.random, ['Ups!', 'Autsch!', 'Hoppla!', 'Sorry', 'Viel spass damit', 'Schwerkraft wars', 'Hat niemand gesehen...', 'Dann halt so', 'Knapp verfehlt ist auch vorbei..']));
-  else if (pts === 0 && breaks) say(pick(Math.random, ['Mist!', 'Daneben!', 'Och nö!', 'Oder auch nicht...', ]));
-  else if (pts >= 20) say(pick(Math.random, ['Volltreffer!', 'Jawoll!', 'Schwupp!', 'Treffer, versenkt', 'Bamm']));
+  if (pts < 0) say(pick(Math.random, ['ups', 'Autsch', 'Hoppla', 'Sorry', 'oh oh', 'Hat niemand gesehen...', 'Beim nächsten mal vielleicht', 'Zeitung - Geliefert bis in ihre Wohnung', 'War ich nicht!']));
+  else if (pts === 0 && breaks) say(pick(Math.random, ['fast', 'Daneben!', 'ach ne', 'Oder auch nicht...', ]));
+  else if (pts >= 20) say(pick(Math.random, ['Volltreffer!', 'Perfekt', 'Treffer, versenkt', 'Endlich...']));
   score = Math.max(0, score + pts);
   if (pts > 0) {
     const c = Math.ceil(pts / 10);
@@ -291,6 +291,7 @@ function update(dt) {
     player.x += SPEED * dt;
     camX = player.x - PLAYER_SCREEN_X;
     if (follow > 0) follow -= dt;
+    if (escT > 0) escT -= dt;
     if ((tickT -= dt) <= 0) { tickT = 0.16; sfx('tick'); }
     if ((birdT -= dt) <= 0) { birdT = 4 + Math.random() * 6; sfx('bird'); }
     if (pending && !pending.shouted && (pending.xrel - player.x) / SPEED <= WIND + SWING + 0.05) { pending.shouted = true; say(pick(Math.random, THROW_CALLS), true); }
@@ -833,7 +834,7 @@ function drawHUD() {
   for (let i = 0; i < Math.min(left, 16); i++) paperSprite(480 + (i % 8) * 17, 18 + Math.floor(i / 8) * 17, 0, 0.8);
   ctx.textAlign = 'right'; ctx.fillStyle = PAL.dim; ctx.font = '600 10px system-ui'; ctx.fillText('REKORD', W - 18, 18);
   ctx.fillStyle = '#eceff2'; ctx.font = 'bold 22px system-ui'; ctx.fillText(String(save.best), W - 18, 42);
-  text('Klick / Tippen auf den Boden = Ziel  ·  Wurf startet automatisch  ·  N Musik', W / 2, H - 14, 12, PAL.dim);
+  text('Klick / Tippen auf den Boden = Ziel  ·  Wurf startet automatisch  ·  N Musik  ·  Esc Auswahl', W / 2, H - 14, 12, PAL.dim);
   if (aimMsg) { ctx.globalAlpha = Math.min(1, aimMsg.life * 2); ctx.lineWidth = 4; ctx.strokeStyle = '#0a0a0a'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'center'; ctx.strokeText(aimMsg.text, aimMsg.x, aimMsg.y - 16); ctx.fillStyle = '#ff8a80'; ctx.fillText(aimMsg.text, aimMsg.x, aimMsg.y - 16); ctx.globalAlpha = 1; }
   // Popups mit dunkler Kontur
   ctx.textAlign = 'center'; ctx.font = 'bold 20px system-ui'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
@@ -882,6 +883,7 @@ function drawMenu() {
   text('Das Wurftempo schwankt leicht – Upgrade: ruhige Hand.', W / 2, 332, 13, PAL.dim);
   btn('start', 'SPIEL STARTEN', 330, 352, 300, 44, true);
   btn('music', 'Musik: ' + (musicOn ? 'an' : 'aus'), 330, 408, 300, 28, false);
+  text('Esc = zurück zur Spielauswahl', W / 2, 452, 11, PAL.dim);
   text('Rekord ' + save.best + '   ·   Münzen ' + save.coins, W / 2, 462, 13, PAL.gold);
 }
 function drawEnd() {
@@ -944,6 +946,11 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyN') { toggleMusic(); return; }
   if (e.code === 'KeyF') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); return; }
   if (e.repeat) return;
+  if (e.code === 'Escape') {
+    if (state !== 'play' || (escT > 0)) { location.href = '../index.html'; return; }
+    escT = 2; aimMsg = { text: 'Esc nochmal = zurück zur Auswahl', x: W / 2, y: 120, life: 2 };
+    return;
+  }
   if (e.code === 'Space') { e.preventDefault(); press(); }
   if (state === 'end') { if (e.key === '1') buyBag(); if (e.key === '2') buyAim(); }
 });

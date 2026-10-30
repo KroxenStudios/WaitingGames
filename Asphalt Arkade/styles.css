@@ -12,7 +12,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 8px;
-  background: #2b2f34;
+  background: #10151c;
   color: #eceff2;
   font: 15px system-ui, sans-serif;
   --menu-font: "Bahnschrift", "DIN Alternate", "Helvetica Neue", Arial, sans-serif;
@@ -771,7 +771,7 @@ body.edge .screen-buttons {
   place-content: center;
   justify-items: center;
   gap: 22px;
-  background: #2b2f34;
+  background: #10151c;
   pointer-events: none;
   animation: splash-out 0.6s ease 2.2s forwards;
 }

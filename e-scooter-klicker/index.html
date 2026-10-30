@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="theme-color" content="#10151c">
+<title>E-Scooter Klicker</title>
+<link rel="icon" href="images/escooter.png">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #10151c; color: #eceff2; font: 15px system-ui, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden; user-select: none;
+  }
+  .top { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid #2a2a2a; background: #0a0a0a; }
+  .top a { color: #9eacba; text-decoration: none; font-size: 13px; }
+  .top a:hover { color: #65e6a5; }
+  .top b { color: #e10600; letter-spacing: .2em; font-size: 12px; text-transform: uppercase; margin-left: auto; }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 1.2fr) minmax(260px, 340px); }
+  section { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  /* Klickbereich */
+  .click { align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center; border-right: 1px solid #2a2a2a; }
+  .count { font-size: clamp(34px, 6vw, 56px); font-weight: 900; color: #65e6a5; line-height: 1; }
+  .label { color: #9eacba; font-size: 14px; }
+  .ps { color: #ffd166; font-weight: 700; }
+  #btn {
+    position: relative; width: min(300px, 70vw); aspect-ratio: 1; border: 4px solid #65e6a5; border-radius: 50%;
+    background: #fff url(images/escooter.png) center / 118% no-repeat; cursor: pointer; padding: 0;
+    box-shadow: 0 0 0 0 #65e6a555; transition: transform .06s;
+  }
+  #btn:hover { box-shadow: 0 0 28px 4px #65e6a544; }
+  #btn:active, #btn.press { transform: scale(.94); }
+  .pop { position: fixed; pointer-events: none; font-weight: 900; color: #65e6a5; text-shadow: 0 1px 3px #000; animation: pop .8s ease-out forwards; z-index: 10; }
+  @keyframes pop { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-60px); } }
+  /* Flotte */
+  .fleet { border-right: 1px solid #2a2a2a; background: linear-gradient(#1b2530, #2b3540 60%, #4a4f55 60% 64%, #5b5f64 64%); position: relative; }
+  .fleet h3 { margin: 0; padding: 10px 14px; font-size: 13px; color: #9eacba; position: relative; z-index: 2; background: #0a0a0acc; }
+  #field { position: absolute; inset: 38px 0 0 0; overflow: hidden; }
+  #field img { position: absolute; width: 44px; height: auto; mix-blend-mode: screen; filter: invert(1) hue-rotate(180deg); animation: drop .35s ease-out; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-120px); } to { opacity: 1; transform: none; } }
+  /* Shop */
+  .shop { padding: 12px; gap: 8px; overflow-y: auto; background: #0a0a0a; }
+  .shop h3 { margin: 0 0 2px; font-size: 14px; color: #65e6a5; }
+  .up {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; text-align: left; padding: 10px 12px; width: 100%;
+    background: #10151c; color: inherit; border: 1px solid #2a2a2a; border-radius: 4px; cursor: pointer; font: inherit;
+  }
+  .up:hover:not(:disabled) { border-color: #65e6a5; }
+  .up:disabled { opacity: .45; cursor: not-allowed; }
+  .up .n { font-weight: 800; }
+  .up .c { color: #ffd166; font-weight: 800; text-align: right; }
+  .up .d { grid-column: 1 / 2; color: #9eacba; font-size: 12px; }
+  .up .o { color: #65e6a5; font-weight: 800; text-align: right; }
+  .tabs { display: flex; gap: 6px; }
+  .tab { flex: 1; padding: 8px; background: #10151c; color: #9eacba; border: 1px solid #2a2a2a; border-radius: 4px; cursor: pointer; font: inherit; font-weight: 800; }
+  .tab.on { color: #0a0a0a; background: #65e6a5; border-color: #65e6a5; }
+  .ms { padding: 10px 12px; border: 1px solid #2a2a2a; border-radius: 4px; background: #10151c; margin-bottom: 8px; }
+  .ms h4 { margin: 0 0 4px; font-size: 14px; color: #ffd166; }
+  .ms p { margin: 0; color: #c4ced8; font-size: 13px; line-height: 1.45; }
+  .ms.locked { opacity: .5; }
+  .ms.locked h4 { color: #9eacba; }
+  .ms .goal { color: #9eacba; font-size: 12px; margin-top: 4px; }
+  .earth { margin: 0 0 10px; font-size: 12px; color: #9eacba; }
+  .earth i { display: block; height: 6px; margin-top: 4px; background: #2a2a2a; border-radius: 3px; overflow: hidden; }
+  .earth i b { display: block; height: 100%; background: #65e6a5; }
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 50; max-width: min(92vw, 420px); padding: 12px 16px; background: #0a0a0a; border: 2px solid #ffd166; border-radius: 4px; box-shadow: 0 4px 20px #000a; animation: toast 5s ease forwards; cursor: pointer; }
+  .toast b { color: #ffd166; display: block; }
+  .toast span { color: #c4ced8; font-size: 13px; }
+  @keyframes toast { 0% { opacity: 0; transform: translate(-50%, 30px); } 8%, 88% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, 0); } }
+  .reset { margin-top: auto; background: none; border: 1px solid #2a2a2a; color: #9eacba; padding: 6px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; grid-template-rows: auto 22vh 1fr; overflow-y: auto; }
+    .click { border-right: 0; border-bottom: 1px solid #2a2a2a; padding: 10px; }
+    #btn { width: min(180px, 40vw); }
+    .fleet { border-right: 0; border-bottom: 1px solid #2a2a2a; }
+  }
+  /* Start-Overlay "KroxenStudios" (wie in den anderen Waiting Games) */
+  .splash { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 22px; background: #10151c; pointer-events: none; animation: splash-out 0.6s ease 2.2s forwards; }
+  .splash-name { color: #e10600; font-size: clamp(32px, 9vw, 84px); font-weight: 900; letter-spacing: 0.08em; animation: splash-in 0.9s ease both; }
+  .splash-bar { width: clamp(140px, 30vw, 320px); height: 3px; background: #e1060033; overflow: hidden; }
+  .splash-bar i { display: block; width: 100%; height: 100%; background: #e10600; transform-origin: left; animation: splash-load 2s ease-in-out both; }
+  @keyframes splash-in { from { opacity: 0; letter-spacing: 0.3em; } to { opacity: 1; letter-spacing: 0.08em; } }
+  @keyframes splash-load { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes splash-out { to { opacity: 0; visibility: hidden; } }
+</style>
+</head>
+<body>
+<div class="splash" aria-hidden="true">
+  <div class="splash-name">KroxenStudios</div>
+  <div class="splash-bar"><i></i></div>
+</div>
+<div class="top"><a href="../index.html">&larr; Waiting Games</a><b>KroxenStudios</b></div>
+<main>
+  <section class="click">
+    <div class="label">E-Scooter</div>
+    <div class="count" id="count">0</div>
+    <div class="label"><span class="ps" id="ps">0</span> pro Sekunde &middot; <span id="pc">1</span> pro Klick</div>
+    <button id="btn" aria-label="E-Scooter klicken"></button>
+  </section>
+  <section class="fleet">
+    <h3>Deine Flotte</h3>
+    <div id="field"></div>
+  </section>
+  <section class="shop">
+    <div class="tabs">
+      <button class="tab on" id="tabShop">Power-ups</button>
+      <button class="tab" id="tabMs">Meilensteine <span id="msCount"></span></button>
+    </div>
+    <div id="shop"></div>
+    <div id="msPanel" hidden></div>
+    <button class="reset" id="reset">Spielstand zurücksetzen</button>
+  </section>
+</main>
+<script>
+"use strict";
+// ================= Konfiguration =================
+// base: Grundpreis, grow: Preisfaktor je Kauf, cps: Scooter pro Sekunde je Stueck
+const UPS = [
+  { id: 'click',  name: 'Kräftiger Kick',     desc: '+1 Scooter pro Klick',               base: 15,      grow: 1.6,  click: 1 },
+  { id: 'click2', name: 'Turbo-Motor',        desc: '+5 Scooter pro Klick',               base: 500,     grow: 1.7,  click: 5 },
+  { id: 'intern', name: 'Praktikant',         desc: 'Schraubt 0,5 Scooter pro Sekunde',   base: 40,      grow: 1.15, cps: 0.5 },
+  { id: 'lader',  name: 'Ladestation',        desc: '3 Scooter pro Sekunde',              base: 250,     grow: 1.15, cps: 3 },
+  { id: 'sharing',name: 'Sharing-Flotte',     desc: '15 Scooter pro Sekunde',             base: 1500,    grow: 1.15, cps: 15 },
+  { id: 'werk',   name: 'Scooter-Fabrik',     desc: '80 Scooter pro Sekunde',             base: 9000,    grow: 1.15, cps: 80 },
+  { id: 'giga',   name: 'Gigafactory',        desc: '500 Scooter pro Sekunde',            base: 60000,   grow: 1.15, cps: 500 },
+  { id: 'mond',   name: 'Mond-Werkstatt',     desc: '4.000 Scooter pro Sekunde',          base: 500000,  grow: 1.15, cps: 4000 },
+];
+
+// Meilensteine: werden einmalig freigeschaltet und sind danach nachlesbar.
+// total = insgesamt produzierte Scooter, own(id) = Anzahl gekaufter Power-ups.
+const EARTH = 1e15;   // Scooter, die die gesamte Erdoberflaeche (510 Mio. km2) bedecken
+const MS = [
+  { id: 'first',  total: 1,     title: 'Der erste Scooter',        text: 'Aus einer Idee wird ein Fahrzeug. Er rollt noch wackelig, aber er rollt.' },
+  { id: 'garage', total: 100,   title: 'Garagen-Startup',          text: 'Hundert Scooter stehen in der Garage. Die Nachbarn beschweren sich schon über den Lärm.' },
+  { id: 'intern', own: ['intern', 1], title: 'Erster Mitarbeiter', text: 'Ein Praktikant schraubt für Kaffee und Ruhm. Er nennt es „Erfahrung“.' },
+  { id: 'hall',   total: 1e3,   title: 'Eigene Werkshalle',        text: 'Die Garage ist zu klein. Du ziehst in eine Halle mit echtem Förderband.' },
+  { id: 'manu',   own: ['lader', 1], title: 'Manufaktur',         text: 'Handarbeit trifft Ladestation. Jeder Scooter bekommt ein Qualitätssiegel – handgeklebt.' },
+  { id: 'city',   total: 1e4,   title: 'Stadtgespräch',            text: 'Die ganze Stadt fährt E-Scooter. Der Bürgermeister fordert Parkzonen.' },
+  { id: 'share',  own: ['sharing', 1], title: 'Sharing-Imperium',  text: 'Per App entsperren, überall stehen lassen. Gehwege werden zu Parkplätzen.' },
+  { id: 'fab',    own: ['werk', 1], title: 'Industrielle Fertigung', text: 'Die erste vollautomatische Fabrik läuft rund um die Uhr. Ein Scooter pro Sekunde, dann zwei, dann zehn.' },
+  { id: 'nat',    total: 1e5,   title: 'Nationale Mobilitätswende', text: 'Das Verkehrsministerium streicht den Begriff „Auto“ aus dem Entwurf. Fußgänger fordern Gehwege zurück.' },
+  { id: 'glob',   total: 1e6,   title: 'Globale Produktion',       text: 'Werke auf allen Kontinenten. Die Lieferketten reichen einmal um den Planeten und zurück.' },
+  { id: 'giga',   own: ['giga', 1], title: 'Gigafactory',         text: 'Eine Fabrik so groß, dass sie ein eigenes Wetter hat. Drinnen regnet es manchmal Schrauben.' },
+  { id: 'mil10',  total: 1e7,   title: 'Zehn Millionen',           text: 'Es gibt jetzt mehr Scooter als Menschen in manchen Ländern. Rechnerisch fährt jeder dort zweimal.' },
+  { id: 'traffic',total: 1e8,   title: 'Der Verkehr kippt',        text: 'Autos sind im Stau eingekeilt, Scooter fahren drumherum. Die Autobahn wird zur Scooterspur.' },
+  { id: 'moon',   own: ['mond', 1], title: 'Mond-Werkstatt',      text: 'Geringe Schwerkraft, hohe Sprünge. Der erste Mondscooter springt 40 Meter weit.' },
+  { id: 'bill',   total: 1e9,   title: 'Eine Milliarde',           text: 'Jeder achte Mensch besitzt einen Scooter. Die Ladekabel-Industrie feiert Rekordumsätze.' },
+  { id: 'trill',  total: 1e12,  title: 'Billionen-Marke',          text: 'Scooter stapeln sich auf Dächern, in Seen und in Wohnzimmern. Statistiker hören auf zu zählen.' },
+  { id: 'land',   total: EARTH * 0.29, title: 'Alle Kontinente bedeckt', text: 'Das gesamte Festland ist unter einer Schicht aus E-Scootern verschwunden. Die Ozeane sind als Nächstes dran.' },
+  { id: 'earth',  total: EARTH, title: 'Die Erde ist zu 100 % mit E-Scootern bedeckt', text: 'Von den Polen bis zum Äquator – nur noch Lenker und Trittbretter. Aus dem All sieht der Planet jetzt schwarz-türkis aus. Du hast gewonnen. Oder verloren. Schwer zu sagen.' },
+  { id: 'beyond', total: EARTH * 1e3, title: 'Interplanetarer Marktführer', text: 'Mars, Venus und Jupitermonde: überall rollt es. Die Galaxie wartet.' },
+];
+const msDone = m => m.total ? save.total >= m.total : owned(UPS.find(u => u.id === m.own[0])) >= m.own[1];
+
+// ================= Speicherstand =================
+let stored = {};
+try { stored = JSON.parse(localStorage.getItem('escooterklicker') || '{}'); } catch (e) {}
+const save = Object.assign({ n: 0, total: 0, own: {}, ms: {} }, stored);
+const persist = () => { try { localStorage.setItem('escooterklicker', JSON.stringify(save)); } catch (e) {} };
+
+const owned = u => save.own[u.id] || 0;
+const cost = u => Math.ceil(u.base * Math.pow(u.grow, owned(u)));
+const perClick = () => 1 + UPS.reduce((s, u) => s + (u.click || 0) * owned(u), 0);
+const perSec = () => UPS.reduce((s, u) => s + (u.cps || 0) * owned(u), 0);
+
+const fmt = n => {
+  if (n < 1e4) return Math.floor(n).toLocaleString('de-DE');
+  const s = ['', 'Tsd', 'Mio', 'Mrd', 'Bio', 'Brd'];
+  let i = 0; while (n >= 1000 && i < s.length - 1) { n /= 1000; i++; }
+  return n.toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' ' + s[i];
+};
+
+// ================= Flotte =================
+const field = document.getElementById('field');
+const MAX_VISIBLE = 160;
+let shown = 0;
+function addScooter(animate) {
+  const w = field.clientWidth || 300, h = field.clientHeight || 300;
+  const img = document.createElement('img');
+  img.src = 'images/escooter.png'; img.alt = '';
+  const y = Math.random();
+  img.style.left = Math.random() * Math.max(10, w - 44) + 'px';
+  img.style.top = (h * 0.35 + y * (h * 0.65 - 40)) + 'px';
+  img.style.zIndex = Math.round(y * 100);
+  img.style.width = (34 + y * 22) + 'px';
+  if (!animate) img.style.animation = 'none';
+  field.appendChild(img);
+  if (++shown > MAX_VISIBLE) { field.removeChild(field.firstChild); shown--; }
+}
+function syncFleet(animate) {
+  const want = Math.min(MAX_VISIBLE, Math.floor(save.n));
+  while (shown < want) addScooter(animate);
+}
+
+// ================= UI =================
+const $ = id => document.getElementById(id);
+const shop = $('shop');
+const rows = UPS.map(u => {
+  const b = document.createElement('button');
+  b.className = 'up';
+  b.innerHTML = '<span class="n"></span><span class="c"></span><span class="d"></span><span class="o"></span>';
+  b.onclick = () => {
+    const c = cost(u);
+    if (save.n < c) return;
+    save.n -= c; save.own[u.id] = owned(u) + 1;
+    persist(); render();
+  };
+  shop.appendChild(b);
+  return { u, b, n: b.children[0], c: b.children[1], d: b.children[2], o: b.children[3] };
+});
+function render() {
+  $('count').textContent = fmt(save.n);
+  $('ps').textContent = fmt(perSec());
+  $('pc').textContent = fmt(perClick());
+  for (const r of rows) {
+    r.n.textContent = r.u.name;
+    r.c.textContent = fmt(cost(r.u));
+    r.d.textContent = r.u.desc;
+    r.o.textContent = owned(r.u) ? '×' + owned(r.u) : '';
+    r.b.disabled = save.n < cost(r.u);
+  }
+  document.title = fmt(save.n) + ' E-Scooter';
+  checkMs(); renderMs();
+}
+
+// ================= Meilensteine =================
+const msPanel = $('msPanel');
+const showTab = ms => {
+  $('tabShop').classList.toggle('on', !ms); $('tabMs').classList.toggle('on', ms);
+  shop.hidden = ms; msPanel.hidden = !ms; msKey = ''; renderMs();
+};
+$('tabShop').onclick = () => showTab(false);
+$('tabMs').onclick = () => showTab(true);
+
+function toast(m) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.innerHTML = '<b></b><span>Meilenstein erreicht – nachzulesen unter „Meilensteine“.</span>';
+  t.firstChild.textContent = '🏆 ' + m.title;
+  t.onclick = () => { showTab(true); t.remove(); };
+  document.body.appendChild(t); setTimeout(() => t.remove(), 5000);
+}
+let msKey = '';
+function renderMs() {
+  const done = MS.filter(m => save.ms[m.id]).length;
+  $('msCount').textContent = '(' + done + '/' + MS.length + ')';
+  if (msPanel.hidden) return;
+  const pct = Math.min(100, save.total / EARTH * 100);
+  const key = done + '|' + pct.toFixed(2);
+  if (key === msKey) return;
+  msKey = key;
+  let h = '<div class="earth">Erdoberfläche bedeckt: ' + (pct < 0.01 && pct > 0 ? '<0,01' : pct.toLocaleString('de-DE', { maximumFractionDigits: 2 })) + ' %<i><b style="width:' + pct + '%"></b></i></div>';
+  for (const m of MS) {
+    if (save.ms[m.id]) { h += '<div class="ms"><h4>🏆 ' + m.title + '</h4><p>' + m.text + '</p></div>'; continue; }
+    const goal = m.total ? fmt(m.total) + ' Scooter produzieren' : m.own[1] + '× ' + UPS.find(u => u.id === m.own[0]).name + ' kaufen';
+    h += '<div class="ms locked"><h4>🔒 ???</h4><div class="goal">' + goal + '</div></div>';
+  }
+  msPanel.innerHTML = h;
+}
+function checkMs() {
+  let hit = false;
+  for (const m of MS) if (!save.ms[m.id] && msDone(m)) { save.ms[m.id] = 1; toast(m); hit = true; }
+  if (hit) persist();
+  return hit;
+}
+
+function gain(x) { save.n += x; save.total += x; }
+const btn = $('btn');
+btn.addEventListener('pointerdown', e => {
+  const x = perClick();
+  gain(x);
+  syncFleet(true);
+  const p = document.createElement('div');
+  p.className = 'pop'; p.textContent = '+' + fmt(x);
+  p.style.left = (e.clientX - 8 + (Math.random() * 30 - 15)) + 'px'; p.style.top = (e.clientY - 20) + 'px';
+  document.body.appendChild(p); setTimeout(() => p.remove(), 800);
+  render();
+});
+btn.addEventListener('keydown', e => {   // Tastatur: Leertaste/Enter
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) { gain(perClick()); syncFleet(true); render(); } }
+});
+$('reset').onclick = () => {
+  if (!confirm('Spielstand wirklich löschen?')) return;
+  save.n = 0; save.total = 0; save.own = {}; save.ms = {}; field.innerHTML = ''; shown = 0; persist(); render();
+};
+
+// Spiel-Tick: Scooter pro Sekunde
+let last = performance.now(), acc = 0, saveT = 0;
+setInterval(() => {
+  const now = performance.now(), dt = Math.min(1, (now - last) / 1000); last = now;
+  const ps = perSec();
+  if (ps > 0) { gain(ps * dt); acc += dt; }
+  saveT += dt;
+  if (saveT > 3) { saveT = 0; persist(); }
+  syncFleet(true); render();
+}, 100);
+addEventListener('beforeunload', persist);
+
+syncFleet(false); render();
+</script>
+<script>
+// GoatCounter: nur statisch ein Zaehlpixel fuer den Seitenaufruf (kein Skript, keine Cookies, keine Spielereignisse)
+(() => {
+  const h = location.hostname;
+  if (!/^https?:$/.test(location.protocol) || h === 'localhost' || h === '127.0.0.1') return;
+  new Image().src = 'https://kroxenstudios.goatcounter.com/count?p=' + encodeURIComponent('/e-scooter-klicker') + '&rnd=' + Math.random().toString(36).slice(2);
+})();
+</script>
+</body>
+</html>

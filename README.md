@@ -1,4 +1,4 @@
 # WaitingGames
-Work-in-progress.
+Work-in-progress collection of simple browser games.
 
 Aktuell nur auf Deutsch.

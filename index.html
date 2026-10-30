@@ -1718,7 +1718,7 @@
     // ---------- Sound ----------
     // Alles wird live per WebAudio erzeugt (keine Audiodateien, keine Lizenzfragen - frei nutzbar, CC0).
     const sfx = (() => {
-      let ac = null, master, engOsc, engOsc2, engGain, skidGain, sirenOsc, sirenGain, noiseBuf;
+      let ac = null, master, engOsc, engOsc2, engGain, ignGain, ignLfo, ignOut, skidGain, sirenOsc, sirenGain, noiseBuf;
       const ok = () => ac && settings.sound;
 
       function init() {
@@ -1727,17 +1727,27 @@
         if (!AC) return;
         ac = new AC();
         master = ac.createGain(); master.connect(ac.destination);
-        // Motor: Sägezahn + Rechteck durch Tiefpass
-        const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1800;
-        engGain = ac.createGain(); engGain.gain.value = 0;
-        engOsc = ac.createOscillator(); engOsc.type = "sawtooth";
-        engOsc2 = ac.createOscillator(); engOsc2.type = "square";
-        engOsc.connect(lp); engOsc2.connect(lp); lp.connect(engGain); engGain.connect(master);
-        engOsc.start(); engOsc2.start();
-        // Rauschen für Reifenquietschen und Aufprall
+        // Rauschen für Zündung, Reifenquietschen und Aufprall
         noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
         const d = noiseBuf.getChannelData(0);
         for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        // Motor, tiefer Teil: Sägezahn (Grundbrummen) + Sinus eine Oktave darunter, durch Tiefpass
+        const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 420;
+        engGain = ac.createGain(); engGain.gain.value = 0;
+        engOsc = ac.createOscillator(); engOsc.type = "sawtooth";
+        engOsc2 = ac.createOscillator(); engOsc2.type = "sine";
+        engOsc.connect(lp); engOsc2.connect(lp); lp.connect(engGain); engGain.connect(master);
+        engOsc.start(); engOsc2.start();
+        // Zündung: mittelhohes Rauschen, im Takt der Zündungen ein- und ausgeblendet (knatternd)
+        const ign = ac.createBufferSource(); ign.buffer = noiseBuf; ign.loop = true;
+        const ibp = ac.createBiquadFilter(); ibp.type = "bandpass"; ibp.frequency.value = 1400; ibp.Q.value = 1.2;
+        ignGain = ac.createGain(); ignGain.gain.value = 0.5;
+        ignLfo = ac.createOscillator(); ignLfo.type = "square";
+        const lfoDepth = ac.createGain(); lfoDepth.gain.value = 0.5;
+        ignLfo.connect(lfoDepth); lfoDepth.connect(ignGain.gain);
+        ignOut = ac.createGain(); ignOut.gain.value = 0;
+        ign.connect(ibp); ibp.connect(ignGain); ignGain.connect(ignOut); ignOut.connect(master);
+        ign.start(); ignLfo.start();
         const skid = ac.createBufferSource(); skid.buffer = noiseBuf; skid.loop = true;
         const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1800; bp.Q.value = 3;
         skidGain = ac.createGain(); skidGain.gain.value = 0;
@@ -1754,10 +1764,13 @@
         const t = ac.currentTime, on = settings.sound;
         master.gain.setTargetAtTime(on ? settings.volume : 0, t, 0.05);
         const r = clamp(speedRatio, 0, 1.3);
-        const f = 110 + r * 280;
+        const f = 38 + r * 80;                      // tiefes Brummen
+        const fire = 9 + r * 30;                    // Zündungen pro Sekunde
         engOsc.frequency.setTargetAtTime(f, t, 0.08);
-        engOsc2.frequency.setTargetAtTime(f * 1.005, t, 0.08);
-        engGain.gain.setTargetAtTime(started ? 0.1 + r * 0.12 : 0, t, 0.1);
+        engOsc2.frequency.setTargetAtTime(f * 0.5, t, 0.08);
+        ignLfo.frequency.setTargetAtTime(fire, t, 0.08);
+        engGain.gain.setTargetAtTime(started ? 0.22 + r * 0.14 : 0, t, 0.1);
+        ignOut.gain.setTargetAtTime(started ? 0.05 + r * 0.07 : 0, t, 0.1);
         skidGain.gain.setTargetAtTime(sliding > 0 ? Math.min(0.2, sliding * 0.25) : 0, t, 0.06);
         // Sirene: Hi-Lo-Ton, Lautstärke nach Abstand des nächsten Verfolgers
         if (siren > 0) {

@@ -1,2 +1,4 @@
 # WaitingGames
-side projects
+Work-in-progress.
+
+Aktuell nur auf Deutsch.

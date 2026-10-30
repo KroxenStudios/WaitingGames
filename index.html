@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
@@ -21,12 +21,11 @@
     <div class="start-card">
       <div class="start-logo">🏁</div>
       <h1>Asphalt Arkade</h1>
-      <p class="tagline">Drifte durch eine riesige Stadt, sammle Geld und kaufe dir deinen Traumwagen.</p>
+      <p class="tagline">Drifte durch eine Stadt und sammle Geld.</p>
       <ul class="start-features">
         <li><b>8 Autos</b> vom Kleinwagen bis zur Rakete</li>
         <li><b>Riesige Welt</b> mit Stadt, Wäldern und viel Verkehr</li>
         <li><b>Verfolgungsjagd:</b> Du wirst verfolgt – je länger du überlebst, desto mehr Punkte</li>
-        <li><b>Drift-Kombos</b> – das Auto driftet immer, die Leertaste ist die Handbremse</li>
       </ul>
       <button class="start-button" id="startButton">SPIEL STARTEN</button>
       <div class="start-controls">
@@ -168,7 +167,7 @@
 
       <div class="crash-overlay" id="crashOverlay" aria-live="polite">
         <div class="fireball">🔥</div>
-        <strong>BOOM!</strong>
+        <strong>BUMM</strong>
         <span>Respawn läuft …</span>
       </div>
 
@@ -207,14 +206,14 @@
     const creditsDisplay = document.querySelector("#credits");
 
     const cars = [
-      { name: "Kleinwagen",    color: "#57d6a1", maxSpeed: 190, accel: 0.12, turn: 0.047, grip: 0.91, price: 0 },
-      { name: "Limousine",     color: "#68a8ff", maxSpeed: 230, accel: 0.10, turn: 0.040, grip: 0.93, price: 2500 },
-      { name: "Sportwagen",    color: "#ff6868", maxSpeed: 290, accel: 0.16, turn: 0.055, grip: 0.88, price: 7500 },
-      { name: "Muscle Car",    color: "#ff9d3c", maxSpeed: 320, accel: 0.20, turn: 0.044, grip: 0.86, price: 18000 },
-      { name: "Rallye-Auto",   color: "#f2f5f8", maxSpeed: 300, accel: 0.18, turn: 0.062, grip: 0.90, price: 40000 },
-      { name: "Supersportler", color: "#d68cff", maxSpeed: 360, accel: 0.22, turn: 0.052, grip: 0.89, price: 90000 },
-      { name: "Hypercar",      color: "#ffe14d", maxSpeed: 410, accel: 0.26, turn: 0.050, grip: 0.90, price: 200000 },
-      { name: "Rakete",        color: "#4df0ff", maxSpeed: 480, accel: 0.32, turn: 0.048, grip: 0.92, price: 500000 }
+      { name: "Kleinwagen",    color: "#57d6a1", maxSpeed: 190, accel: 0.09, turn: 0.047, grip: 0.91, price: 0 },
+      { name: "Limousine",     color: "#68a8ff", maxSpeed: 230, accel: 0.10, turn: 0.040, grip: 0.93, price: 250 },
+      { name: "Sportwagen",    color: "#ff6868", maxSpeed: 290, accel: 0.16, turn: 0.055, grip: 0.88, price: 750 },
+      { name: "Muscle Car",    color: "#ff9d3c", maxSpeed: 320, accel: 0.20, turn: 0.044, grip: 0.86, price: 1800 },
+      { name: "Rallye-Auto",   color: "#f2f5f8", maxSpeed: 300, accel: 0.18, turn: 0.062, grip: 0.90, price: 4000 },
+      { name: "Supersportler", color: "#d68cff", maxSpeed: 360, accel: 0.22, turn: 0.052, grip: 0.89, price: 9000 },
+      { name: "Hypercar",      color: "#ffe14d", maxSpeed: 410, accel: 0.26, turn: 0.050, grip: 0.90, price: 20000 },
+      { name: "Rakete",        color: "#4df0ff", maxSpeed: 480, accel: 0.32, turn: 0.048, grip: 0.92, price: 50000 }
     ];
 
     // Level-System
@@ -1651,7 +1650,10 @@
     let lastPointerType = "";
     let inputMode = null;   // "touch" | "mouse"
     const baseDevice = { touchMode: settings.touchMode, fingerSteer: settings.fingerSteer };
+    let lastTouchAt = -1e9;
     addEventListener("pointerdown", e => { lastPointerType = e.pointerType; }, true);
+    // iOS Safari meldet pointerType am Klick teils falsch/leer -> touchstart zusätzlich auswerten
+    addEventListener("touchstart", () => { lastTouchAt = performance.now(); lastPointerType = "touch"; }, { capture: true, passive: true });
     function setInputMode(mode) {
       inputMode = mode;
       settings.touchMode = mode === "touch" ? 1 : 2;
@@ -1670,7 +1672,7 @@
       setTimeout(() => bar.remove(), 15000);
     }
     document.querySelector("#startButton").addEventListener("click", e => {
-      const type = e.pointerType || lastPointerType;
+      const type = performance.now() - lastTouchAt < 1500 ? "touch" : (e.pointerType || lastPointerType);
       if (type) setInputMode(type === "mouse" ? "mouse" : "touch");
       startGame();
       if (!inputMode) return;

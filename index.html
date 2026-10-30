@@ -13,6 +13,10 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div class="splash" id="splash" aria-hidden="true">
+    <div class="splash-name">KroxenStudios</div>
+    <div class="splash-bar"><i></i></div>
+  </div>
   <div class="start-page" id="startPage">
     <div class="start-card">
       <div class="start-logo">🏁</div>
@@ -83,6 +87,11 @@
       <label class="check"><input type="checkbox" data-key="shake"> Bildschirmwackeln</label>
       <label class="check"><input type="checkbox" data-key="zoom"> Kamera zoomt bei Tempo heraus</label>
       <label class="check"><input type="checkbox" data-key="speedLines"> Tempolinien</label>
+
+      <h3>Ton</h3>
+      <label class="check"><input type="checkbox" data-key="sound"> Sound an</label>
+      <label>Lautstärke <output data-for="volume"></output>
+        <input type="range" data-key="volume" min="0" max="1" step="0.05"></label>
 
       <div class="settings-actions">
         <button id="settingsReset">Zurücksetzen</button>
@@ -251,7 +260,9 @@
       policeMistakes: 0.5,   // 0 = fehlerfrei, 1 = baut oft Mist (falsch abbiegen, Ausbrechen, Ablenkung)
       shake: true,           // Bildschirmwackeln
       zoom: true,            // Kamera zoomt bei Tempo heraus
-      speedLines: true       // Tempolinien am Bildrand
+      speedLines: true,      // Tempolinien am Bildrand
+      sound: true,           // Ton an/aus
+      volume: 0.5            // Gesamtlautstärke
     };
     const settings = { ...DEFAULT_SETTINGS };
     try { Object.assign(settings, JSON.parse(localStorage.getItem("asphaltSettings") || "{}")); } catch {}
@@ -351,7 +362,7 @@
     }
 
     function loseCombo() {
-      if (run.pending > 0 || run.chain > 0) popup("KOMBO VERLOREN", "#ff6b6b", 22);
+      if (run.pending > 0 || run.chain > 0) { popup("KOMBO VERLOREN", "#ff6b6b", 22); sfx.lost(); }
       run.pending = 0; run.chain = 0; run.comboTimer = 0; run.drifting = false; run.boost = 0;
     }
 
@@ -365,6 +376,7 @@
         run.boostLevel = lvl;
         run.shake = Math.max(run.shake, 0.35);
         run.flash = 0.35; run.flashColor = "120,200,255";
+        sfx.turbo(lvl);
         popup(`TURBO ${"I".repeat(lvl)}`, LEVEL_COLORS[lvl], 28);
         burst(player.x, player.y, 24, [LEVEL_COLORS[lvl], "#ffffff"], 7);
       }
@@ -388,6 +400,7 @@
         const lvl = driftLevel();
         if (lvl > run.lastLevel) {
           run.lastLevel = lvl;
+          sfx.level(lvl);
           burst(player.x, player.y, 10, [LEVEL_COLORS[lvl]], 4);
         }
       } else if (run.drifting) {
@@ -525,6 +538,7 @@
     function takedown(c) {
       c.stun = 2.2;
       c.speed = 0;
+      sfx.takedown();
       addPoints(500);
       popup("GERAMMT! +500", "#65e6a5", 24);
       run.shake = Math.max(run.shake, 0.7);
@@ -542,6 +556,7 @@
       }
       run.bustInfo = { score: final, time: run.time, lost, isBest };
       run.bustTimer = 3;
+      sfx.bust();
       run.shake = 1; run.flash = 0.6; run.flashColor = "255,40,40";
       player.vx = 0; player.vy = 0;
       if (typeof track === "function") track("erwischt-" + Math.floor(run.time / 10) * 10 + "s");
@@ -1538,6 +1553,8 @@
       startPage.classList.add("hidden");
       resetRun();
       initializeMapLazy();
+      // Handy: beim Start gleich ins echte Vollbild (braucht eine Berührung/Klick, daher hier)
+      if (matchMedia("(pointer: coarse)").matches && !document.fullscreenElement && !document.webkitFullscreenElement && !fakeFullscreen) toggleFullscreen();
     }
     document.querySelector("#startButton").addEventListener("click", startGame);
 
@@ -1698,8 +1715,89 @@
       lastTrailPosition = { left, right };
     }
 
+    // ---------- Sound ----------
+    // Alles wird live per WebAudio erzeugt (keine Audiodateien, keine Lizenzfragen - frei nutzbar, CC0).
+    const sfx = (() => {
+      let ac = null, master, engOsc, engOsc2, engGain, skidGain, sirenOsc, sirenGain, noiseBuf;
+      const ok = () => ac && settings.sound;
+
+      function init() {
+        if (ac) { if (ac.state === "suspended") ac.resume(); return; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        ac = new AC();
+        master = ac.createGain(); master.connect(ac.destination);
+        // Motor: Sägezahn + Rechteck durch Tiefpass
+        const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 700;
+        engGain = ac.createGain(); engGain.gain.value = 0;
+        engOsc = ac.createOscillator(); engOsc.type = "sawtooth";
+        engOsc2 = ac.createOscillator(); engOsc2.type = "square";
+        engOsc.connect(lp); engOsc2.connect(lp); lp.connect(engGain); engGain.connect(master);
+        engOsc.start(); engOsc2.start();
+        // Rauschen für Reifenquietschen und Aufprall
+        noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        const skid = ac.createBufferSource(); skid.buffer = noiseBuf; skid.loop = true;
+        const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1800; bp.Q.value = 3;
+        skidGain = ac.createGain(); skidGain.gain.value = 0;
+        skid.connect(bp); bp.connect(skidGain); skidGain.connect(master); skid.start();
+        // Sirene
+        sirenOsc = ac.createOscillator(); sirenOsc.type = "triangle";
+        sirenGain = ac.createGain(); sirenGain.gain.value = 0;
+        sirenOsc.connect(sirenGain); sirenGain.connect(master); sirenOsc.start();
+      }
+
+      // pro Frame: Motor, Quietschen, Sirene
+      function update(speedRatio, sliding, siren) {
+        if (!ac) return;
+        const t = ac.currentTime, on = settings.sound;
+        master.gain.setTargetAtTime(on ? settings.volume : 0, t, 0.05);
+        const r = clamp(speedRatio, 0, 1.3);
+        const f = 55 + r * 130;
+        engOsc.frequency.setTargetAtTime(f, t, 0.08);
+        engOsc2.frequency.setTargetAtTime(f * 0.503, t, 0.08);
+        engGain.gain.setTargetAtTime(started ? 0.1 + r * 0.12 : 0, t, 0.1);
+        skidGain.gain.setTargetAtTime(sliding > 0 ? Math.min(0.2, sliding * 0.25) : 0, t, 0.06);
+        // Sirene: Hi-Lo-Ton, Lautstärke nach Abstand des nächsten Verfolgers
+        if (siren > 0) {
+          sirenOsc.frequency.setTargetAtTime(Math.floor(t * 1.6) % 2 ? 640 : 860, t, 0.02);
+          sirenGain.gain.setTargetAtTime(siren * 0.07, t, 0.1);
+        } else sirenGain.gain.setTargetAtTime(0, t, 0.15);
+      }
+
+      function tone(freq, dur, type, vol, slideTo) {
+        if (!ok()) return;
+        const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+        o.type = type; o.frequency.setValueAtTime(freq, t);
+        if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+        g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+      }
+
+      function noise(dur, vol, freq) {
+        if (!ok()) return;
+        const t = ac.currentTime, src = ac.createBufferSource(), g = ac.createGain(), f = ac.createBiquadFilter();
+        src.buffer = noiseBuf; f.type = "lowpass"; f.frequency.value = freq;
+        g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t + dur);
+      }
+
+      return {
+        init, update,
+        hit(power = 1) { noise(0.25, 0.5 * power, 900); tone(90, 0.2, "sine", 0.5 * power, 40); },
+        turbo(level) { tone(300, 0.35, "sawtooth", 0.15, 300 + level * 400); noise(0.3, 0.15, 3000); },
+        level(level) { tone(500 + level * 150, 0.12, "square", 0.08); },
+        takedown() { noise(0.3, 0.5, 1200); tone(140, 0.3, "square", 0.25, 50); tone(660, 0.15, "square", 0.1); },
+        bust() { tone(440, 0.25, "square", 0.2, 220); setTimeout(() => tone(330, 0.5, "square", 0.2, 110), 200); },
+        lost() { tone(300, 0.25, "triangle", 0.15, 120); }
+      };
+    })();
+    // Browser erlauben Ton erst nach einer Berührung/Taste
+    for (const ev of ["pointerdown", "keydown", "touchstart"]) addEventListener(ev, () => sfx.init(), { passive: true });
+
     function update(dt) {
-      if (!started || settingsOpen) return;
+      if (!started || settingsOpen) { sfx.update(0, 0, 0); return; }
 
       updateParticles(dt);
       const zoomTarget = settings.zoomLevel * (settings.zoom
@@ -1724,6 +1822,13 @@
       updateTraffic(dt);
       updateChase(dt);
       if (run.bustTimer > 0) return;
+
+      {
+        const sp = Math.hypot(player.vx, player.vy) / (cars[selectedCar].maxSpeed / 13);
+        let near = 1e9;
+        for (const c of chasers) near = Math.min(near, Math.hypot(c.x - player.x, c.y - player.y));
+        sfx.update(player.crashed ? 0 : sp, (run.drifting || handbrakeOn) && sp > 0.15 ? driftAmount + 0.3 : 0, near < 1500 ? 1 - near / 1500 : 0);
+      }
 
       if (player.crashed) {
         crashTimer -= dt / 60;
@@ -1826,6 +1931,7 @@
           // andere Autos werden weggeschoben
           const closing = pushNpc(hitInfo) * 13;
           if (closing > 35) {
+            sfx.hit(Math.min(1, closing / 120));
             loseCombo();
             run.shake = Math.max(run.shake, 0.3);
             burst(hitInfo.cx, hitInfo.cy, 8, ["#ffd166", "#ffffff"], 5, true);
@@ -1838,6 +1944,7 @@
           startCrash();
         } else {
           if (kmhAtImpact >= 15) {
+            sfx.hit(Math.min(1, kmhAtImpact / 120));
             loseCombo();                 // harter Aufprall unterbricht die Drift-Kombo
             run.shake = Math.max(run.shake, 0.35);
             burst(player.x, player.y, 8, ["#cfcfcf", "#8c7c55"], 3, false);
@@ -2822,12 +2929,25 @@
       const vv = window.visualViewport;
       const vw = vv ? vv.width : innerWidth, vh = vv ? vv.height : innerHeight;
       const headerH = headerEl && headerEl.offsetParent !== null ? headerEl.offsetHeight + 8 : 0;
-      const pad = fs ? 0 : 12;
-      const availW = vw - pad;
-      const availH = vh - pad - (fs ? 0 : headerH) - (fs ? 0 : hintHeight());
-      const w = Math.max(240, Math.min(availW, availH * (canvas.width / canvas.height), 1400));
-      screenEl.style.width = Math.floor(w) + "px";
-      uiScale = clamp(720 / w, 1, 2.2);       // kleine Bildschirme: Anzeigen im Spiel größer zeichnen
+      // Randlos: Vollbild oder Handy im Querformat -> Spielfeld füllt den ganzen Bildschirm von Rand zu Rand
+      const edge = vw > vh && (fs || vh <= 520);
+      document.body.classList.toggle("edge", edge);
+      let w, h = null;
+      if (edge) {
+        w = Math.floor(vw); h = Math.floor(vh);
+        // Auflösung ans Seitenverhältnis anpassen (mehr Karte seitlich statt Balken oder Verzerrung)
+        const cw = Math.round(clamp(canvas.height * vw / vh, 960, 1500));
+        if (canvas.width !== cw) canvas.width = cw;
+      } else {
+        if (canvas.width !== 960) canvas.width = 960;
+        const pad = fs ? 0 : 12;
+        const availW = vw - pad;
+        const availH = vh - pad - (fs ? 0 : headerH) - (fs ? 0 : hintHeight());
+        w = Math.floor(Math.max(240, Math.min(availW, availH * (canvas.width / canvas.height), 1400)));
+      }
+      screenEl.style.width = w + "px";
+      screenEl.style.height = h ? h + "px" : "";
+      uiScale = clamp(0.75 * canvas.width / w, 1, 2.2);       // kleine Bildschirme: Anzeigen im Spiel größer zeichnen
     }
     function hintHeight() {
       const hint = document.querySelector(".rotate-hint");

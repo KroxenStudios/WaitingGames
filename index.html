@@ -1477,12 +1477,23 @@
     });
     selectCar(0);
 
+    // Handhelds (Steam Deck, ROG Ally …) senden Tasten UND haben einen Touchscreen:
+    // Touch-Steuerung deshalb nie dauerhaft ausblenden, sobald Touch möglich ist oder benutzt wurde.
+    let touchSeen = false;
     function setKeyboardMode() {
-      if (keyboardMode) return;
+      if (keyboardMode || touchSeen || navigator.maxTouchPoints > 0) return;
       keyboardMode = true;
       touchControls.classList.add("hidden");
       keyboardHelp.classList.add("visible");
     }
+    addEventListener("pointerdown", e => {
+      if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+      touchSeen = true;
+      if (!keyboardMode) return;
+      keyboardMode = false;
+      touchControls.classList.remove("hidden");
+      keyboardHelp.classList.remove("visible");
+    }, { passive: true });
 
     addEventListener("keydown", event => {
       const key = event.key.toLowerCase();

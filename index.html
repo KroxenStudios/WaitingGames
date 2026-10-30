@@ -76,6 +76,7 @@
         <input type="range" data-key="traffic" min="0" max="200" step="10"></label>
 
       <h3>Verfolger</h3>
+      <label class="check"><input type="checkbox" data-key="chasers"> Verfolger aktiv</label>
       <label>Tempo <output data-for="policeSpeed"></output>
         <input type="range" data-key="policeSpeed" min="0.3" max="1.2" step="0.05">
         <small>Anteil der Höchstgeschwindigkeit deines Autos.</small></label>
@@ -90,9 +91,16 @@
       <label class="check"><input type="checkbox" data-key="speedLines"> Tempolinien</label>
 
       <h3>Touch-Steuerung</h3>
+      <label>Anzeige
+        <select data-key="touchMode">
+          <option value="0">Automatisch</option>
+          <option value="1">Immer an (Handheld)</option>
+          <option value="2">Aus</option>
+        </select></label>
       <label>Button-Größe <output data-for="touchScale"></output>
         <input type="range" data-key="touchScale" min="0.4" max="1.6" step="0.05"></label>
-      <label>Max. Lenkwinkel (Lenkrad) <output data-for="wheelLimit"></output>
+      <label class="check"><input type="checkbox" data-key="fingerSteer"> Zusätzlich mit dem Finger lenken (Finger links/rechts der Bildmitte auf das Spielfeld halten)</label>
+      <label>Max. Lenkwinkel (Lenkrad / Finger) <output data-for="wheelLimit"></output>
         <input type="range" data-key="wheelLimit" min="0.2" max="1" step="0.05">
         <small>Begrenzt den Einschlag beim Touch-Lenkrad. Niedriger = stabiler bei hohem Tempo.</small></label>
 
@@ -277,13 +285,17 @@
       rotateCamera: true,    // Kamera dreht sich mit dem Auto (Fahrtrichtung immer oben)
       speedLines: true,      // Tempolinien am Bildrand
       touchScale: 1,         // Größe der Touch-Buttons (Faktor)
-      wheelLimit: 0.55,      // maximaler Lenkeinschlag mit dem Touch-Lenkrad (1 = voll)
+      chasers: true,         // Verfolger an/aus
+      fingerSteer: false,   // Lenken per Finger auf dem Spielfeld
+      touchMode: 0,         // Touch-Steuerung: 0 = automatisch, 1 = immer an, 2 = aus
+      wheelLimit: 0.55,     // maximaler Lenkeinschlag mit dem Touch-Lenkrad (1 = voll)
       sound: true,           // Ton an/aus
       volume: 0.5            // Gesamtlautstärke
     };
     const settings = { ...DEFAULT_SETTINGS };
     try { Object.assign(settings, JSON.parse(localStorage.getItem("asphaltSettings") || "{}")); } catch {}
-    const saveSettings = () => { try { localStorage.setItem("asphaltSettings", JSON.stringify(settings)); } catch {} };
+    // Sitzungs-Umschaltung Maus/Touch (inputMode) wird nicht dauerhaft gespeichert
+    const saveSettings = () => { try { localStorage.setItem("asphaltSettings", JSON.stringify(inputMode ? { ...settings, ...baseDevice } : settings)); } catch {} };
     let steerValue = 0;
     let handbrakeOn = false;
 
@@ -610,7 +622,8 @@
       if (!player.crashed && !inGarage) addPoints(50 * tier * sec);
 
       // Wellen: erst nach der Schonfrist, danach alle 30 s ein Wagen mehr (max. 4)
-      const want = run.time < GRACE_SECONDS ? 0 : Math.min(4, 1 + Math.floor((run.time - GRACE_SECONDS) / 30));
+      if (!settings.chasers) chasers.length = 0;
+      const want = !settings.chasers || run.time < GRACE_SECONDS ? 0 : Math.min(4, 1 + Math.floor((run.time - GRACE_SECONDS) / 30));
       while (chasers.length < want) {
         spawnChaser();
         popup(chasers.length === 1 ? "DU WIRST VERFOLGT" : "VERSTÄRKUNG!", "#ff6b6b", 24);
@@ -1481,7 +1494,9 @@
     // Touch-Steuerung deshalb nie dauerhaft ausblenden, sobald Touch möglich ist oder benutzt wurde.
     let touchSeen = false;
     function setKeyboardMode() {
-      if (keyboardMode || touchSeen || navigator.maxTouchPoints > 0) return;
+      if (settings.touchMode === 1) return;
+      if (settings.touchMode === 0 && (keyboardMode || touchSeen || navigator.maxTouchPoints > 0)) return;
+      if (keyboardMode) return;
       keyboardMode = true;
       touchControls.classList.add("hidden");
       keyboardHelp.classList.add("visible");
@@ -1491,8 +1506,7 @@
       touchSeen = true;
       if (!keyboardMode) return;
       keyboardMode = false;
-      touchControls.classList.remove("hidden");
-      keyboardHelp.classList.remove("visible");
+      applyTouchMode();
     }, { passive: true });
 
     addEventListener("keydown", event => {
@@ -1578,6 +1592,26 @@
       button.addEventListener("lostpointercapture", release);
     });
 
+    // Zusätzliche Richtungssteuerung per Finger: Position links/rechts der Bildmitte lenkt (Einstellung "fingerSteer")
+    let fingerSteer = null;
+    {
+      let fpid = null;
+      const set = e => {
+        const r = canvas.getBoundingClientRect();
+        fingerSteer = clamp((e.clientX - (r.left + r.width / 2)) / (r.width * 0.3), -1, 1);
+      };
+      canvas.addEventListener("pointerdown", e => {
+        if (!settings.fingerSteer || e.pointerType === "mouse" || !started || settingsOpen) return;
+        fpid = e.pointerId; set(e);
+        if (canvas.setPointerCapture) canvas.setPointerCapture(fpid);
+      });
+      canvas.addEventListener("pointermove", e => { if (e.pointerId === fpid) set(e); });
+      const end = e => { if (e.pointerId === fpid) { fpid = null; fingerSteer = null; } };
+      canvas.addEventListener("pointerup", end);
+      canvas.addEventListener("pointercancel", end);
+      canvas.addEventListener("lostpointercapture", end);
+    }
+
     {
       let startAngle = 0, startValue = 0, pid = null;
       const angleAt = e => {
@@ -1613,7 +1647,40 @@
       // Handy: beim Start gleich ins echte Vollbild (braucht eine Berührung/Klick, daher hier)
       if (matchMedia("(pointer: coarse)").matches && !document.fullscreenElement && !document.webkitFullscreenElement && !fakeFullscreen) toggleFullscreen();
     }
-    document.querySelector("#startButton").addEventListener("click", startGame);
+    // Eingabemodus aus dem Start-Klick ableiten (nur für diese Sitzung, wird nicht gespeichert)
+    let lastPointerType = "";
+    let inputMode = null;   // "touch" | "mouse"
+    const baseDevice = { touchMode: settings.touchMode, fingerSteer: settings.fingerSteer };
+    addEventListener("pointerdown", e => { lastPointerType = e.pointerType; }, true);
+    function setInputMode(mode) {
+      inputMode = mode;
+      settings.touchMode = mode === "touch" ? 1 : 2;
+      settings.fingerSteer = mode === "touch";
+      keyboardMode = false;
+      refreshSettingsUI();
+    }
+    function askOtherMode() {
+      const other = inputMode === "touch" ? "mouse" : "touch";
+      const bar = document.createElement("div");
+      bar.style.cssText = "position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:50;display:flex;gap:8px;align-items:center;padding:8px 12px;background:#10151cee;color:#fff;border:1px solid #ffffff44;border-radius:10px;font:14px sans-serif";
+      bar.innerHTML = `<span>${other === "touch" ? "Mit dem Finger steuern?" : "Mit Maus/Tastatur steuern?"}</span><button data-y>Ja, wechseln</button><button data-n>Nein</button>`;
+      bar.querySelector("[data-y]").onclick = () => { setInputMode(other); bar.remove(); };
+      bar.querySelector("[data-n]").onclick = () => bar.remove();
+      document.body.appendChild(bar);
+      setTimeout(() => bar.remove(), 15000);
+    }
+    document.querySelector("#startButton").addEventListener("click", e => {
+      const type = e.pointerType || lastPointerType;
+      if (type) setInputMode(type === "mouse" ? "mouse" : "touch");
+      startGame();
+      if (!inputMode) return;
+      let waited = 0;
+      const timer = setInterval(() => {
+        waited += 500;
+        if (Math.hypot(player.vx, player.vy) > 0.5) return clearInterval(timer);
+        if (waited >= 10000) { clearInterval(timer); askOtherMode(); }
+      }, 500);
+    });
 
     function pressed(touchKey, ...keyboardKeys) {
       return touchInput[touchKey] || keyboardKeys.some(key => keys.has(key));
@@ -1926,6 +1993,8 @@
       }
       if (wheelActive || wheelValue !== 0) {
         steerValue = wheelValue * settings.wheelLimit;   // Lenkrad: Einschlag = Drehwinkel, begrenzt
+      } else if (fingerSteer !== null) {
+        steerValue += (fingerSteer * settings.wheelLimit - steerValue) * Math.min(1, 0.25 * dt);
       } else if (rawSteer === 0) {
         steerValue -= Math.sign(steerValue) * Math.min(Math.abs(steerValue), settings.steerReturn * dt);
       } else if (Math.sign(steerValue) === -rawSteer) {
@@ -3119,7 +3188,14 @@
       soft:   { steerRise: 0.03, steerReverse: 0.08, steerReturn: 0.07, steerCurve: 1.6 }
     };
 
+    function applyTouchMode() {
+      const off = settings.touchMode === 2 || (settings.touchMode === 0 && keyboardMode);
+      touchControls.classList.toggle("hidden", off);
+      keyboardHelp.classList.toggle("visible", settings.touchMode === 2 || keyboardMode);
+    }
+
     function refreshSettingsUI() {
+      applyTouchMode();
       document.documentElement.style.setProperty("--ts", settings.touchScale);
       settingsPage.querySelectorAll("[data-key]").forEach(input => {
         const v = settings[input.dataset.key];
@@ -3142,6 +3218,8 @@
     settingsPage.querySelectorAll("[data-key]").forEach(input => {
       input.addEventListener("input", () => {
         settings[input.dataset.key] = input.type === "checkbox" ? input.checked : Number(input.value);
+        if (input.dataset.key === "touchMode") keyboardMode = false;
+        if (input.dataset.key in baseDevice) baseDevice[input.dataset.key] = settings[input.dataset.key];
         saveSettings();
         refreshSettingsUI();
       });
@@ -3153,6 +3231,8 @@
     document.querySelector("#settingsClose").addEventListener("click", toggleSettings);
     document.querySelector("#settingsButton").addEventListener("click", toggleSettings);
     document.querySelector("#settingsButton2").addEventListener("click", toggleSettings);
+
+    applyTouchMode();
 
     function frame(time) {
       const dt = Math.min((time - lastTime) / 16.67 || 1, 2);

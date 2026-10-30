@@ -1,4 +1,4 @@
-* {
+﻿* {
   box-sizing: border-box;
 }
 
@@ -819,5 +819,5 @@ body.edge .screen-buttons {
 
 /* Randloses Querformat: Buttongröße nach Bildschirmhöhe (Handy 414 px hoch -> ca. 50 px), damit die Karte sichtbar bleibt */
 body.edge .touch-controls {
-  --u: clamp(40px, 12vh, 96px);
+  --u: clamp(32px, 9vh, 80px);
 }

@@ -554,7 +554,7 @@ kbd {
 
 @supports (width: 1cqw) {
   .touch-controls {
-    --u: clamp(76px, 15cqw, 190px);
+    --u: calc(clamp(76px, 15cqw, 190px) * var(--ts, 1));
   }
 }
 
@@ -819,5 +819,61 @@ body.edge .screen-buttons {
 
 /* Randloses Querformat: Buttongröße nach Bildschirmhöhe (Handy 414 px hoch -> ca. 50 px), damit die Karte sichtbar bleibt */
 body.edge .touch-controls {
-  --u: clamp(32px, 9vh, 80px);
+  --u: calc(clamp(32px, 9vh, 80px) * var(--ts, 1));
+}
+
+/* ---------- Touch-Lenkrad ---------- */
+.steering {
+  pointer-events: none;
+}
+
+.wheel {
+  position: relative;
+  width: calc(var(--u) * 2);
+  height: calc(var(--u) * 2);
+  pointer-events: auto;
+  touch-action: none;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+.wheel i {
+  position: absolute;
+  display: block;
+}
+
+.wheel-rim {
+  inset: 0;
+  border: calc(var(--u) * 0.2) solid #10151ccc;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #ffffff66, inset 0 0 0 1px #ffffff44;
+}
+
+.wheel-spoke {
+  left: 8%;
+  right: 8%;
+  top: 46%;
+  height: 8%;
+  background: #10151ccc;
+  border-radius: 99px;
+}
+
+.wheel-spoke::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 8%;
+  height: 520%;
+  transform: translateX(-50%);
+  background: #10151ccc;
+}
+
+.wheel-mark {
+  left: 46%;
+  top: 2%;
+  width: 8%;
+  height: 16%;
+  background: #e10600;
+  border-radius: 3px;
 }

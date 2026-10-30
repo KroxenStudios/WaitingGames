@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
@@ -88,6 +88,10 @@
       <label class="check"><input type="checkbox" data-key="zoom"> Kamera zoomt bei Tempo heraus</label>
       <label class="check"><input type="checkbox" data-key="speedLines"> Tempolinien</label>
 
+      <h3>Touch-Steuerung</h3>
+      <label>Button-Größe <output data-for="touchScale"></output>
+        <input type="range" data-key="touchScale" min="0.4" max="1.6" step="0.05"></label>
+
       <h3>Ton</h3>
       <label class="check"><input type="checkbox" data-key="sound"> Sound an</label>
       <label>Lautstärke <output data-for="volume"></output>
@@ -158,8 +162,7 @@
 
       <div class="touch-controls" id="touchControls" aria-label="Touch-Steuerung">
         <div class="steering">
-          <button class="control-button steer-button" data-control="left" aria-label="Links lenken">◀</button>
-          <button class="control-button steer-button" data-control="right" aria-label="Rechts lenken">▶</button>
+          <div class="wheel" id="wheel" aria-label="Lenkrad"><i class="wheel-rim"></i><i class="wheel-spoke"></i><i class="wheel-mark"></i></div>
         </div>
         <div class="pedals">
           <button class="control-button brake-button" data-control="brake">BREMSEN</button>
@@ -233,6 +236,10 @@
     const touchInput = {
       left: false, right: false, gas: false, brake: false, drift: false
     };
+    // Touch-Lenkrad: wheelValue -1..1 (proportional zum Drehwinkel), federt beim Loslassen zurück
+    const wheelEl = document.querySelector("#wheel");
+    const WHEEL_MAX = 1.9;          // maximaler Drehwinkel in rad (ca. 110°)
+    let wheelValue = 0, wheelActive = false;
 
     let selectedCar = 0;
     const ownedCars = new Set([0]);
@@ -261,6 +268,7 @@
       shake: true,           // Bildschirmwackeln
       zoom: true,            // Kamera zoomt bei Tempo heraus
       speedLines: true,      // Tempolinien am Bildrand
+      touchScale: 1,         // Größe der Touch-Buttons (Faktor)
       sound: true,           // Ton an/aus
       volume: 0.5            // Gesamtlautstärke
     };
@@ -1547,6 +1555,32 @@
       button.addEventListener("lostpointercapture", release);
     });
 
+    {
+      let startAngle = 0, startValue = 0, pid = null;
+      const angleAt = e => {
+        const r = wheelEl.getBoundingClientRect();
+        // das gedrehte Quadrat hat dasselbe Zentrum wie das ungedrehte
+        return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2));
+      };
+      wheelEl.addEventListener("pointerdown", e => {
+        e.preventDefault();
+        pid = e.pointerId; wheelActive = true;
+        startAngle = angleAt(e); startValue = wheelValue;
+        if (wheelEl.setPointerCapture) wheelEl.setPointerCapture(pid);
+      });
+      wheelEl.addEventListener("pointermove", e => {
+        if (!wheelActive || e.pointerId !== pid) return;
+        let d = angleAt(e) - startAngle;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        wheelValue = clamp(startValue + d / WHEEL_MAX, -1, 1);
+        wheelEl.style.transform = `rotate(${wheelValue * WHEEL_MAX}rad)`;
+      });
+      const end = e => { if (e.pointerId === pid) { wheelActive = false; pid = null; } };
+      wheelEl.addEventListener("pointerup", end);
+      wheelEl.addEventListener("pointercancel", end);
+      wheelEl.addEventListener("lostpointercapture", end);
+    }
+
     const startPage = document.querySelector("#startPage");
     function startGame() {
       started = true;
@@ -1863,7 +1897,13 @@
 
       // Progressive Lenkung: ein kurzer Tipp bewirkt nur einen winzigen Einschlag,
       // je länger man hält, desto weiter schlägt das Lenkrad ein. Loslassen zentriert zügig.
-      if (rawSteer === 0) {
+      if (!wheelActive && wheelValue !== 0) {          // Lenkrad federt zurück
+        wheelValue -= Math.sign(wheelValue) * Math.min(Math.abs(wheelValue), 0.09 * dt);
+        wheelEl.style.transform = `rotate(${wheelValue * WHEEL_MAX}rad)`;
+      }
+      if (wheelActive || wheelValue !== 0) {
+        steerValue = wheelValue;                         // Lenkrad: Einschlag = Drehwinkel
+      } else if (rawSteer === 0) {
         steerValue -= Math.sign(steerValue) * Math.min(Math.abs(steerValue), settings.steerReturn * dt);
       } else if (Math.sign(steerValue) === -rawSteer) {
         steerValue += rawSteer * settings.steerReverse * dt;          // Gegenlenken geht schneller
@@ -2997,6 +3037,7 @@
 
     // ---------- Einstellungsseite ----------
     const settingsPage = document.querySelector("#settingsPage");
+    document.documentElement.style.setProperty("--ts", settings.touchScale);
     let settingsOpen = false;
     const STEER_PRESETS = {
       direct: { steerRise: 0.12, steerReverse: 0.25, steerReturn: 0.2, steerCurve: 1.0 },
@@ -3005,6 +3046,7 @@
     };
 
     function refreshSettingsUI() {
+      document.documentElement.style.setProperty("--ts", settings.touchScale);
       settingsPage.querySelectorAll("[data-key]").forEach(input => {
         const v = settings[input.dataset.key];
         if (input.type === "checkbox") input.checked = !!v; else input.value = v;

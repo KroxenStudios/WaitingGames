@@ -8,43 +8,47 @@
   <title>Waiting Games – KroxenStudios</title>
   <link rel="icon" href="Asphalt%20Arkade/images/asphalt_arkade.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
+  <script src="i18n.js"></script>
   <script>try { const t = localStorage.getItem("wg-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
-  <button class="theme-switch" id="themeSwitch" role="switch" aria-checked="false" aria-label="Farbschema wechseln"><span id="themeLabel">Dunkel</span><span class="track"></span></button>
+  <div class="switches">
+    <button class="theme-switch lang-switch" id="langSwitch" aria-label="Sprache wechseln / Switch language">DE | EN</button>
+    <button class="theme-switch" id="themeSwitch" role="switch" aria-checked="false" aria-label="Farbschema wechseln"><span id="themeLabel">Dunkel</span><span class="track"></span></button>
+  </div>
   <header>
     <div class="brand">KroxenStudios</div>
     <h1>Waiting Games</h1>
-    <p>Kleine Spiele für zwischendurch – direkt im Browser, ohne Installation.</p>
+    <p data-en="Small games for in between – right in the browser, no installation.">Kleine Spiele für zwischendurch – direkt im Browser, ohne Installation.</p>
   </header>
 
   <main class="games">
     <a class="card" href="Asphalt%20Arkade/index.html">
       <div class="thumb t-asphalt"><img src="Asphalt%20Arkade/images/asphalt_arkade.png" alt=""></div>
       <h2>Asphalt Arkade</h2>
-      <p>Drifte durch eine riesige Stadt, sammle Geld, kaufe neue Autos und entkomme deinen Verfolgern.</p>
-      <div class="tags"><span>Rennen</span><span>Drift</span><span>8 Autos</span></div>
-      <div class="play">SPIELEN</div>
+      <p data-en="Drift through a huge city, collect money, buy new cars and escape your pursuers.">Drifte durch eine riesige Stadt, sammle Geld, kaufe neue Autos und entkomme deinen Verfolgern.</p>
+      <div class="tags"><span data-en="Racing">Rennen</span><span>Drift</span><span data-en="8 cars">8 Autos</span></div>
+      <div class="play" data-en="PLAY">SPIELEN</div>
     </a>
 
     <a class="card" href="Mattenwurf/index.html">
       <div class="thumb t-matte"><img src="Mattenwurf/images/mattenwurf.png" alt=""></div>
       <h2>Mattenwurf</h2>
-      <p>Fahre durch die Vorstadt und liefer Zeitungen aus</p>
-      <div class="tags"><span>Geschicklichkeit</span><span>Zielen</span><span>Upgrades</span></div>
-      <div class="play">SPIELEN</div>
+      <p data-en="Ride through the suburbs and deliver newspapers">Fahre durch die Vorstadt und liefer Zeitungen aus</p>
+      <div class="tags"><span data-en="Skill">Geschicklichkeit</span><span data-en="Aiming">Zielen</span><span>Upgrades</span></div>
+      <div class="play" data-en="PLAY">SPIELEN</div>
     </a>
     <a class="card" href="e-scooter-klicker/index.html">
       <div class="thumb t-scooter"><img src="e-scooter-klicker/images/escooter.png" alt=""></div>
       <h2>E-Scooter Klicker</h2>
-      <p>Klicke den E-Scooter, baue deine Flotte auf und kaufe Power-ups</p>
-      <div class="tags"><span>Klicker</span><span>Idle</span><span>Power-ups</span></div>
-      <div class="play">SPIELEN</div>
+      <p data-en="Click the e-scooter, build up your fleet and buy power-ups">Klicke den E-Scooter, baue deine Flotte auf und kaufe Power-ups</p>
+      <div class="tags"><span data-en="Clicker">Klicker</span><span>Idle</span><span>Power-ups</span></div>
+      <div class="play" data-en="PLAY">SPIELEN</div>
     </a>
   </main>
 
   <footer>
-    © KroxenStudios · <a href="Asphalt%20Arkade/privacy.html">Datenschutz</a>
+    © KroxenStudios · <a href="Asphalt%20Arkade/privacy.html" data-en="Privacy">Datenschutz</a>
   </footer>
 
   <script>
@@ -56,9 +60,17 @@
       const sync = () => {
         const light = isLight();
         btn.setAttribute('aria-checked', light);
-        label.textContent = light ? 'Beige' : 'Dunkelblau';
+        label.textContent = light ? 'Beige' : WG.L('Dunkelblau', 'Dark blue');
         for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = light ? '#f1e8d6' : '#10151c';
       };
+      // Sprache: Texte mit data-en werden in der englischen Fassung ersetzt
+      if (WG.lang === 'en') {
+        for (const el of document.querySelectorAll('[data-en]')) el.textContent = el.dataset.en;
+        document.querySelector('.switches [aria-label^="Sprache"]').setAttribute('aria-label', 'Switch language');
+        btn.setAttribute('aria-label', 'Switch colour scheme');
+      }
+      document.getElementById('langSwitch').innerHTML = WG.lang === 'de' ? '<b>DE</b> | EN' : 'DE | <b>EN</b>';
+      document.getElementById('langSwitch').onclick = () => WG.set(WG.lang === 'de' ? 'en' : 'de');
       btn.onclick = () => {
         const t = isLight() ? 'dark' : 'light';
         root.dataset.theme = t;

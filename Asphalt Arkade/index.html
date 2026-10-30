@@ -192,6 +192,117 @@
     <p class="rotate-hint">Tipp: Handy quer halten und auf ⛶ tippen für Vollbild.</p>
   </main>
 
+  <script src="../i18n.js"></script>
+  <script>
+    // Englische Fassung: statische Texte (Textknoten und Attribute) anhand der Tabelle ersetzen
+    const L = WG.L, LOCALE = L("de-DE", "en-US");
+    const EN_TEXT = {
+  "Drifte durch eine Stadt und sammle Geld.": "Drift through a city and collect money.",
+  "vom Kleinwagen bis zur Rakete": "from compact car to rocket",
+  "8 Autos": "8 cars",
+  "Riesige Welt": "Huge world",
+  "mit Stadt, Wäldern und viel Verkehr": "with city, forests and plenty of traffic",
+  "Verfolgungsjagd:": "Chase:",
+  "Du wirst verfolgt – je länger du überlebst, desto mehr Punkte": "You are being chased – the longer you survive, the more points",
+  "SPIEL STARTEN": "START GAME",
+  "Gas": "Gas",
+  "Bremse": "Brake",
+  "Lenken": "Steer",
+  "Leertaste": "Space",
+  "Handbremse": "Handbrake",
+  "Vollbild": "Fullscreen",
+  "Auto": "Car",
+  "← Spielauswahl (Esc)": "← Game selection (Esc)",
+  "Datenschutz": "Privacy",
+  "Einstellungen": "Settings",
+  "Das Spiel ist pausiert. Änderungen gelten sofort und werden gespeichert.": "The game is paused. Changes apply immediately and are saved.",
+  "Lenkung": "Steering",
+  "Direkt": "Direct",
+  "Normal": "Normal",
+  "Sanft": "Soft",
+  "Lenkgeschwindigkeit": "Steering speed",
+  "Wie schnell das Lenkrad beim Halten einschlägt.": "How fast the wheel turns while held.",
+  "Gegenlenken": "Counter-steering",
+  "Zurückstellen": "Return speed",
+  "Progressivität": "Progressiveness",
+  "1 = linear, höher = kurze Tipps lenken weniger.": "1 = linear, higher = short taps steer less.",
+  "Fahrzeug & Welt": "Vehicle & world",
+  "Kamera-Abstand": "Camera distance",
+  "Kleiner = weiter herausgezoomt, mehr Überblick.": "Smaller = zoomed out further, more overview.",
+  "Beschleunigung": "Acceleration",
+  "Verkehrsdichte": "Traffic density",
+  "Verfolger": "Chasers",
+  "Verfolger aktiv": "Chasers active",
+  "Tempo": "Speed",
+  "Anteil der Höchstgeschwindigkeit deines Autos.": "Share of your car's top speed.",
+  "Fehlerquote": "Mistake rate",
+  "Falsch abbiegen, in Kurven ausbrechen, gegen Wände fahren, kurz abgelenkt sein.": "Taking wrong turns, sliding out in corners, hitting walls, getting briefly distracted.",
+  "Effekte": "Effects",
+  "Bildschirmwackeln": "Screen shake",
+  "Kamera dreht sich mit dem Auto": "Camera rotates with the car",
+  "Kamera zoomt bei Tempo heraus": "Camera zooms out at speed",
+  "Tempolinien": "Speed lines",
+  "Touch-Steuerung": "Touch controls",
+  "Anzeige": "Display",
+  "Automatisch": "Automatic",
+  "Immer an (Handheld)": "Always on (handheld)",
+  "Aus": "Off",
+  "Button-Größe": "Button size",
+  "Zusätzlich mit dem Finger lenken (Finger links/rechts der Bildmitte auf das Spielfeld halten)": "Also steer with a finger (hold a finger left/right of the screen centre on the playing field)",
+  "Max. Lenkwinkel (Lenkrad / Finger)": "Max. steering angle (wheel / finger)",
+  "Begrenzt den Einschlag beim Touch-Lenkrad. Niedriger = stabiler bei hohem Tempo.": "Limits the lock of the touch wheel. Lower = more stable at high speed.",
+  "Ton": "Sound",
+  "Sound an": "Sound on",
+  "Lautstärke": "Volume",
+  "Zurücksetzen": "Reset",
+  "Zur Spielauswahl": "Game selection",
+  "Weiter (Esc)": "Continue (Esc)",
+  "Drifte durch die Stadt – verdiene Punkte und kaufe neue Autos!": "Drift through the city – earn points and buy new cars!",
+  "Autos auswählen oder kaufen": "Select or buy cars",
+  "⚙ Einstellungen": "⚙ Settings",
+  "Einstellungen (Esc)": "Settings (Esc)",
+  "⛶ Vollbild": "⛶ Fullscreen",
+  "Vollbild (F)": "Fullscreen (F)",
+  "Asphalt Arkade Spielfeld": "Asphalt Arkade playing field",
+  "Fahrzeuganzeige": "Vehicle display",
+  "GESCHWINDIGKEIT": "SPEED",
+  "MOTOR-DREHZAHL": "ENGINE RPM",
+  "PUNKTE": "POINTS",
+  "ÜBERLEBT": "SURVIVED",
+  "GUTHABEN": "BALANCE",
+  "Kleinwagen": "Compact car",
+  "STADT": "CITY",
+  "Respawn läuft …": "Respawning …",
+  "BUMM": "BOOM",
+  "BREMSEN": "BRAKE",
+  "HANDBREMSE": "HANDBRAKE",
+  "GAS": "GAS",
+  "Lenkrad": "Steering wheel",
+  "Tipp: Handy quer halten und auf ⛶ tippen für Vollbild.": "Tip: hold your phone in landscape and tap ⛶ for fullscreen.",
+  "Beim Start wird nur ein anonymer Besuch gezählt. Mit „OK“ sendest du zusätzlich Gerätedaten (Browser, Bildschirmgröße, Herkunft) und Spielereignisse, damit wir das Spiel verbessern können. Keine Cookies.": "Only an anonymous visit is counted at start. With \"OK\" you additionally send device data (browser, screen size, origin) and game events so we can improve the game. No cookies.",
+  "Ablehnen": "Decline"
+};
+    const EN_FRAG = {
+      "Kleinwagen": "Compact car", "Limousine": "Saloon", "Sportwagen": "Sports car", "Muscle Car": "Muscle car", "Rallye-Auto": "Rally car",
+      "Supersportler": "Supercar", "Hypercar": "Hypercar", "Rakete": "Rocket",
+      "BÄCKEREI": "BAKERY", "APOTHEKE": "PHARMACY", "FRISEUR": "HAIRDRESSER", "BLUMEN": "FLOWERS", "BUCHLADEN": "BOOKSHOP", "WERKSTATT": "GARAGE",
+      "DÖNER": "KEBAB", "METZGEREI": "BUTCHER", "EISDIELE": "ICE CREAM", "KINO": "CINEMA", "BAUMARKT": "DIY STORE", "TANKSTELLE": "GAS STATION",
+      "SUPERMARKT": "SUPERMARKET", "DISCOUNTER": "DISCOUNT",
+    };
+    const t = x => (WG.lang === "en" && EN_FRAG[x]) || x;
+    function wgTranslate(root) {
+      if (WG.lang !== "en") return;
+      const norm = x => x.replace(/\s+/g, " ").trim();
+      const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let n; (n = w.nextNode());) {
+        const k = norm(n.nodeValue);
+        if (k && EN_TEXT[k]) n.nodeValue = n.nodeValue.replace(k, EN_TEXT[k]);
+      }
+      for (const el of root.querySelectorAll("[title],[aria-label]"))
+        for (const a of ["title", "aria-label"]) { const v = el.getAttribute(a); if (v && EN_TEXT[norm(v)]) el.setAttribute(a, EN_TEXT[norm(v)]); }
+    }
+    wgTranslate(document.body);
+  </script>
   <script>
     const canvas = document.querySelector("#game");
     const ctx = canvas.getContext("2d");
@@ -207,14 +318,14 @@
     const creditsDisplay = document.querySelector("#credits");
 
     const cars = [
-      { name: "Kleinwagen",    color: "#57d6a1", maxSpeed: 190, accel: 0.09, turn: 0.047, grip: 0.91, price: 0 },
-      { name: "Limousine",     color: "#68a8ff", maxSpeed: 230, accel: 0.10, turn: 0.040, grip: 0.93, price: 250 },
-      { name: "Sportwagen",    color: "#ff6868", maxSpeed: 290, accel: 0.16, turn: 0.055, grip: 0.88, price: 750 },
-      { name: "Muscle Car",    color: "#ff9d3c", maxSpeed: 320, accel: 0.20, turn: 0.044, grip: 0.86, price: 1800 },
-      { name: "Rallye-Auto",   color: "#f2f5f8", maxSpeed: 300, accel: 0.18, turn: 0.062, grip: 0.90, price: 4000 },
-      { name: "Supersportler", color: "#d68cff", maxSpeed: 360, accel: 0.22, turn: 0.052, grip: 0.89, price: 9000 },
-      { name: "Hypercar",      color: "#ffe14d", maxSpeed: 410, accel: 0.26, turn: 0.050, grip: 0.90, price: 20000 },
-      { name: "Rakete",        color: "#4df0ff", maxSpeed: 480, accel: 0.32, turn: 0.048, grip: 0.92, price: 50000 }
+      { name: t("Kleinwagen"),    color: "#57d6a1", maxSpeed: 190, accel: 0.09, turn: 0.047, grip: 0.91, price: 0 },
+      { name: t("Limousine"),     color: "#68a8ff", maxSpeed: 230, accel: 0.10, turn: 0.040, grip: 0.93, price: 250 },
+      { name: t("Sportwagen"),    color: "#ff6868", maxSpeed: 290, accel: 0.16, turn: 0.055, grip: 0.88, price: 750 },
+      { name: t("Muscle Car"),    color: "#ff9d3c", maxSpeed: 320, accel: 0.20, turn: 0.044, grip: 0.86, price: 1800 },
+      { name: t("Rallye-Auto"),   color: "#f2f5f8", maxSpeed: 300, accel: 0.18, turn: 0.062, grip: 0.90, price: 4000 },
+      { name: t("Supersportler"), color: "#d68cff", maxSpeed: 360, accel: 0.22, turn: 0.052, grip: 0.89, price: 9000 },
+      { name: t("Hypercar"),      color: "#ffe14d", maxSpeed: 410, accel: 0.26, turn: 0.050, grip: 0.90, price: 20000 },
+      { name: t("Rakete"),        color: "#4df0ff", maxSpeed: 480, accel: 0.32, turn: 0.048, grip: 0.92, price: 50000 }
     ];
 
     // Level-System
@@ -334,7 +445,7 @@
 
     function addPoints(n) {
       driftScore += Math.round(n);
-      driftScoreDisplay.textContent = driftScore.toLocaleString("de-DE");
+      driftScoreDisplay.textContent = driftScore.toLocaleString(LOCALE);
     }
 
     function popup(text, color = "#ffd166", size = 24) {
@@ -388,13 +499,13 @@
         addPoints(got);
         if (!devMode) credits += Math.round(got / 25 * (1 + selectedCar * 0.35));
         updateCreditsDisplay();
-        popup(`+${got.toLocaleString("de-DE")}`, "#65e6a5", 26);
+        popup(`+${got.toLocaleString(LOCALE)}`, "#65e6a5", 26);
       }
       run.pending = 0; run.chain = 0; run.comboTimer = 0;
     }
 
     function loseCombo() {
-      if (run.pending > 0 || run.chain > 0) { popup("KOMBO VERLOREN", "#ff6b6b", 22); sfx.lost(); }
+      if (run.pending > 0 || run.chain > 0) { popup(L("KOMBO VERLOREN", "COMBO LOST"), "#ff6b6b", 22); sfx.lost(); }
       run.pending = 0; run.chain = 0; run.comboTimer = 0; run.drifting = false; run.boost = 0;
     }
 
@@ -572,7 +683,7 @@
       c.speed = 0;
       sfx.takedown();
       addPoints(500);
-      popup("GERAMMT! +500", "#65e6a5", 24);
+      popup(L("GERAMMT! +500", "RAMMED! +500"), "#65e6a5", 24);
       run.shake = Math.max(run.shake, 0.7);
       burst(c.x, c.y, 12, ["#cfcfcf", "#e8e8e8"], 4, false);
     }
@@ -614,7 +725,7 @@
       const tier = 1 + Math.floor(run.time / 20);
       if (tier !== run.tier) {
         run.tier = tier;
-        popup(`ÜBERLEBT: x${tier} PUNKTE`, "#65e6a5", 22);
+        popup(L(`ÜBERLEBT: x${tier} PUNKTE`, `SURVIVED: x${tier} POINTS`), "#65e6a5", 22);
       }
       // In der Garage zu parken bringt keine Überlebens-Punkte
       const inGarage = garage && player.x > garage.x && player.x < garage.x + garage.w &&
@@ -626,7 +737,7 @@
       const want = !settings.chasers || run.time < GRACE_SECONDS ? 0 : Math.min(4, 1 + Math.floor((run.time - GRACE_SECONDS) / 30));
       while (chasers.length < want) {
         spawnChaser();
-        popup(chasers.length === 1 ? "DU WIRST VERFOLGT" : "VERSTÄRKUNG!", "#ff6b6b", 24);
+        popup(chasers.length === 1 ? L("DU WIRST VERFOLGT", "YOU ARE BEING CHASED") : L("VERSTÄRKUNG!", "REINFORCEMENTS!"), "#ff6b6b", 24);
         run.shake = Math.max(run.shake, 0.25);
       }
 
@@ -641,7 +752,7 @@
           c.nearCd = 2.5;
           const bonus = 150 * Math.max(1, run.chain);
           addPoints(bonus);
-          popup(`KNAPP! +${bonus}`, "#ffd166", 20);
+          popup(L(`KNAPP! +${bonus}`, `CLOSE CALL! +${bonus}`), "#ffd166", 20);
         }
       }
     }
@@ -748,7 +859,7 @@
     const pick = list => list[Math.floor(sr() * list.length)];
 
     const SHOPS = ["BÄCKEREI", "KIOSK", "APOTHEKE", "CAFÉ", "PIZZERIA", "SUPERMARKT", "BANK", "FRISEUR",
-      "BLUMEN", "BAR", "BUCHLADEN", "WERKSTATT", "DÖNER", "METZGEREI", "EISDIELE", "KINO", "BAUMARKT", "HOTEL"];
+      "BLUMEN", "BAR", "BUCHLADEN", "WERKSTATT", "DÖNER", "METZGEREI", "EISDIELE", "KINO", "BAUMARKT", "HOTEL"].map(t);
     const AWNINGS = [["#c0392b", "#f4f1e8"], ["#2d7dd2", "#f4f1e8"], ["#2e9e5b", "#f4f1e8"], ["#e0a526", "#f4f1e8"], ["#8e44ad", "#f4f1e8"]];
 
     function palette() {
@@ -1061,7 +1172,7 @@
       } else if (kind === "parking") {
         lots.push({ x, y, w, h, kind: "parking" });
         const sw = Math.min(w * 0.75, 280);
-        addBuilding(x + (w - sw) / 2, y + 6, sw, 74, pick(pal.build), "shop", pick(["SUPERMARKT", "BAUMARKT", "DISCOUNTER"]), "s", pick(AWNINGS));
+        addBuilding(x + (w - sw) / 2, y + 6, sw, 74, pick(pal.build), "shop", pick(["SUPERMARKT", "BAUMARKT", "DISCOUNTER"].map(t)), "s", pick(AWNINGS));
         for (let yy = y + 104; yy + 30 <= y + h - 6; yy += 62) {
           for (let xx = x + 14; xx + 18 <= x + w - 6; xx += 24) {
             if (sr() < 0.5) addProp(xx, yy, 16, 30, pick(["#c0392b", "#2d7dd2", "#d9d9d9", "#222831", "#e0a526", "#2e9e5b"]), "car");
@@ -1069,7 +1180,7 @@
         }
       } else if (kind === "gas") {
         lots.push({ x, y, w, h, kind: "gas" });
-        addBuilding(x + w - 120 - 10, y + 8, 120, 62, pick(pal.build), "shop", "TANKSTELLE", "s", ["#e0a526", "#c0392b"]);
+        addBuilding(x + w - 120 - 10, y + 8, 120, 62, pick(pal.build), "shop", t("TANKSTELLE"), "s", ["#e0a526", "#c0392b"]);
         const cx = x + 26, cy = y + h * 0.45;
         decor.push({ k: "canopy", x: cx, y: cy, w: Math.min(150, w - 60), h: 64 });
         for (let i = 0; i < 2; i++) addProp(cx + 40 + i * 60, cy + 24, 10, 18, "#d94a3a", "pump");
@@ -1430,7 +1541,7 @@
       for (let tries = 0; npcs.length < target && tries < 2; tries++) trySpawnNpc(650, 3000);
     }
 
-    const formatMoney = value => `${value.toLocaleString("de-DE")} €`;
+    const formatMoney = value => `${value.toLocaleString(LOCALE)} €`;
 
     function updateCreditsDisplay() {
       creditsDisplay.textContent = devMode ? "∞ €" : formatMoney(credits);
@@ -1473,9 +1584,9 @@
 
       // Level-Info updaten
       if (currentLevel === "moon") {
-        levelInfo.textContent = "🌙 MOND";
+        levelInfo.textContent = L("🌙 MOND", "🌙 MOON");
       } else {
-        levelInfo.textContent = "STADT";
+        levelInfo.textContent = L("STADT", "CITY");
       }
     }
 
@@ -1667,7 +1778,7 @@
       const other = inputMode === "touch" ? "mouse" : "touch";
       const bar = document.createElement("div");
       bar.style.cssText = "position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:50;display:flex;gap:8px;align-items:center;padding:8px 12px;background:#10151cee;color:#fff;border:1px solid #ffffff44;border-radius:10px;font:14px sans-serif";
-      bar.innerHTML = `<span>${other === "touch" ? "Mit dem Finger steuern?" : "Mit Maus/Tastatur steuern?"}</span><button data-y>Ja, wechseln</button><button data-n>Nein</button>`;
+      bar.innerHTML = `<span>${other === "touch" ? L("Mit dem Finger steuern?", "Steer with your finger?") : L("Mit Maus/Tastatur steuern?", "Steer with mouse/keyboard?")}</span><button data-y>${L("Ja, wechseln", "Yes, switch")}</button><button data-n>${L("Nein", "No")}</button>`;
       bar.querySelector("[data-y]").onclick = () => { setInputMode(other); bar.remove(); };
       bar.querySelector("[data-n]").onclick = () => bar.remove();
       document.body.appendChild(bar);
@@ -1797,7 +1908,7 @@
         currentLevel = "moon";
         moonLevelUnlocked = true;
         generateMap();
-        levelInfo.textContent = "🌙 MOND";
+        levelInfo.textContent = L("🌙 MOND", "🌙 MOON");
         devLog("🌙 Angekommen auf dem Mond!");
       }
 
@@ -2887,7 +2998,7 @@
         ctx.fillText(`DRIFT x${mult}`, W / 2, y + 28);
         ctx.fillStyle = "#fff";
         ctx.font = "bold 18px system-ui";
-        ctx.fillText(Math.round(run.pending).toLocaleString("de-DE"), W / 2, y + 50);
+        ctx.fillText(Math.round(run.pending).toLocaleString(LOCALE), W / 2, y + 50);
 
         ctx.fillStyle = "#ffffff22";
         ctx.fillRect(x + 12, y + 58, w - 24, 7);
@@ -2903,7 +3014,7 @@
           ctx.fillRect(x + 12, y + 58, (w - 24) * clamp(run.comboTimer / 2, 0, 1), 7);
           ctx.fillStyle = "#c5d0db";
           ctx.font = "11px system-ui";
-          ctx.fillText("weiter driften – sonst wird eingelöst", W / 2, y - 6);
+          ctx.fillText(L("weiter driften – sonst wird eingelöst", "keep drifting – or it gets cashed in"), W / 2, y - 6);
         }
       }
 
@@ -2917,7 +3028,7 @@
         ctx.fillStyle = "#c5d0db";
         ctx.font = "bold 10px system-ui";
         ctx.textAlign = "center";
-        ctx.fillText(run.boost > 0 ? "BOOST" : run.boostCharge >= BOOST_MIN_CHARGE ? "BOOST bereit – B" : "BOOST lädt beim Driften", W / 2, by + 24);
+        ctx.fillText(run.boost > 0 ? "BOOST" : run.boostCharge >= BOOST_MIN_CHARGE ? L("BOOST bereit – B", "BOOST ready – B") : L("BOOST lädt beim Driften", "BOOST charges while drifting"), W / 2, by + 24);
       }
 
       // Pop-up-Meldungen
@@ -2946,16 +3057,16 @@
       ctx.shadowColor = "#000"; ctx.shadowBlur = 8;
       ctx.fillStyle = sirenPhase() ? "#ff4b4b" : "#4b8bff";
       ctx.font = "900 46px system-ui";
-      ctx.fillText("ERWISCHT!", W / 2, H / 2 - 40);
+      ctx.fillText(L("ERWISCHT!", "BUSTED!"), W / 2, H / 2 - 40);
       ctx.fillStyle = "#fff";
       ctx.font = "bold 22px system-ui";
-      ctx.fillText(`${b.score.toLocaleString("de-DE")} Punkte · ${fmtTime(b.time)} überlebt`, W / 2, H / 2 + 6);
+      ctx.fillText(L(`${b.score.toLocaleString(LOCALE)} Punkte · ${fmtTime(b.time)} überlebt`, `${b.score.toLocaleString(LOCALE)} points · survived ${fmtTime(b.time)}`), W / 2, H / 2 + 6);
       ctx.fillStyle = b.isBest ? "#ffd166" : "#c5d0db";
       ctx.font = "16px system-ui";
-      ctx.fillText(b.isBest ? "NEUER REKORD!" : `Rekord: ${run.best.toLocaleString("de-DE")}`, W / 2, H / 2 + 36);
+      ctx.fillText(b.isBest ? L("NEUER REKORD!", "NEW BEST!") : L("Rekord: ", "Best: ") + run.best.toLocaleString(LOCALE), W / 2, H / 2 + 36);
       if (b.lost > 0) {
         ctx.fillStyle = "#ff8a8a";
-        ctx.fillText(`${b.lost.toLocaleString("de-DE")} Kombo-Punkte nicht eingelöst`, W / 2, H / 2 + 60);
+        ctx.fillText(L(`${b.lost.toLocaleString(LOCALE)} Kombo-Punkte nicht eingelöst`, `${b.lost.toLocaleString(LOCALE)} combo points not cashed in`), W / 2, H / 2 + 60);
       }
       ctx.restore();
     }
@@ -3264,6 +3375,8 @@
     <button id="cookieDecline" style="padding:6px 12px;cursor:pointer">Ablehnen</button>
     <button id="cookieAccept" style="padding:6px 12px;cursor:pointer;background:#ffd166;border:0;font-weight:bold">OK</button>
   </div>
+
+  <script>wgTranslate(document.querySelector("#cookieBanner"));</script>
 
   <script>
     (() => {

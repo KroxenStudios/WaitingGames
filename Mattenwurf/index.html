@@ -29,9 +29,11 @@
   <div class="splash-name">KroxenStudios</div>
   <div class="splash-bar"><i></i></div>
 </div>
-<canvas id="c" width="960" height="540" aria-label="Mattenwurf Spielfeld"></canvas>
+<canvas id="c" width="960" height="540" aria-label="Mattenwurf"></canvas>
+<script src="../i18n.js"></script>
 <script>
 "use strict";
+const L = WG.L;
 // ================= Konfiguration =================
 const W = 960, H = 540;
 const BASE = 500;            // Bildschirm-y für z=0,h=0
@@ -154,41 +156,42 @@ function evalTarget(mx, my) {
       const th = (w.h0 + w.h1) / 2, dz = hs.zw - PLAYER_Z, cs = Math.cos(ANGLE);
       const denom = H0 + dz * Math.tan(ANGLE) - th;
       Object.assign(r, { tx: w.x, tz: hs.zw, th, zStop: hs.zw });
-      if (denom <= 0) { r.msg = 'Zu weit'; return r; }
+      if (denom <= 0) { r.msg = L('Zu weit', 'Too far'); return r; }
       r.P = Math.sqrt(G * dz * dz / (2 * cs * cs * denom));
-      if (r.P > P_MAX) { r.msg = 'Zu weit'; return r; }
+      if (r.P > P_MAX) { r.msg = L('Zu weit', 'Too far'); return r; }
       r.T = dz / (r.P * cs);
       r.xrel = w.x - SPEED * r.T - RX;
-      if ((r.xrel - player.x) / SPEED < WIND + SWING + LEAD) { r.msg = 'Zu spaet'; return r; }
+      if ((r.xrel - player.x) / SPEED < WIND + SWING + LEAD) { r.msg = L('Zu spät', 'Too late'); return r; }
       r.ok = true;
       return r;
     }
   }
-  if (tz > ZMAX - 2) { r.msg = 'Auf den Boden zielen'; return r; }
+  if (tz > ZMAX - 2) { r.msg = L('Auf den Boden zielen', 'Aim at the ground'); return r; }
   for (let i = Math.max(0, Math.floor((tx - 700) / SPACING) - 1); i <= Math.floor((tx - 700) / SPACING) + 1; i++) {
     const hs = house(i);
-    if (tx > hs.x0 && tx < hs.x1 && tz > hs.zw - 2) { r.msg = 'Auf den Boden zielen'; return r; }
+    if (tx > hs.x0 && tx < hs.x1 && tz > hs.zw - 2) { r.msg = L('Auf den Boden zielen', 'Aim at the ground'); return r; }
   }
-  if (tz < 45) { r.msg = 'Zu nah'; return r; }
+  if (tz < 45) { r.msg = L('Zu nah', 'Too close'); return r; }
   r.P = solveP(tz - PLAYER_Z);
-  if (r.P > P_MAX) { r.msg = 'Zu weit'; return r; }
+  if (r.P > P_MAX) { r.msg = L('Zu weit', 'Too far'); return r; }
   r.T = flightT(r.P);
   r.xrel = tx - SPEED * r.T - RX;               // Fahrer-Position, an der geworfen wird
-  if ((r.xrel - player.x) / SPEED < WIND + SWING + LEAD) { r.msg = 'Zu spaet'; return r; }
+  if ((r.xrel - player.x) / SPEED < WIND + SWING + LEAD) { r.msg = L('Zu spät', 'Too late'); return r; }
   r.ok = true;
   return r;
 }
 // Zurufe des Zeitungsjungen: Sprechblase + (optional) Sprachausgabe
-const THROW_CALLS = ['ZEEITUNG!', 'ZEIIITUNG!', 'ZEEEITUNG!!', 'Frische Zeitung!', 'Zeitung kommt!', 'Vorsicht, Papier!', 'Morgenpost!', 'Pappe im Anflug', 'Viel spass damit', 'FLIEEEG, Zeitung'];
+const THROW_CALLS = L(['ZEEITUNG!', 'ZEIIITUNG!', 'ZEEEITUNG!!', 'Frische Zeitung!', 'Zeitung kommt!', 'Vorsicht, Papier!', 'Morgenpost!', 'Pappe im Anflug', 'Viel spass damit', 'FLIEEEG, Zeitung'],
+  ['NEEEWSPAPER!', 'PAAAPER!', 'FRESH NEWS!', 'Fresh paper!', 'Paper coming in!', 'Heads up, paper!', 'Morning post!', 'Incoming paper', 'Enjoy the read', 'FLYYY, paper']);
 function say(text, big = false) {
   shout = { text, life: 1.3, age: 0, big };
   if (!voiceOn || !window.speechSynthesis) return;
   try {
     if (speechSynthesis.speaking) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text.replace(/[!]/g, '').replace(/([EI])\1+/g, '$1$1'));
-    const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('de'));
+    const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith(WG.lang));
     if (v) u.voice = v;
-    u.lang = 'de-DE'; u.rate = big ? 0.7 : 0.85; u.pitch = 1.7; u.volume = 0.8;
+    u.lang = L('de-DE', 'en-US'); u.rate = big ? 0.7 : 0.85; u.pitch = 1.7; u.volume = 0.8;
     speechSynthesis.speak(u);
   } catch (e) {}
 }
@@ -217,17 +220,18 @@ function resolve(p) {
       const w = hs.wins.find(w => Math.abs(p.x - w.x) < w.w && p.h > w.h0 && p.h < w.h1);
       if (w) {
         if (!w.broken) { w.broken = true; spawnShards(w.x, p.h, hs.zw); }
-        sfx('glass'); award(-10, 'Fenster! -10', p, true); burst(p, '#bfe6ff', 10);
-        popups.push({ x: w.x, y: sy(hs.zw, 40) - 20, text: pick(Math.random, ['HEY!', 'Mein Fenster!', 'Na warte!', 'KLIRR!', 'Oh, eine Zeitung', 'AAAAAHHH', 'Da ist ja meine Zeitung...', 'Ahh ein EINBRECHER!!!', 'Das wird Teuer', 'Warum immer ich?', '*Keine Reaktion*']), life: 1.6, good: false, bad: false });
+        sfx('glass'); award(-10, L('Fenster! -10', 'Window! -10'), p, true); burst(p, '#bfe6ff', 10);
+        popups.push({ x: w.x, y: sy(hs.zw, 40) - 20, text: pick(Math.random, L(['HEY!', 'Mein Fenster!', 'Na warte!', 'KLIRR!', 'Oh, eine Zeitung', 'AAAAAHHH', 'Da ist ja meine Zeitung...', 'Ahh ein EINBRECHER!!!', 'Das wird Teuer', 'Warum immer ich?', '*Keine Reaktion*'],
+    ['HEY!', 'My window!', 'You just wait!', 'CRASH!', 'Oh, a newspaper', 'AAAAAHHH', 'There is my newspaper...', 'Ahh a BURGLAR!!!', 'That will be expensive', 'Why always me?', '*No reaction*'])), life: 1.6, good: false, bad: false });
         return true;
       }
-      sfx('wall'); award(0, 'Wand', p, true); burst(p, '#f4f1e8', 5); return true;
+      sfx('wall'); award(0, L('Wand', 'Wall'), p, true); burst(p, '#f4f1e8', 5); return true;
     }
     for (const o of hs.obstacles) {
       const dx = p.x - o.x, dz = p.z - o.z;
       if (dx * dx + dz * dz < o.rad * o.rad && p.h < o.hgt) {
         o.hit = true; sfx(o.type);
-        award(-5, (o.type === 'gnome' ? 'Gartenzwerg' : 'Blumentopf') + '! -5', p, true);
+        award(-5, (o.type === 'gnome' ? L('Gartenzwerg', 'Garden gnome') : L('Blumentopf', 'Flower pot')) + '! -5', p, true);
         burst(p, o.type === 'gnome' ? o.col : '#b5532f', 10); return true;
       }
     }
@@ -239,31 +243,32 @@ function resolve(p) {
       const hs = house(i);
       const dx = Math.abs(p.x - hs.cx), dz = Math.abs(p.z - (hs.mz0 + hs.mz1) / 2);
       if (dx < MAT_HALF_X && p.z > hs.mz0 && p.z < hs.mz1) {
-        if (hs.delivered) { sfx('miss'); award(0, 'Schon geliefert', p, false); return true; }
+        if (hs.delivered) { sfx('miss'); award(0, L('Schon geliefert', 'Already delivered'), p, false); return true; }
         hs.delivered = true; hs.landX = p.x; hs.landZ = p.z;
         const d = Math.hypot(dx / MAT_HALF_X, dz / ((hs.mz1 - hs.mz0) / 2));
         const perfect = d < 0.35;
         streak++;
         const bonus = (streak - 1) * 2;
         const pts = (perfect ? 20 : 10) + bonus;
-        award(pts, (perfect ? 'PERFEKT! +' : 'Treffer +') + pts + (bonus ? ' (Serie ' + streak + ')' : ''), p, false);
+        award(pts, (perfect ? L('PERFEKT! +', 'PERFECT! +') : L('Treffer +', 'Hit +')) + pts + (bonus ? L(' (Serie ', ' (Streak ') + streak + ')' : ''), p, false);
         burst(p, perfect ? PAL.gold : PAL.accent, perfect ? 16 : 8);
         sfx(perfect ? 'perfect' : 'mat');
         return true;
       }
     }
-    sfx('miss'); award(0, 'Daneben', p, true);
+    sfx('miss'); award(0, L('Daneben', 'Missed'), p, true);
     burst(p, '#8a7a5a', 5);
     return true;
   }
-  if (p.z > ZMAX + 40) { sfx('miss'); award(0, 'Zu weit', p, true); return true; }
+  if (p.z > ZMAX + 40) { sfx('miss'); award(0, L('Zu weit', 'Too far'), p, true); return true; }
   return false;
 }
 function award(pts, text, p, breaks) {
   if (breaks) { streak = 0; if (pts < 0) shake = 8; }
-  if (pts < 0) say(pick(Math.random, ['ups', 'Autsch', 'Hoppla', 'Sorry', 'oh oh', 'Hat niemand gesehen...', 'Beim nächsten mal vielleicht', 'Zeitung - Geliefert bis in ihre Wohnung', 'War ich nicht!']));
-  else if (pts === 0 && breaks) say(pick(Math.random, ['fast', 'Daneben!', 'ach ne', 'Oder auch nicht...', ]));
-  else if (pts >= 20) say(pick(Math.random, ['Volltreffer!', 'Perfekt', 'Treffer, versenkt', 'Endlich...']));
+  if (pts < 0) say(pick(Math.random, L(['ups', 'Autsch', 'Hoppla', 'Sorry', 'oh oh', 'Hat niemand gesehen...', 'Beim nächsten mal vielleicht', 'Zeitung - Geliefert bis in ihre Wohnung', 'War ich nicht!'],
+    ['oops', 'Ouch', 'Whoops', 'Sorry', 'uh oh', 'Nobody saw that...', 'Maybe next time', 'Newspaper - delivered right to your flat', "Wasn't me!"])));
+  else if (pts === 0 && breaks) say(pick(Math.random, L(['fast', 'Daneben!', 'ach ne', 'Oder auch nicht...'], ['almost', 'Missed!', 'oh no', 'Or not...'])));
+  else if (pts >= 20) say(pick(Math.random, L(['Volltreffer!', 'Perfekt', 'Treffer, versenkt', 'Endlich...'], ['Bullseye!', 'Perfect', 'Nailed it', 'Finally...'])));
   score = Math.max(0, score + pts);
   if (pts > 0) {
     const c = Math.ceil(pts / 10);
@@ -555,7 +560,7 @@ function drawLawn(hs) {
   ctx.fillRect(x - MAT_HALF_X, my0, MAT_HALF_X * 2, my1 - my0);
   ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 2; ctx.strokeRect(x - MAT_HALF_X + 3, my0 + 3, MAT_HALF_X * 2 - 6, my1 - my0 - 6);
   ctx.strokeStyle = PAL.outline; ctx.lineWidth = 3; ctx.strokeRect(x - MAT_HALF_X, my0, MAT_HALF_X * 2, my1 - my0);
-  ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = 'bold 8px system-ui'; ctx.textAlign = 'center'; ctx.fillText(hs.delivered ? 'DANKE' : 'HIER', x, (my0 + my1) / 2 + 3);
+  ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = 'bold 8px system-ui'; ctx.textAlign = 'center'; ctx.fillText(hs.delivered ? L('DANKE', 'THANKS') : L('HIER', 'HERE'), x, (my0 + my1) / 2 + 3);
   if (hs.delivered) paperSprite(hs.landX - camX, sy(hs.landZ, 0) - 3, 0.2, 1);
   // Hindernisse
   for (const o of hs.obstacles) drawObstacle(o);
@@ -825,16 +830,16 @@ function readout(x, label, value, col, w) {
 function drawHUD() {
   ctx.fillStyle = 'rgba(10,10,10,0.88)'; ctx.fillRect(0, 0, W, HUD_H);
   ctx.fillStyle = '#2a2a2a'; ctx.fillRect(0, HUD_H, W, 2);
-  readout(18, 'PUNKTE', String(score), PAL.accent);
-  readout(150, 'SERIE', '×' + streak, streak >= 3 ? PAL.gold : '#eceff2');
+  readout(18, L('PUNKTE', 'SCORE'), String(score), PAL.accent);
+  readout(150, L('SERIE', 'STREAK'), '×' + streak, streak >= 3 ? PAL.gold : '#eceff2');
   ctx.save(); if (hudCoinPulse > 0) { ctx.translate(310, 30); ctx.scale(1 + hudCoinPulse * 0.2, 1 + hudCoinPulse * 0.2); ctx.translate(-310, -30); }
-  readout(260, 'MÜNZEN', String(coinsRound), PAL.gold);
+  readout(260, L('MÜNZEN', 'COINS'), String(coinsRound), PAL.gold);
   ctx.restore();
-  readout(400, 'ZEITUNGEN', String(left), '#eceff2');
+  readout(400, L('ZEITUNGEN', 'PAPERS'), String(left), '#eceff2');
   for (let i = 0; i < Math.min(left, 16); i++) paperSprite(480 + (i % 8) * 17, 18 + Math.floor(i / 8) * 17, 0, 0.8);
-  ctx.textAlign = 'right'; ctx.fillStyle = PAL.dim; ctx.font = '600 10px system-ui'; ctx.fillText('REKORD', W - 18, 18);
+  ctx.textAlign = 'right'; ctx.fillStyle = PAL.dim; ctx.font = '600 10px system-ui'; ctx.fillText(L('REKORD', 'BEST'), W - 18, 18);
   ctx.fillStyle = '#eceff2'; ctx.font = 'bold 22px system-ui'; ctx.fillText(String(save.best), W - 18, 42);
-  text('Klick / Tippen auf den Boden = Ziel  ·  Wurf startet automatisch  ·  N Musik  ·  Esc Auswahl', W / 2, H - 14, 12, PAL.dim);
+  text(L('Klick / Tippen auf den Boden = Ziel  ·  Wurf startet automatisch  ·  N Musik  ·  Esc Auswahl', 'Click / tap the ground = target  ·  Throw starts automatically  ·  N Music  ·  Esc Menu'), W / 2, H - 14, 12, PAL.dim);
   if (aimMsg) { ctx.globalAlpha = Math.min(1, aimMsg.life * 2); ctx.lineWidth = 4; ctx.strokeStyle = '#0a0a0a'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'center'; ctx.strokeText(aimMsg.text, aimMsg.x, aimMsg.y - 16); ctx.fillStyle = '#ff8a80'; ctx.fillText(aimMsg.text, aimMsg.x, aimMsg.y - 16); ctx.globalAlpha = 1; }
   // Popups mit dunkler Kontur
   ctx.textAlign = 'center'; ctx.font = 'bold 20px system-ui'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
@@ -876,28 +881,28 @@ function drawMenu() {
   card(250, 80, 460, 400);
   text('🗞', W / 2, 140, 44, '#fff');
   text('Mattenwurf', W / 2, 190, 40, PAL.accent, 'center', 'bold');
-  text('Wirf Zeitungen auf die Fußmatten.', W / 2, 220, 16, PAL.dim);
-  text('Treffer: +10   ·   Mitte: +20   ·   Serien geben Bonus', W / 2, 258, 14, '#eceff2');
-  text('Fenster −10 (einwerfen geht auch gezielt!)   ·   Zwerg / Topf −5', W / 2, 280, 14, '#ff8a80');
-  text('Klick / Tippen auf den Boden = Ziel. Der Wurf startet von selbst.', W / 2, 312, 13, PAL.dim);
-  text('Das Wurftempo schwankt leicht – Upgrade: ruhige Hand.', W / 2, 332, 13, PAL.dim);
-  btn('start', 'SPIEL STARTEN', 330, 352, 300, 44, true);
-  btn('music', 'Musik: ' + (musicOn ? 'an' : 'aus'), 330, 408, 300, 28, false);
-  text('Esc = zurück zur Spielauswahl', W / 2, 452, 11, PAL.dim);
-  text('Rekord ' + save.best + '   ·   Münzen ' + save.coins, W / 2, 462, 13, PAL.gold);
+  text(L('Wirf Zeitungen auf die Fußmatten.', 'Throw newspapers onto the doormats.'), W / 2, 220, 16, PAL.dim);
+  text(L('Treffer: +10   ·   Mitte: +20   ·   Serien geben Bonus', 'Hit: +10   ·   Centre: +20   ·   Streaks give a bonus'), W / 2, 258, 14, '#eceff2');
+  text(L('Fenster −10 (einwerfen geht auch gezielt!)   ·   Zwerg / Topf −5', 'Window −10 (breaking it on purpose works too!)   ·   Gnome / pot −5'), W / 2, 280, 14, '#ff8a80');
+  text(L('Klick / Tippen auf den Boden = Ziel. Der Wurf startet von selbst.', 'Click / tap the ground = target. The throw starts by itself.'), W / 2, 312, 13, PAL.dim);
+  text(L('Das Wurftempo schwankt leicht – Upgrade: ruhige Hand.', 'Throw speed varies slightly – upgrade: steady hand.'), W / 2, 332, 13, PAL.dim);
+  btn('start', L('SPIEL STARTEN', 'START GAME'), 330, 352, 300, 44, true);
+  btn('music', L('Musik: ', 'Music: ') + (musicOn ? L('an', 'on') : L('aus', 'off')), 330, 408, 300, 28, false);
+  text(L('Esc = zurück zur Spielauswahl', 'Esc = back to game selection'), W / 2, 452, 11, PAL.dim);
+  text(L('Rekord ', 'Best ') + save.best + L('   ·   Münzen ', '   ·   Coins ') + save.coins, W / 2, 462, 13, PAL.gold);
 }
 function drawEnd() {
   buttons.length = 0;
   card(230, 70, 500, 400);
-  text('Runde vorbei', W / 2, 120, 34, PAL.accent, 'center', 'bold');
-  text('Punkte ' + score + (score > 0 && score >= save.best ? '  ·  NEUER REKORD' : ''), W / 2, 155, 18, '#eceff2', 'center', 'bold');
-  text('Münzen +' + coinsRound + '   ·   Gesamt ' + save.coins, W / 2, 182, 15, PAL.gold);
+  text(L('Runde vorbei', 'Round over'), W / 2, 120, 34, PAL.accent, 'center', 'bold');
+  text(L('Punkte ', 'Score ') + score + (score > 0 && score >= save.best ? L('  ·  NEUER REKORD', '  ·  NEW BEST') : ''), W / 2, 155, 18, '#eceff2', 'center', 'bold');
+  text(L('Münzen +', 'Coins +') + coinsRound + L('   ·   Gesamt ', '   ·   Total ') + save.coins, W / 2, 182, 15, PAL.gold);
   const aimMax = save.aim >= AIM_MAX, pc = v => (v * 100).toFixed(1).replace('.', ',') + '%';
   const nextJ = 0.02 / (1 + 0.5 * (save.aim + 1));
-  btn('bag', '[1] Größere Tasche  ' + bagSize() + ' → ' + (bagSize() + 3) + '   ·   ' + costBag() + ' €', 260, 214, 440, 42, false, save.coins >= costBag());
-  btn('aim', aimMax ? '[2] Ruhige Hand  ±' + pc(jitter()) + '  (max.)' : '[2] Ruhige Hand  ±' + pc(jitter()) + ' → ±' + pc(nextJ) + '   ·   ' + costAim() + ' €', 260, 266, 440, 42, false, !aimMax && save.coins >= costAim());
-  text('Upgrades: Taste 1 / 2 oder antippen', W / 2, 336, 12, PAL.dim);
-  btn('start', 'NOCHMAL (Leertaste)', 330, 370, 300, 44, true);
+  btn('bag', L('[1] Größere Tasche  ', '[1] Bigger bag  ') + bagSize() + ' → ' + (bagSize() + 3) + '   ·   ' + costBag() + ' €', 260, 214, 440, 42, false, save.coins >= costBag());
+  btn('aim', aimMax ? L('[2] Ruhige Hand  ±', '[2] Steady hand  ±') + pc(jitter()) + '  (max.)' : L('[2] Ruhige Hand  ±', '[2] Steady hand  ±') + pc(jitter()) + ' → ±' + pc(nextJ) + '   ·   ' + costAim() + ' €', 260, 266, 440, 42, false, !aimMax && save.coins >= costAim());
+  text(L('Upgrades: Taste 1 / 2 oder antippen', 'Upgrades: press 1 / 2 or tap'), W / 2, 336, 12, PAL.dim);
+  btn('start', L('NOCHMAL (Leertaste)', 'AGAIN (Space)'), 330, 370, 300, 44, true);
 }
 
 // ================= Gesamtbild =================
@@ -934,12 +939,12 @@ function buyAim() { if (save.aim < AIM_MAX && save.coins >= costAim()) { save.co
 function toggleVoice() {
   voiceOn = !voiceOn; save.voice = voiceOn; persist();
   if (!voiceOn && window.speechSynthesis) speechSynthesis.cancel();
-  aimMsg = { text: voiceOn ? 'Stimme an' : 'Stimme aus', x: W / 2, y: 120, life: 1 };
+  aimMsg = { text: voiceOn ? L('Stimme an', 'Voice on') : L('Stimme aus', 'Voice off'), x: W / 2, y: 120, life: 1 };
 }
 function toggleMusic() {
   musicOn = !musicOn; save.music = musicOn; persist();
   if (musicBus) musicBus.gain.setTargetAtTime(musicOn ? 0.3 : 0, ac.currentTime, 0.05);
-  aimMsg = { text: musicOn ? 'Musik an' : 'Musik aus', x: W / 2, y: 120, life: 1 };
+  aimMsg = { text: musicOn ? L('Musik an', 'Music on') : L('Musik aus', 'Music off'), x: W / 2, y: 120, life: 1 };
 }
 addEventListener('keydown', e => {
   // if (e.code === 'KeyM') { toggleVoice(); return; }   // Sprachausgabe deaktiviert
@@ -948,7 +953,7 @@ addEventListener('keydown', e => {
   if (e.repeat) return;
   if (e.code === 'Escape') {
     if (state !== 'play' || (escT > 0)) { location.href = '../index.html'; return; }
-    escT = 2; aimMsg = { text: 'Esc nochmal = zurück zur Auswahl', x: W / 2, y: 120, life: 2 };
+    escT = 2; aimMsg = { text: L('Esc nochmal = zurück zur Auswahl', 'Esc again = back to menu'), x: W / 2, y: 120, life: 2 };
     return;
   }
   if (e.code === 'Space') { e.preventDefault(); press(); }

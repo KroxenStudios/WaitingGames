@@ -7,6 +7,7 @@
   <title>Datenschutz – Asphalt Arkade</title>
   <link rel="icon" href="images/asphalt_arkade.ico" sizes="any">
   <link rel="shortcut icon" href="images/asphalt_arkade.ico">
+  <script src="../i18n.js"></script>
   <style>
     body { margin: 0; background: #14171a; color: #e6e9ec; font: 16px/1.6 system-ui, sans-serif; }
     main { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
@@ -18,6 +19,7 @@
 </head>
 <body>
   <main>
+    <div data-lang="de">
     <p><a href="index.html">← Zurück zum Spiel</a></p>
     <h1>Datenschutzerklärung</h1>
 
@@ -60,6 +62,55 @@
       „Do Not Track“ aktivierst.</p>
 
     <p><small>Stand: Oktober 2026</small></p>
+    </div>
+    <div data-lang="en" hidden>
+    <p><a href="index.html">← Back to the game</a></p>
+    <h1>Privacy Policy</h1>
+
+    <p class="note"><b>In short:</b> Asphalt Arkade counts visits with GoatCounter, a privacy-friendly
+      statistics service. No cookies are set, no user profiles are created and no data is used for
+      advertising. Your game progress stays in your browser.</p>
+
+    <h2>1. Controller</h2>
+    <p>KROX Electronics / KroxenStudios<br>
+      Contact: <a href="mailto:kroxenstudios@proton.me">kroxenstudios@proton.me</a></p>
+
+    <h2>2. Visitor statistics with GoatCounter</h2>
+    <p>This site uses <a href="https://www.goatcounter.com" rel="noopener">GoatCounter</a>
+      (instance: kroxenstudios.goatcounter.com) to anonymously count how often the game is opened.
+      The script is loaded from <code>gc.zgo.at</code>.</p>
+    <p>The following information may be processed:</p>
+    <ul>
+      <li>page visited and referrer (where you come from)</li>
+      <li>browser, operating system and screen size</li>
+      <li>approximate location (country), derived from the IP address</li>
+    </ul>
+    <p>Your IP address is not stored. GoatCounter sets <b>no cookies</b> and does not use local storage
+      to recognise you. There is no tracking across multiple pages or devices. The data is not passed
+      on to third parties for advertising purposes.</p>
+    <p>The legal basis is our legitimate interest in anonymous reach measurement
+      (Art. 6(1)(f) GDPR).</p>
+
+    <h2>3. Game</h2>
+    <p>The game runs entirely in your browser. Inputs, balance and game progress are not transmitted
+      to a server.</p>
+
+    <h2>4. Hosting</h2>
+    <p>When the site is accessed, the hosting provider processes technically necessary access data
+      (e.g. IP address, time) in server logs in order to deliver the site.</p>
+
+    <h2>5. Your rights</h2>
+    <p>You have the right to access, rectification, erasure and objection. Simply write to the
+      address above.
+      You can also block the statistics, e.g. with a content blocker or by enabling
+      "Do Not Track".</p>
+
+    <p><small>As of: October 2026 (English version is a courtesy translation; the German text is authoritative.)</small></p>
+    </div>
   </main>
+  <script>
+    for (const el of document.querySelectorAll("[data-lang]")) el.hidden = el.dataset.lang !== WG.lang;
+    if (WG.lang === "en") document.title = "Privacy – Asphalt Arkade";
+  </script>
 </body>
 </html>

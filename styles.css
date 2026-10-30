@@ -816,3 +816,8 @@ body.edge .screen-buttons {
 @keyframes splash-out {
   to { opacity: 0; visibility: hidden; }
 }
+
+/* Randloses Querformat: Buttongröße nach Bildschirmhöhe (Handy 414 px hoch -> ca. 50 px), damit die Karte sichtbar bleibt */
+body.edge .touch-controls {
+  --u: clamp(40px, 12vh, 96px);
+}

@@ -167,6 +167,7 @@
         <div class="pedals">
           <button class="control-button brake-button" data-control="brake">BREMSEN</button>
           <button class="control-button drift-button" data-control="drift">HANDBREMSE</button>
+          <button class="control-button boost-button" id="boostButton" data-control="boost"><span>BOOST</span></button>
           <button class="control-button gas-button" data-control="gas">GAS</button>
         </div>
       </div>
@@ -234,12 +235,14 @@
 
     const keys = new Set();
     const touchInput = {
-      left: false, right: false, gas: false, brake: false, drift: false
+      left: false, right: false, gas: false, brake: false, drift: false, boost: false
     };
     // Touch-Lenkrad: wheelValue -1..1 (proportional zum Drehwinkel), federt beim Loslassen zurück
     const wheelEl = document.querySelector("#wheel");
     const WHEEL_MAX = 1.9;          // maximaler Drehwinkel in rad (ca. 110°)
     let wheelValue = 0, wheelActive = false;
+    const boostButton = document.querySelector("#boostButton");
+    let boostHeld = false;
 
     let selectedCar = 0;
     const ownedCars = new Set([0]);
@@ -291,6 +294,9 @@
     const LEVEL_AT = [0.7, 1.6, 3.0];                          // Sekunden Drift bis Turbo-Stufe 1-3
     const LEVEL_COLORS = ["#ffe9a8", "#59b6ff", "#ff9a2e", "#c45cff"];
     const BOOST_SECONDS = [0, 0.8, 1.3, 1.9];
+    const BOOST_CHARGE = [0, 0.2, 0.35, 0.5];     // Ladung je Drift-Stufe (1 = voll)
+    const BOOST_MAX_SECONDS = 2.4;                // Dauer bei voller Ladung
+    const BOOST_MIN_CHARGE = 0.2;                 // darunter lässt sich nicht zünden
     const GRACE_SECONDS = 6;                                   
     const CATCH_DISTANCE = 30;
     const NEAR_MISS_DISTANCE = 85;
@@ -298,7 +304,7 @@
     const run = {
       time: 0, tier: 1, best: 0, safe: 0, bustTimer: 0, bustInfo: null,
       chain: 0, pending: 0, driftTime: 0, driftLost: 0, drifting: false, comboTimer: 0, lastLevel: 0,
-      boost: 0, boostLevel: 0, shake: 0, flash: 0, flashColor: "255,255,255", zoom: 1
+      boost: 0, boostLevel: 0, boostCharge: 0, shake: 0, flash: 0, flashColor: "255,255,255", zoom: 1
     };
     try { run.best = Number(localStorage.getItem("asphaltBest") || 0); } catch {}
 
@@ -380,13 +386,11 @@
       run.lastLevel = 0;
       run.comboTimer = 2;        // Frist, in der ein weiterer Drift die Kombo fortsetzt
       if (lvl > 0) {
-        run.boost = BOOST_SECONDS[lvl];
-        run.boostLevel = lvl;
-        run.shake = Math.max(run.shake, 0.35);
-        run.flash = 0.35; run.flashColor = "120,200,255";
-        sfx.turbo(lvl);
-        popup(`TURBO ${"I".repeat(lvl)}`, LEVEL_COLORS[lvl], 28);
-        burst(player.x, player.y, 24, [LEVEL_COLORS[lvl], "#ffffff"], 7);
+        // Kein automatischer Schub mehr: der Drift lädt nur den Boost, ausgelöst wird er per Taste B / Boost-Knopf
+        run.boostCharge = Math.min(1, run.boostCharge + BOOST_CHARGE[lvl]);
+        sfx.level(lvl);
+        popup(`BOOST ${Math.round(run.boostCharge * 100)}%`, LEVEL_COLORS[lvl], 22);
+        burst(player.x, player.y, 12, [LEVEL_COLORS[lvl], "#ffffff"], 5);
       }
     }
 
@@ -572,7 +576,7 @@
 
     function resetRun() {
       run.time = 0; run.tier = 1; run.safe = 0; run.bustTimer = 0; run.bustInfo = null;
-      run.chain = 0; run.pending = 0; run.drifting = false; run.comboTimer = 0; run.boost = 0;
+      run.chain = 0; run.pending = 0; run.drifting = false; run.comboTimer = 0; run.boost = 0; run.boostCharge = 0;
       steerValue = 0;
       driftScore = 0;
       driftScoreDisplay.textContent = "0";
@@ -1920,7 +1924,23 @@
         player.vy += forwardY * accel * dt;
       }
 
-      // Mini-Turbo nach einem langen Drift: schiebt auch ohne Gas
+      // Boost: lädt sich beim Driften, B / Boost-Knopf zündet ihn (verbraucht die ganze Ladung)
+      if (run.drifting) run.boostCharge = Math.min(1, run.boostCharge + dt / 60 * 0.1);
+      const boostKey = pressed("boost", "b");
+      if (boostKey && !boostHeld && run.boost <= 0 && run.boostCharge >= BOOST_MIN_CHARGE) {
+        run.boostLevel = run.boostCharge > 0.7 ? 3 : run.boostCharge > 0.4 ? 2 : 1;
+        run.boost = run.boostCharge * BOOST_MAX_SECONDS;
+        run.boostCharge = 0;
+        run.shake = Math.max(run.shake, 0.35);
+        run.flash = 0.35; run.flashColor = "120,200,255";
+        sfx.turbo(run.boostLevel);
+        popup("BOOST!", LEVEL_COLORS[run.boostLevel], 28);
+        burst(player.x, player.y, 24, [LEVEL_COLORS[run.boostLevel], "#ffffff"], 7);
+      }
+      boostHeld = boostKey;
+      boostButton.style.setProperty("--charge", run.boostCharge);
+      boostButton.classList.toggle("ready", run.boostCharge >= BOOST_MIN_CHARGE);
+
       if (run.boost > 0) {
         player.vx += forwardX * accel * 2.4 * dt;
         player.vy += forwardY * accel * 2.4 * dt;
@@ -2791,6 +2811,19 @@
           ctx.font = "11px system-ui";
           ctx.fillText("weiter driften – sonst wird eingelöst", W / 2, y - 6);
         }
+      }
+
+      // Boost-Ladeanzeige (oben Mitte); B zündet
+      {
+        const bw = 150, bx = W / 2 - bw / 2, by = 12;
+        ctx.fillStyle = "rgba(10,14,20,0.7)";
+        ctx.fillRect(bx - 3, by - 3, bw + 6, 14);
+        ctx.fillStyle = run.boost > 0 ? "#ffffff" : run.boostCharge >= BOOST_MIN_CHARGE ? "#65e6ff" : "#5b7a99";
+        ctx.fillRect(bx, by, bw * (run.boost > 0 ? clamp(run.boost / BOOST_MAX_SECONDS, 0, 1) : run.boostCharge), 8);
+        ctx.fillStyle = "#c5d0db";
+        ctx.font = "bold 10px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText(run.boost > 0 ? "BOOST" : run.boostCharge >= BOOST_MIN_CHARGE ? "BOOST bereit – B" : "BOOST lädt beim Driften", W / 2, by + 24);
       }
 
       // Pop-up-Meldungen

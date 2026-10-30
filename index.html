@@ -2,7 +2,11 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#10151c">
   <title>Asphalt Arkade</title>
   <link rel="icon" href="images/asphalt_arkade.ico" sizes="any">
   <link rel="shortcut icon" href="images/asphalt_arkade.ico">
@@ -37,6 +41,9 @@
     <div class="settings-card">
       <h2>Einstellungen</h2>
       <p class="settings-note">Das Spiel ist pausiert. Änderungen gelten sofort und werden gespeichert.</p>
+
+      <h3>Auto</h3>
+      <div class="car-select" id="settingsCars"></div>
 
       <h3>Lenkung</h3>
       <div class="preset-row">
@@ -151,7 +158,13 @@
           <button class="control-button gas-button" data-control="gas">GAS</button>
         </div>
       </div>
+
+      <div class="screen-buttons" id="screenButtons">
+        <button id="settingsButton2" aria-label="Einstellungen">⚙</button>
+        <button id="fsButton2" aria-label="Vollbild">⛶</button>
+      </div>
     </div>
+    <p class="rotate-hint">Tipp: Handy quer halten und auf ⛶ tippen für Vollbild.</p>
   </main>
 
   <script>
@@ -1376,7 +1389,8 @@
     }
 
     function updateCarButtons() {
-      carSelect.querySelectorAll("button").forEach((button, i) => {
+      document.querySelectorAll("#carSelect button, #settingsCars button").forEach(button => {
+        const i = Number(button.dataset.index);
         const owned = ownedCars.has(i) || devMode;
         button.textContent = owned
           ? `${i + 1} · ${cars[i].name}`
@@ -1417,10 +1431,14 @@
       }
     }
 
+    const settingsCarsEl = document.querySelector("#settingsCars");
     cars.forEach((car, index) => {
-      const button = document.createElement("button");
-      button.addEventListener("click", () => selectCar(index));
-      carSelect.appendChild(button);
+      for (const parent of [carSelect, settingsCarsEl]) {
+        const button = document.createElement("button");
+        button.dataset.index = index;
+        button.addEventListener("click", () => selectCar(index));
+        parent.appendChild(button);
+      }
     });
     selectCar(0);
 
@@ -1859,6 +1877,7 @@
       rpmDisplay.textContent = Math.round(850 + (kmh / car.maxSpeed) * 5700);
     }
 
+    let uiScale = 1;     // >1 auf kleinen Bildschirmen: Anzeigen im Canvas werden vergrößert
     let viewX = 0, viewY = 0, viewW = canvas.width, viewH = canvas.height;
     const visible = (x, y, w, h) =>
       x + w > viewX && x < viewX + viewW &&
@@ -2504,9 +2523,11 @@
     }
 
     function drawRunHud() {
-      const W = canvas.width, H = canvas.height;
+      const ui = uiScale;
+      const W = canvas.width / ui, H = canvas.height / ui;
       const on = sirenPhase();
       ctx.save();
+      ctx.scale(ui, ui);
 
       // Tempo-Linien am Bildrand
       const maxV = cars[selectedCar].maxSpeed / 13;
@@ -2547,7 +2568,7 @@
 
       // Pfeile zu Verfolgern außerhalb des Bildes
       for (const c of chasers) {
-        const sx = (c.x - viewX) * run.zoom, sy = (c.y - viewY) * run.zoom;
+        const sx = (c.x - viewX) * run.zoom / ui, sy = (c.y - viewY) * run.zoom / ui;
         if (sx > 0 && sx < W && sy > 0 && sy < H) continue;
         const ang = Math.atan2(sy - H / 2, sx - W / 2);
         const m = 26;
@@ -2629,8 +2650,9 @@
 
     function drawBustScreen() {
       if (run.bustTimer <= 0 || !run.bustInfo) return;
-      const W = canvas.width, H = canvas.height, b = run.bustInfo;
+      const W = canvas.width / uiScale, H = canvas.height / uiScale, b = run.bustInfo;
       ctx.save();
+      ctx.scale(uiScale, uiScale);
       ctx.fillStyle = "rgba(8,10,16,0.78)";
       ctx.fillRect(0, 0, W, H);
       ctx.textAlign = "center";
@@ -2757,11 +2779,13 @@
     }
 
     function drawMinimap() {
+      const k = Math.min(uiScale, 1.4);
       const w = 150, h = w * world.height / world.width;
-      const x0 = canvas.width - w - 14, y0 = 14;
+      const x0 = canvas.width / k - w - 14, y0 = 14;
       const sx = w / world.width, sy = h / world.height;
 
       ctx.save();
+      ctx.scale(k, k);
       ctx.globalAlpha = 0.85;
       if (minimapCache) ctx.drawImage(minimapCache, x0, y0, w, h);
       else { ctx.fillStyle = "#2f4a35"; ctx.fillRect(x0, y0, w, h); }
@@ -2786,25 +2810,56 @@
       ctx.restore();
     }
 
-    // Spielfläche passend ins Fenster einpassen (ganze Seite sichtbar) und Vollbild
+    // Spielfläche passend ins Fenster einpassen (ganze Seite sichtbar) und Vollbild.
+    // Echtes Vollbild per Fullscreen-API; wo es fehlt (z. B. iPhone-Safari) gibt es ein Ersatz-Vollbild,
+    // das die ganze sichtbare Fläche nutzt.
     const screenEl = document.querySelector(".screen");
     const headerEl = document.querySelector("header");
+    let fakeFullscreen = false;
     function fitScreen() {
-      const fs = !!document.fullscreenElement;
+      const fs = !!document.fullscreenElement || !!document.webkitFullscreenElement || fakeFullscreen;
       document.body.classList.toggle("is-fullscreen", fs);
-      const pad = fs ? 0 : 16;
-      const availW = innerWidth - pad;
-      const availH = innerHeight - pad - (fs ? 0 : headerEl.offsetHeight + 8);
-      const w = Math.max(320, Math.min(availW, availH * (canvas.width / canvas.height), 1400));
+      const vv = window.visualViewport;
+      const vw = vv ? vv.width : innerWidth, vh = vv ? vv.height : innerHeight;
+      const headerH = headerEl && headerEl.offsetParent !== null ? headerEl.offsetHeight + 8 : 0;
+      const pad = fs ? 0 : 12;
+      const availW = vw - pad;
+      const availH = vh - pad - (fs ? 0 : headerH) - (fs ? 0 : hintHeight());
+      const w = Math.max(240, Math.min(availW, availH * (canvas.width / canvas.height), 1400));
       screenEl.style.width = Math.floor(w) + "px";
+      uiScale = clamp(720 / w, 1, 2.2);       // kleine Bildschirme: Anzeigen im Spiel größer zeichnen
+    }
+    function hintHeight() {
+      const hint = document.querySelector(".rotate-hint");
+      return hint && hint.offsetParent !== null ? hint.offsetHeight + 6 : 0;
     }
     function toggleFullscreen() {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+      const active = document.fullscreenElement || document.webkitFullscreenElement;
+      if (active) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        return;
+      }
+      if (fakeFullscreen) { fakeFullscreen = false; fitScreen(); return; }
+      const de = document.documentElement;
+      const request = de.requestFullscreen || de.webkitRequestFullscreen;
+      const fallback = () => { fakeFullscreen = true; window.scrollTo(0, 1); fitScreen(); };
+      if (!request) { fallback(); return; }
+      try {
+        const result = request.call(de);
+        if (result && result.then) {
+          result.then(() => {
+            // Handy: nach Möglichkeit Querformat erzwingen
+            if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(() => {});
+          }).catch(fallback);
+        }
+      } catch { fallback(); }
     }
-    document.querySelector("#fsButton").addEventListener("click", toggleFullscreen);
+    for (const id of ["#fsButton", "#fsButton2"]) document.querySelector(id).addEventListener("click", toggleFullscreen);
     addEventListener("resize", fitScreen);
+    addEventListener("orientationchange", () => setTimeout(fitScreen, 200));
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", fitScreen);
     document.addEventListener("fullscreenchange", fitScreen);
+    document.addEventListener("webkitfullscreenchange", fitScreen);
     fitScreen();
 
     // ---------- Einstellungsseite ----------
@@ -2848,6 +2903,7 @@
     document.querySelector("#settingsReset").addEventListener("click", () => { Object.assign(settings, DEFAULT_SETTINGS); saveSettings(); refreshSettingsUI(); });
     document.querySelector("#settingsClose").addEventListener("click", toggleSettings);
     document.querySelector("#settingsButton").addEventListener("click", toggleSettings);
+    document.querySelector("#settingsButton2").addEventListener("click", toggleSettings);
 
     function frame(time) {
       const dt = Math.min((time - lastTime) / 16.67 || 1, 2);

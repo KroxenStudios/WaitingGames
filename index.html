@@ -92,6 +92,9 @@
       <h3>Touch-Steuerung</h3>
       <label>Button-Größe <output data-for="touchScale"></output>
         <input type="range" data-key="touchScale" min="0.4" max="1.6" step="0.05"></label>
+      <label>Max. Lenkwinkel (Lenkrad) <output data-for="wheelLimit"></output>
+        <input type="range" data-key="wheelLimit" min="0.2" max="1" step="0.05">
+        <small>Begrenzt den Einschlag beim Touch-Lenkrad. Niedriger = stabiler bei hohem Tempo.</small></label>
 
       <h3>Ton</h3>
       <label class="check"><input type="checkbox" data-key="sound"> Sound an</label>
@@ -274,6 +277,7 @@
       rotateCamera: true,    // Kamera dreht sich mit dem Auto (Fahrtrichtung immer oben)
       speedLines: true,      // Tempolinien am Bildrand
       touchScale: 1,         // Größe der Touch-Buttons (Faktor)
+      wheelLimit: 0.55,      // maximaler Lenkeinschlag mit dem Touch-Lenkrad (1 = voll)
       sound: true,           // Ton an/aus
       volume: 0.5            // Gesamtlautstärke
     };
@@ -1910,7 +1914,7 @@
         wheelEl.style.transform = `rotate(${wheelValue * WHEEL_MAX}rad)`;
       }
       if (wheelActive || wheelValue !== 0) {
-        steerValue = wheelValue;                         // Lenkrad: Einschlag = Drehwinkel
+        steerValue = wheelValue * settings.wheelLimit;   // Lenkrad: Einschlag = Drehwinkel, begrenzt
       } else if (rawSteer === 0) {
         steerValue -= Math.sign(steerValue) * Math.min(Math.abs(steerValue), settings.steerReturn * dt);
       } else if (Math.sign(steerValue) === -rawSteer) {

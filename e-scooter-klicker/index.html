@@ -347,13 +347,5 @@ addEventListener('beforeunload', persist);
 
 syncFleet(false); render();
 </script>
-<script>
-// GoatCounter: nur statisch ein Zaehlpixel fuer den Seitenaufruf (kein Skript, keine Cookies, keine Spielereignisse)
-(() => {
-  const h = location.hostname;
-  if (!/^https?:$/.test(location.protocol) || h === 'localhost' || h === '127.0.0.1') return;
-  new Image().src = 'https://kroxenstudios.goatcounter.com/count?p=' + encodeURIComponent('/e-scooter-klicker') + '&rnd=' + Math.random().toString(36).slice(2);
-})();
-</script>
 </body>
 </html>

@@ -279,7 +279,6 @@
   "GAS": "GAS",
   "Lenkrad": "Steering wheel",
   "Tipp: Handy quer halten und auf ⛶ tippen für Vollbild.": "Tip: hold your phone in landscape and tap ⛶ for fullscreen.",
-  "Beim Start wird nur ein anonymer Besuch gezählt. Mit „OK“ sendest du zusätzlich Gerätedaten (Browser, Bildschirmgröße, Herkunft) und Spielereignisse, damit wir das Spiel verbessern können. Keine Cookies.": "Only an anonymous visit is counted at start. With \"OK\" you additionally send device data (browser, screen size, origin) and game events so we can improve the game. No cookies.",
   "Ablehnen": "Decline"
 };
     const EN_FRAG = {
@@ -3368,67 +3367,5 @@
     requestAnimationFrame(frame);
     idle(initializeMapLazy);
   </script>
-
-  <div id="cookieBanner" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1f2a33;color:#e6e9ec;padding:14px 18px;font:14px/1.5 system-ui,sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.5);align-items:center;gap:12px;flex-wrap:wrap;justify-content:center">
-    <span>Beim Start wird nur ein anonymer Besuch gezählt. Mit „OK“ sendest du zusätzlich Gerätedaten (Browser, Bildschirmgröße, Herkunft) und Spielereignisse, damit wir das Spiel verbessern können. Keine Cookies.</span>
-    <button id="cookieInfo" style="padding:6px 12px;cursor:pointer">Datenschutz</button>
-    <button id="cookieDecline" style="padding:6px 12px;cursor:pointer">Ablehnen</button>
-    <button id="cookieAccept" style="padding:6px 12px;cursor:pointer;background:#ffd166;border:0;font-weight:bold">OK</button>
-  </div>
-
-  <script>wgTranslate(document.querySelector("#cookieBanner"));</script>
-
-  <script>
-    (() => {
-      const banner = document.querySelector("#cookieBanner");
-      const get = () => { try { return localStorage.getItem("analytics"); } catch { return null; } };
-      const set = v => { try { localStorage.setItem("analytics", v); } catch {} };
-      if (!get()) banner.style.display = "flex";
-      document.querySelector("#cookieInfo").addEventListener("click", () => { location.href = "privacy.html"; });
-      document.querySelector("#cookieAccept").addEventListener("click", () => {
-        set("yes"); banner.style.display = "none";
-      });
-      document.querySelector("#cookieDecline").addEventListener("click", () => { set("no"); banner.style.display = "none"; });
-    })();
-
-    const GC_URL = "https://kroxenstudios.goatcounter.com/count";
-    let statsLoaded = false;
-    let analyticsOn = false;
-
-    // Voller Modus (nur mit Zustimmung): count.js sendet Browser, Bildschirmgröße, Referrer usw.
-    function loadStats(onReady, countPageview) {
-      if (statsLoaded) { onReady && onReady(); return; }
-      statsLoaded = true;
-      analyticsOn = true;
-      window.goatcounter = { no_onload: !countPageview };
-      const s = document.createElement("script");
-      s.async = true;
-      s.dataset.goatcounter = GC_URL;
-      s.src = "//gc.zgo.at/count.js";
-      s.onload = () => onReady && onReady();
-      document.body.appendChild(s);
-    }
-
-    // Spielereignisse: nur wenn der Nutzer zugestimmt hat
-    function track(name) {
-      if (!analyticsOn || !window.goatcounter || !window.goatcounter.count) return;
-      window.goatcounter.count({ path: name, title: name, event: true });
-    }
-
-    // Minimal-Modus: nur ein Zählpixel, ohne Referrer, Bildschirmgröße oder Titel
-    function countVisitMinimal() {
-      new Image().src = GC_URL + "?p=" + encodeURIComponent("/spielstart") + "&rnd=" + Math.random().toString(36).slice(2);
-    }
-
-    // Gezählt wird ausschließlich der Spielstart (Klick auf "SPIEL STARTEN"), keine Seitenaufrufe
-    function countGameStart() {
-      let choice = null;
-      try { choice = localStorage.getItem("analytics"); } catch {}
-      if (choice === "yes") loadStats(() => track("spielstart"), false);
-      else countVisitMinimal();
-    }
-    document.querySelector("#startButton").addEventListener("click", countGameStart);
-  </script>
-
 </body>
 </html>

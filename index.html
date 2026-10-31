@@ -48,7 +48,7 @@
   </main>
 
   <footer>
-    © KroxenStudios · <a href="Asphalt%20Arkade/privacy.html" data-en="Privacy">Datenschutz</a>
+    © KroxenStudios · <a href="privacy.html" data-en="Privacy">Datenschutz</a>
   </footer>
 
   <script>
@@ -81,9 +81,29 @@
       sync();
     })();
   </script>
+  <div id="startBanner" hidden>
+    <span data-en="This website uses GoatCounter for anonymous statistical purposes. No cookies are used.">Diese Website verwendet GoatCounter zu anonymen statistischen Zwecken. Es werden keine Cookies verwendet.</span>
+    <a href="privacy.html" data-en="Privacy">Datenschutz</a>
+    <button id="startBannerOk">OK</button>
+  </div>
+  <style>
+    #startBanner { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9999; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; padding: 10px 16px; background: #1f2a33; color: #e6e9ec; font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 -2px 12px rgba(0,0,0,.4); }
+    #startBanner[hidden] { display: none; }
+    #startBanner a { color: #68a8ff; }
+    #startBanner button { padding: 4px 14px; cursor: pointer; background: #ffd166; color: #14171a; border: 0; border-radius: 4px; font-weight: bold; }
+  </style>
   <script>
-    // GoatCounter: nur statisch ein Zaehlpixel fuer den Seitenaufruf (kein Skript, keine Cookies)
+    // Startbanner (nur Hinweis, "OK" blendet ihn dauerhaft aus) und GoatCounter-Zählpixel für den Seitenaufruf
     (() => {
+      const b = document.getElementById('startBanner');
+      if (WG.lang === 'en') for (const el of b.querySelectorAll('[data-en]')) el.textContent = el.dataset.en;
+      let seen = false;
+      try { seen = localStorage.getItem('wg-notice') === '1'; } catch (e) {}
+      if (!seen) b.hidden = false;
+      document.getElementById('startBannerOk').onclick = () => {
+        b.hidden = true;
+        try { localStorage.setItem('wg-notice', '1'); } catch (e) {}
+      };
       const h = location.hostname;
       if (!/^https?:$/.test(location.protocol) || h === 'localhost' || h === '127.0.0.1') return;
       new Image().src = 'https://kroxenstudios.goatcounter.com/count?p=' + encodeURIComponent('/waiting-games') + '&rnd=' + Math.random().toString(36).slice(2);

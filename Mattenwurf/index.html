@@ -975,7 +975,7 @@ cv.addEventListener('pointerleave', () => { hover = null; });
 
 // ================= Sound (alles per WebAudio erzeugt, keine Dateien) =================
 let ac = null, bus = null, musicBus = null, noiseBuf = null;
-let musicOn = save.music !== false;
+let musicOn = save.music === true;   // Musik ist standardmäßig aus
 function initAudio() {
   if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
   try {

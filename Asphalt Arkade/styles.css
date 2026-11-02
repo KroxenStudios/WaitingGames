@@ -947,3 +947,91 @@ h1, h2, .start-card h1 {
   color: #eceff2;
   font: inherit;
 }
+/* ---------- Werkstatt (Tuning) ---------- */
+.ws-balance {
+  margin: 12px 0 4px;
+  color: #9eacba;
+  font-size: 14px;
+}
+
+.ws-balance b {
+  color: #ffd166;
+}
+
+.ws-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 14px;
+  margin: 6px 0 8px;
+  padding: 8px 10px;
+  border-radius: 3px;
+  background: #2b3036;
+  color: #9eacba;
+  font-size: 13px;
+}
+
+.ws-stats b {
+  float: right;
+  color: #eceff2;
+  font-variant-numeric: tabular-nums;
+}
+
+.up-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid #50575f;
+}
+
+.up-row b {
+  font-size: 14px;
+}
+
+.up-row button {
+  min-width: 96px;
+  padding: 7px 10px;
+}
+
+.up-row button:not(:disabled):hover {
+  border-color: #65e6a5;
+  color: #65e6a5;
+}
+
+.up-row button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pips {
+  display: flex;
+  gap: 3px;
+  margin: 4px 0 3px;
+}
+
+.pips i {
+  width: 18px;
+  height: 6px;
+  border-radius: 2px;
+  background: #50575f;
+}
+
+.pips i.on {
+  background: #65e6a5;
+}
+
+#workshopPage .car-select {
+  margin-top: 10px;
+}
+
+.global-best {
+  margin: 8px 0;
+  color: #ffd166;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.global-best[hidden] {
+  display: none;
+}

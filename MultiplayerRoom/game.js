@@ -735,6 +735,7 @@ const WALK_SPEED = 4.2;
 const SPRINT_SPEED = 7.2;
 const PLAYER_RADIUS = 0.3;
 const STEP_HEIGHT = 0.35;
+const INTERPOLATION_DELAY = 80;  // ms Verzögerung für ruhige Bewegung anderer Spieler
 const BASE_FOV = 68;
 const MIN_FOV = 38;
 const MAX_FOV = 100;
@@ -754,7 +755,7 @@ function updateHint() {
 
   if (touchMode) {
     hintEl.textContent =
-      "Links laufen (ganz außen = rennen) · rechts wischen = umsehen · Springen-Knopf · Zwei Finger = Zoom";
+      "Links laufen · rechts wischen = umsehen · Springen-Knopf · Zwei Finger = Zoom";
     hintEl.hidden = false;
     return;
   }
@@ -1149,13 +1150,17 @@ function updateOtherPlayers() {
 
     mesh.userData.clothes.color.set(color);
 
-    // Zielwerte: die Figur gleitet in der Spielschleife dorthin.
-    mesh.userData.target = {
+    // Serverstand als Schnappschuss merken; die Spielschleife interpoliert
+    // mit kleiner Verzögerung zwischen den Schnappschüssen (ruhige Bewegung).
+    const buffer = (mesh.userData.buffer ||= []);
+    buffer.push({
+      t: performance.now(),
       x: Number(data.x) || 0,
       z: Number(data.y) || 0,
       h: Number(data.h) || 0,
       rot: Number(data.rotation) || 0
-    };
+    });
+    if (buffer.length > 40) buffer.shift();
   }
 
   for (const [id, mesh] of otherPlayerMeshes) {
@@ -1280,8 +1285,8 @@ function animate(time) {
   const inputLength = Math.hypot(forward, side);
   const isMoving = inputLength > 0.08;
 
-  const stickSprint = Math.hypot(joystickX, joystickY) > 0.93;
-  const wantsSprint = keys.has("control") || keys.has("shift") || stickSprint;
+  // Sprinten gibt es nur mit der Tastatur, nicht im Handheld-Modus.
+  const wantsSprint = !touchMode && (keys.has("control") || keys.has("shift"));
   sprintBlend = THREE.MathUtils.damp(sprintBlend, wantsSprint ? 1 : 0, 9, delta);
 
   const pos = myPlayer.position;
@@ -1379,7 +1384,7 @@ function animate(time) {
 
   if (
     changed &&
-    time - lastMoveSent >= 60 &&
+    time - lastMoveSent >= 30 &&
     socket.readyState === WebSocket.OPEN
   ) {
     lastMoveSent = time;
@@ -1402,24 +1407,48 @@ function animate(time) {
 
   // Andere Spieler: weich zur Zielposition gleiten, drehen und laufen.
   for (const mesh of otherPlayerMeshes.values()) {
-    const target = mesh.userData.target;
-    if (!target) continue;
+    const buffer = mesh.userData.buffer;
+    if (!buffer || !buffer.length) continue;
 
-    const dx = target.x - mesh.position.x;
-    const dz = target.z - mesh.position.z;
-    const dh = target.h - mesh.position.y;
-    const follow = 1 - Math.exp(-22 * delta);
+    // Wiedergabezeit liegt etwas hinter der Echtzeit.
+    const renderTime = time - INTERPOLATION_DELAY;
+    let from = buffer[0];
+    let to = buffer[0];
 
-    mesh.position.x += dx * follow;
-    mesh.position.z += dz * follow;
-    mesh.position.y += dh * follow;
+    for (let i = 0; i < buffer.length; i++) {
+      if (buffer[i].t <= renderTime) from = to = buffer[i];
+      else {
+        to = buffer[i];
+        break;
+      }
+    }
 
-    let diff = target.rot - mesh.rotation.y;
+    let k = 0;
+    if (to !== from) k = THREE.MathUtils.clamp((renderTime - from.t) / (to.t - from.t), 0, 1);
+
+    const px = mesh.position.x;
+    const pz = mesh.position.z;
+
+    mesh.position.x = THREE.MathUtils.lerp(from.x, to.x, k);
+    mesh.position.z = THREE.MathUtils.lerp(from.z, to.z, k);
+    mesh.position.y = THREE.MathUtils.lerp(from.h, to.h, k);
+
+    // Blickrichtung über den kürzesten Winkel mischen, dann leicht nachziehen.
+    let rotDiff = to.rot - from.rot;
+    rotDiff = Math.atan2(Math.sin(rotDiff), Math.cos(rotDiff));
+    const targetRot = from.rot + rotDiff * k;
+    let diff = targetRot - mesh.rotation.y;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    mesh.rotation.y += diff * (1 - Math.exp(-12 * delta));
+    mesh.rotation.y += diff * (1 - Math.exp(-16 * delta));
 
-    const moving = Math.hypot(dx, dz) > 0.05;
-    if (moving) mesh.userData.walkCycle += delta * walkSpeed;
+    const speed = delta > 0
+      ? Math.hypot(mesh.position.x - px, mesh.position.z - pz) / delta
+      : 0;
+    const moving = speed > 0.4;
+    if (moving) {
+      mesh.userData.walkCycle +=
+        delta * walkSpeed * THREE.MathUtils.clamp(speed / WALK_SPEED, 0.6, 1.6);
+    }
 
     const otherSwing = moving
       ? Math.sin(mesh.userData.walkCycle) * legSwingAmount

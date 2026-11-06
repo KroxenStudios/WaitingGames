@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#090d18">
+  <title>MultiplayerRoom</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="game">
+    <div id="hud">
+      <strong>MultiplayerRoom</strong>
+      <span id="status">Verbinde …</span>
+      <a href="docs.html">Spielhilfe</a>
+      <a href="charakter.html">Charakter anpassen</a>
+    </div>
+
+    <div id="chatMessages" aria-live="polite"></div>
+
+    <form id="chatForm" autocomplete="off">
+      <input
+        id="chatInput"
+        type="text"
+        maxlength="50"
+        placeholder="Nachricht (max. 50 Zeichen)"
+        aria-label="Chatnachricht"
+      >
+      <button type="submit">Senden</button>
+    </form>
+
+    <div id="joystick" aria-label="Ziehen zum Bewegen">
+      <div id="stick"></div>
+    </div>
+
+    <details id="admin">
+      <summary>Admin</summary>
+      <input id="adminToken" type="password" placeholder="Admin-Token">
+      <input id="kickId" type="text" placeholder="Spieler-ID">
+      <button id="kickButton" type="button">Spieler kicken</button>
+      <small>Klicke im Spiel auf eine Spielerfigur, um ihre ID auszuwählen.</small>
+    </details>
+  </main>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>

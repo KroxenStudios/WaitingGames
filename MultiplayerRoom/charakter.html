@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Charakter anpassen</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #101827;
+        color: #fff;
+        font: 16px system-ui, sans-serif;
+      }
+
+      main {
+        width: min(360px, calc(100% - 40px));
+        padding: 24px;
+        border-radius: 16px;
+        background: #202d40;
+      }
+
+      label {
+        display: block;
+        margin: 18px 0 8px;
+      }
+
+      input,
+      button {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 12px;
+        border: 0;
+        border-radius: 8px;
+        font: inherit;
+      }
+
+      button {
+        margin-top: 22px;
+        background: #62e6b2;
+        color: #101827;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      a {
+        display: block;
+        margin-top: 16px;
+        color: #a9c8ff;
+        text-align: center;
+      }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <h1>Charakter anpassen</h1>
+
+      <form id="characterForm">
+        <label for="characterName">Name</label>
+        <input
+          id="characterName"
+          name="name"
+          maxlength="20"
+          autocomplete="nickname"
+          required
+        >
+
+        <label for="characterColor">Kleidungsfarbe</label>
+        <input
+          id="characterColor"
+          name="color"
+          type="color"
+          value="#62e6b2"
+        >
+
+        <button type="submit">Speichern und spielen</button>
+      </form>
+
+      <a href="index.html">Zurück zum Spiel</a>
+    </main>
+
+    <script>
+      const form = document.querySelector("#characterForm");
+      const saved = JSON.parse(
+        localStorage.getItem("characterSettings") || "{}"
+      );
+
+      form.elements.name.value = saved.name || "";
+      form.elements.color.value = saved.color || "#62e6b2";
+
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+
+        const settings = {
+          name: form.elements.name.value.trim().slice(0, 20) || "Gast",
+          color: form.elements.color.value
+        };
+
+        localStorage.setItem("characterSettings", JSON.stringify(settings));
+        location.href = "index.html";
+      });
+    </script>
+  </body>
+</html>

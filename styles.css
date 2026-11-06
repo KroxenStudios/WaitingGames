@@ -63,6 +63,7 @@ header p { margin: 0; color: var(--dim); font-size: 16px; }
 .t-asphalt { background: linear-gradient(#5b5f64 0 38%, #a3a6a0 38% 46%, #49694d 46%); }
 .t-matte   { background: linear-gradient(#7fa6bf, #cfdde3 55%, #49694d 55% 80%, #a3a6a0 80% 88%, #5b5f64 88%); }
 .t-scooter { background: linear-gradient(#1b2530, #2b3540 60%, #5b5f64 60%); }
+.t-room    { background: linear-gradient(135deg, #1b2530, #2b4a45 60%, #62e6b2); }
 .t-scooter img { height: 100px; border: 0; border-radius: 50%; background: #fff; }
 .card h2 { margin: 0; font-size: 24px; color: var(--accent); }
 .card p { margin: 0; color: var(--dim); line-height: 1.45; flex: 1; }

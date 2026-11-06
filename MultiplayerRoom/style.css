@@ -1,0 +1,362 @@
+:root {
+  color-scheme: dark;
+  --accent: #62e6b2;
+  --accent-soft: #62e6b233;
+  --panel: #0c1522cc;
+  --panel-solid: #0c1522ee;
+  --line: #ffffff22;
+  --text: #eef4ff;
+  --muted: #a9bad0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0c1522;
+  color: var(--text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  min-height: 100vh;
+  background: #0c1522;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  color: var(--text);
+  cursor: pointer;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #a9dbf5;
+}
+
+/* Die Three.js-Leinwand füllt die ganze Website. */
+#scene {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* Kopfzeile */
+#hud {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 46px;
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: 0 10px 34px #0004;
+  backdrop-filter: blur(14px) saturate(1.3);
+  pointer-events: none;
+}
+
+#hud strong {
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+#status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Statuspunkt: gelb beim Verbinden, grün online, rot offline */
+#status::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #f2c14e;
+  box-shadow: 0 0 8px #f2c14e99;
+}
+
+#status[data-state="online"]::before {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+#status[data-state="offline"]::before {
+  background: #ff6b6b;
+  box-shadow: 0 0 8px #ff6b6b99;
+}
+
+#hud a {
+  color: #cdeee2;
+  font-size: 14px;
+  text-decoration: none;
+  pointer-events: auto;
+  padding: 5px 11px;
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s;
+}
+
+/* Der erste Link schiebt die Links nach rechts. */
+#hud a:first-of-type {
+  margin-left: auto;
+}
+
+#hud a:hover {
+  background: var(--accent-soft);
+  color: #fff;
+}
+
+/* Flüchtiger Chat unten links */
+#chatMessages {
+  position: absolute;
+  z-index: 2;
+  left: 16px;
+  bottom: 94px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: min(460px, calc(100vw - 170px));
+  pointer-events: none;
+}
+
+.chat-line {
+  max-width: 100%;
+  padding: 8px 13px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px 14px 14px 14px;
+  background: var(--panel);
+  box-shadow: 0 6px 18px #0004;
+  color: var(--text);
+  font-size: 14px;
+  backdrop-filter: blur(10px);
+  animation: chat-in 0.18s ease-out;
+}
+
+@keyframes chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Chat-Eingabe */
+#chatForm {
+  position: absolute;
+  z-index: 3;
+  left: 16px;
+  bottom: 20px;
+  display: flex;
+  width: min(460px, calc(100vw - 170px));
+  gap: 8px;
+}
+
+#chatInput,
+#admin input {
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  outline: none;
+  background: var(--panel-solid);
+  color: var(--text);
+  backdrop-filter: blur(10px);
+}
+
+#admin input {
+  border-radius: 10px;
+}
+
+#chatInput {
+  flex: 1;
+}
+
+#chatInput::placeholder,
+#admin input::placeholder {
+  color: #8da0b8;
+}
+
+#chatInput:focus,
+#admin input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+#chatForm button,
+#admin button {
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #08231a;
+  font-weight: 600;
+  transition: filter 0.15s, transform 0.1s;
+}
+
+#admin button {
+  border-radius: 10px;
+}
+
+#chatForm button:hover,
+#admin button:hover {
+  filter: brightness(1.1);
+}
+
+#chatForm button:active,
+#admin button:active {
+  transform: scale(0.97);
+}
+
+/* Virtueller Steuerknopf für Touch und Handheld */
+#joystick {
+  position: absolute;
+  z-index: 3;
+  left: 20px;
+  bottom: 86px;
+  width: 120px;
+  height: 120px;
+  border: 2px solid #ffffff55;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff22, #0c152299 70%);
+  box-shadow: 0 8px 24px #0004, inset 0 0 22px #ffffff14;
+  backdrop-filter: blur(6px);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#stick {
+  position: absolute;
+  top: 33px;
+  left: 33px;
+  width: 50px;
+  height: 50px;
+  border: 2px solid #ffffffcc;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #b8ffe4, var(--accent));
+  box-shadow: 0 4px 14px #0006;
+  pointer-events: none;
+}
+
+/* Admin-Bedienelemente */
+#admin {
+  position: absolute;
+  z-index: 4;
+  top: 76px;
+  right: 16px;
+  width: min(260px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 10px 34px #0004;
+  backdrop-filter: blur(14px);
+}
+
+#admin summary {
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#admin[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#admin small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* Schmalere Handhelds und Telefone */
+@media (max-width: 600px) {
+  #hud {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    gap: 9px;
+    min-height: 42px;
+    padding: 8px 12px;
+  }
+
+  #hud strong {
+    font-size: 15px;
+  }
+
+  #status,
+  #hud a {
+    font-size: 12px;
+  }
+
+  #hud a {
+    padding: 4px 8px;
+  }
+
+  #chatForm {
+    left: 10px;
+    bottom: 12px;
+    width: calc(100vw - 145px);
+    gap: 6px;
+  }
+
+  #chatInput {
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+
+  #chatForm button {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  #joystick {
+    left: 12px;
+    bottom: 68px;
+    width: 108px;
+    height: 108px;
+  }
+
+  #stick {
+    top: 28px;
+    left: 28px;
+  }
+
+  #chatMessages {
+    left: 10px;
+    bottom: 184px;
+    max-width: calc(100vw - 20px);
+  }
+
+  #admin {
+    top: 62px;
+    right: 10px;
+  }
+}

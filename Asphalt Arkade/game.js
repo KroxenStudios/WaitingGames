@@ -1,0 +1,4061 @@
+    const canvas = document.querySelector("#game");
+    const ctx = canvas.getContext("2d");
+
+    // Zurück zur Spielauswahl (vorher ein Inline-onclick im HTML)
+    document.querySelector("#settingsBack").addEventListener("click", () => {
+      location.href = "../index.html";
+    });
+
+    const speedDisplay = document.querySelector("#speed");
+    const rpmDisplay = document.querySelector("#rpm");
+    const carNameDisplay = document.querySelector("#carName");
+    const carSelect = document.querySelector("#carSelect");
+    const touchControls = document.querySelector("#touchControls");
+    const keyboardHelp = document.querySelector("#keyboardHelp");
+    const crashOverlay = document.querySelector("#crashOverlay");
+    const driftScoreDisplay = document.querySelector("#driftScore");
+    const creditsDisplay = document.querySelector("#credits");
+
+    // maxSpeed in km/h, t100 = Sekunden von 0 auf 100 km/h (Serienzustand), turn/grip wie bisher, price in €
+    const cars = [
+      { name: t("Kleinwagen"),    color: "#57d6a1", maxSpeed: 190, t100: 13.0, turn: 0.047, grip: 0.91, price: 0 },
+      { name: t("Limousine"),     color: "#68a8ff", maxSpeed: 230, t100: 10.0, turn: 0.040, grip: 0.93, price: 250 },
+      { name: t("Sportwagen"),    color: "#ff6868", maxSpeed: 290, t100: 5.8,  turn: 0.055, grip: 0.88, price: 750 },
+      { name: t("Muscle Car"),    color: "#ff9d3c", maxSpeed: 320, t100: 4.8,  turn: 0.044, grip: 0.86, price: 1800 },
+      { name: t("Rallye-Auto"),   color: "#f2f5f8", maxSpeed: 300, t100: 5.2,  turn: 0.062, grip: 0.90, price: 4000 },
+      { name: t("Supersportler"), color: "#d68cff", maxSpeed: 360, t100: 3.2,  turn: 0.052, grip: 0.89, price: 9000 },
+      { name: t("Hypercar"),      color: "#ffe14d", maxSpeed: 410, t100: 2.6,  turn: 0.050, grip: 0.90, price: 20000 },
+      { name: t("Rakete"),        color: "#4df0ff", maxSpeed: 480, t100: 2.0,  turn: 0.048, grip: 0.92, price: 50000 }
+    ];
+
+    // Level-System
+    let currentLevel = "city"; // "city" oder "moon"
+    let moonLevelUnlocked = false;
+    const levelInfo = document.querySelector("#levelInfo");
+
+    const world = { width: 91180, height: 17680 };   // = Knotenraster 201 x 51 (siehe PITCH)
+    const coins = [];
+    let started = false;
+
+    // Dev-Modus: Nur #dev aktiviert
+    let devMode = window.location.hash === "#dev";
+    const devOutput = [];
+    function devLog(msg) {
+      devOutput.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
+      if (devOutput.length > 30) devOutput.shift();
+      console.log(`[DEV] ${msg}`);
+    }
+    if (devMode) {
+      devLog("Dev-Modus aktiviert via URL (#dev)");
+    }
+    const roads = [];
+    const buildings = [];
+    const trees = [];
+    const npcs = [];
+    const parkingSpots = [];
+    let garage = null;
+
+    const keys = new Set();
+    const touchInput = {
+      left: false, right: false, gas: false, brake: false, drift: false, boost: false
+    };
+    // Touch-Lenkrad: wheelValue -1..1 (proportional zum Drehwinkel), federt beim Loslassen zurück
+    const wheelEl = document.querySelector("#wheel");
+    const WHEEL_MAX = 1.9;          // maximaler Drehwinkel in rad (ca. 110°)
+    let wheelValue = 0, wheelActive = false;
+    const boostButton = document.querySelector("#boostButton");
+    let boostHeld = false;
+
+    let selectedCar = 0;
+    const ownedCars = new Set([0]);
+    let credits = 500;
+    let driftScore = 0;
+    let driftBankTimer = 0;
+    let lastTime = 0;
+    let driftAmount = 0;
+    let crashTimer = 0;
+    let crashPosition = null;
+    let keyboardMode = false;
+    let lastTrailPosition = null;
+
+    // Lenkung und Beschleunigung
+    // Einstellungen (im Menü änderbar, werden im Browser gespeichert)
+    const DEFAULT_SETTINGS = {
+      steerRise: 0.06,       // Lenkeinschlag pro Frame beim Halten (0,06 = voller Einschlag in ca. 0,3 s)
+      steerReverse: 0.14,    // beim Gegenlenken schneller durch die Mitte
+      steerReturn: 0.12,     // Loslassen: Lenkrad zentriert zügig
+      steerCurve: 1.25,      // >1: kleine Einschläge wirken sanfter, 1 = linear
+      accel: 1,              // Beschleunigung relativ zum realistischen Wert (0-100 km/h-Zeit des Autos)
+      traffic: 110,          // Anzahl NPC-Autos in der Umgebung
+      zoomLevel: 0.7,        // Grundzoom der Kamera (kleiner = weiter heraus, 1 = nah)
+      policeSpeed: 0.5,      // Tempo der Verfolger relativ zu deinem Auto (Faktor, steigt mit der Zeit leicht an)
+      policeMistakes: 0.5,   // 0 = fehlerfrei, 1 = baut oft Mist (falsch abbiegen, Ausbrechen, Ablenkung)
+      shake: true,           // Bildschirmwackeln
+      zoom: true,            // Kamera zoomt bei Tempo heraus
+      rotateCamera: true,    // Kamera dreht sich mit dem Auto (Fahrtrichtung immer oben)
+      speedLines: true,      // Tempolinien am Bildrand
+      touchScale: 1,         // Größe der Touch-Buttons (Faktor)
+      chasers: true,         // Verfolger an/aus
+      fingerSteer: false,   // Lenken per Finger auf dem Spielfeld
+      touchMode: 0,         // Touch-Steuerung: 0 = automatisch, 1 = immer an, 2 = aus
+      wheelLimit: 0.55,     // maximaler Lenkeinschlag mit dem Touch-Lenkrad (1 = voll)
+      sound: true,           // Ton an/aus
+      volume: 0.5,           // Gesamtlautstärke
+      sv: 2                  // Version der Einstellungen (1.1.0: realistische Beschleunigung)
+    };
+    const settings = { ...DEFAULT_SETTINGS };
+    try {
+      const saved = JSON.parse(localStorage.getItem("asphaltSettings") || "{}");
+      if (saved.sv !== 2) delete saved.accel;     // alter Wert (0,5) gehörte zur früheren, viel zu starken Beschleunigung
+      Object.assign(settings, saved);
+    } catch {}
+    // Sitzungs-Umschaltung Maus/Touch (inputMode) wird nicht dauerhaft gespeichert
+    const saveSettings = () => { try { localStorage.setItem("asphaltSettings", JSON.stringify(inputMode ? { ...settings, ...baseDevice } : settings)); } catch {} };
+    let steerValue = 0;
+    let handbrakeOn = false;
+
+    const tireMarks = [];
+    const MAX_TIRE_MARKS = 1800;
+
+    // ---------- Verfolgungsjagd, Drift-Kombo und Fahr-Effekte ----------
+    // Zeiten hier in Sekunden; update() rechnet mit dt in Frames (1 = 1/60 s), siehe "sec".
+    const surviveDisplay = document.querySelector("#surviveTime");
+    const chasers = [];
+    const particles = [];
+    const popups = [];
+    const MAX_PARTICLES = 700;
+    const LEVEL_AT = [0.7, 1.6, 3.0];                          // Sekunden Drift bis Turbo-Stufe 1-3
+    const LEVEL_COLORS = ["#ffe9a8", "#59b6ff", "#ff9a2e", "#c45cff"];
+    const BOOST_SECONDS = [0, 0.8, 1.3, 1.9];
+    const BOOST_CHARGE = [0, 0.2, 0.35, 0.5];     // Ladung je Drift-Stufe (1 = voll)
+    const BOOST_MAX_SECONDS = 2.4;                // Dauer bei voller Ladung
+    const BOOST_MIN_CHARGE = 0.2;                 // darunter lässt sich nicht zünden
+    const GRACE_SECONDS = 6;                                   
+    const CATCH_DISTANCE = 30;
+    const NEAR_MISS_DISTANCE = 85;
+
+    const run = {
+      time: 0, tier: 1, best: 0, safe: 0, bustTimer: 0, bustInfo: null,
+      chain: 0, pending: 0, driftTime: 0, driftLost: 0, drifting: false, comboTimer: 0, lastLevel: 0,
+      boost: 0, boostLevel: 0, boostCharge: 0, shake: 0, flash: 0, flashColor: "255,255,255", zoom: 1
+    };
+    try { run.best = Number(localStorage.getItem("asphaltBest") || 0); } catch {}
+
+    const fmtTime = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const laneCenter = i => 90 + i * 700;                      // Straßenmitte (Straßen: x = i*700, Breite 180)
+    const nearestLane = v => Math.round((v - 90) / 700);
+    const sirenPhase = () => Math.floor(performance.now() / 130) % 2;
+
+    function addPoints(n) {
+      driftScore += Math.round(n);
+      driftScoreDisplay.textContent = driftScore.toLocaleString(LOCALE);
+    }
+
+    function popup(text, color = "#ffd166", size = 24) {
+      popups.push({ text, color, size, life: 1.6 });
+      if (popups.length > 4) popups.shift();
+    }
+
+    function emit(x, y, vx, vy, life, size, color, opts = {}) {
+      if (particles.length >= MAX_PARTICLES) particles.shift();
+      particles.push({
+        x, y, vx, vy, life, max: life, size, color,
+        grow: opts.grow || 0, add: !!opts.add, drag: opts.drag || 0.96, alpha: opts.alpha ?? 1
+      });
+    }
+
+    function burst(x, y, count, colors, speed = 5, add = true) {
+      for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2, s = rnd(speed * 0.3, speed);
+        emit(x, y, Math.cos(a) * s, Math.sin(a) * s, rnd(0.3, 0.8), rnd(1.5, 3.5),
+          colors[(Math.random() * colors.length) | 0], { add, drag: 0.93 });
+      }
+    }
+
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt / 60;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        const d = Math.pow(p.drag, dt);
+        p.vx *= d; p.vy *= d;
+        p.size = Math.max(0.2, p.size + p.grow * dt);
+      }
+      for (let i = popups.length - 1; i >= 0; i--) {
+        popups[i].life -= dt / 60;
+        if (popups[i].life <= 0) popups.splice(i, 1);
+      }
+      run.shake = Math.max(0, run.shake - dt / 60 * 2.2);
+      run.flash = Math.max(0, run.flash - dt / 60 * 2.2);
+    }
+
+    function driftLevel() {
+      let l = 0;
+      for (let i = 0; i < LEVEL_AT.length; i++) if (run.driftTime >= LEVEL_AT[i]) l = i + 1;
+      return l;
+    }
+
+    function bankCombo() {
+      const got = Math.round(run.pending);
+      if (got > 0) {
+        addPoints(got);
+        if (!devMode) credits += Math.round(got / 25 * (1 + selectedCar * 0.35));
+        updateCreditsDisplay();
+        popup(`+${got.toLocaleString(LOCALE)}`, "#65e6a5", 26);
+      }
+      run.pending = 0; run.chain = 0; run.comboTimer = 0;
+    }
+
+    function loseCombo() {
+      if (run.pending > 0 || run.chain > 0) { popup(L("KOMBO VERLOREN", "COMBO LOST"), "#ff6b6b", 22); sfx.lost(); }
+      run.pending = 0; run.chain = 0; run.comboTimer = 0; run.drifting = false; run.boost = 0;
+    }
+
+    function endDrift() {
+      const lvl = driftLevel();
+      run.drifting = false;
+      run.lastLevel = 0;
+      run.comboTimer = 2;        // Frist, in der ein weiterer Drift die Kombo fortsetzt
+      if (lvl > 0) {
+        // Kein automatischer Schub mehr: der Drift lädt nur den Boost, ausgelöst wird er per Taste B / Boost-Knopf
+        run.boostCharge = Math.min(1, run.boostCharge + BOOST_CHARGE[lvl]);
+        sfx.level(lvl);
+        popup(`BOOST ${Math.round(run.boostCharge * 100)}%`, LEVEL_COLORS[lvl], 22);
+        burst(player.x, player.y, 12, [LEVEL_COLORS[lvl], "#ffffff"], 5);
+      }
+    }
+
+    function updateDriftCombo(dt, active, speed, slip) {
+      const sec = dt / 60;
+      const nowDrift = active && slip > 0.12;
+
+      if (nowDrift) {
+        run.driftLost = 0;
+        if (!run.drifting) {
+          run.drifting = true; run.driftTime = 0; run.lastLevel = 0;
+          run.chain = run.comboTimer > 0 ? run.chain + 1 : 1;
+          run.comboTimer = 0;
+          if (run.chain > 1) popup(`KOMBO x${run.chain}`, "#ffd166", 22);
+        }
+        run.driftTime += sec;
+        const mult = run.chain + Math.floor(run.driftTime / 1.5);
+        run.pending += speed * slip * 0.5 * mult * dt;
+        const lvl = driftLevel();
+        if (lvl > run.lastLevel) {
+          run.lastLevel = lvl;
+          sfx.level(lvl);
+          burst(player.x, player.y, 10, [LEVEL_COLORS[lvl]], 4);
+        }
+      } else if (run.drifting) {
+        run.driftLost += sec;
+        if (run.driftLost > 0.25) endDrift();
+      }
+
+      if (!run.drifting && run.comboTimer > 0) {
+        run.comboTimer -= sec;
+        if (run.comboTimer <= 0) bankCombo();
+      }
+    }
+
+    // ----- fährt auf dem Straßennetz (ignoriert Ampeln) und biegt Richtung Spieler ab -----
+    function chooseEdgeFor(c, node, cameFrom) {
+      const tx = player.x + player.vx * c.lead, ty = player.y + player.vy * c.lead;
+      let best = null, bestScore = -Infinity;
+      for (const e of node.out) {
+        let score = -Math.hypot(e.to.x - tx, e.to.y - ty);
+        if (cameFrom && e.to === cameFrom) score -= 350;     // Wenden nur, wenn es sich wirklich lohnt
+        if (e.to.out.length < 2) score -= 500;               // keine Sackgassen
+        if (score > bestScore) { bestScore = score; best = e; }
+      }
+      // Fehler: manchmal wird die falsche Abzweigung genommen (nie eine Sackgasse oder Wende)
+      if (cameFrom && Math.random() < 0.5 * settings.policeMistakes) {
+        const options = node.out.filter(e => e !== best && e.to !== cameFrom && e.to.out.length >= 2);
+        if (options.length) best = options[Math.floor(Math.random() * options.length)];
+      }
+      return best;
+    }
+
+    function placeChaserAt(c, node, cameFrom) {
+      c.x = node.x; c.y = node.y; c.s = 0;
+      c.edge = chooseEdgeFor(c, node, cameFrom);
+      if (c.edge) c.angle = Math.atan2(c.edge.dy, c.edge.dx);
+    }
+
+    function spawnChaser() {
+      let node = null;
+      for (let tries = 0; tries < 60 && !node; tries++) {
+        const ang = Math.random() * Math.PI * 2, r = rnd(1100, 2400);
+        const n = nearestNode(player.x + Math.cos(ang) * r, player.y + Math.sin(ang) * r, 6);
+        if (n && n.out.length >= 2 && Math.hypot(n.x - player.x, n.y - player.y) > 900) node = n;
+      }
+      if (!node) return false;          // weit abseits der Straßen: kein Verfolger, später erneut versuchen
+      const c = { x: 0, y: 0, edge: null, s: 0, angle: 0, speed: 0, stun: 0, nearCd: 0, lead: 8 + chasers.length * 14, hunt: false, noHunt: 0, stuck: 0, distract: 0 };
+      placeChaserAt(c, node, null);
+      chasers.push(c);
+      return true;
+    }
+
+    function chaserBlocked(x, y) {
+      return solidHit(x, y, 13) || x < 15 || y < 15 || x > world.width - 15 || y > world.height - 15;
+    }
+
+    function updateChaser(c, dt) {
+      const sec = dt / 60;
+      const car = ST;
+      const dist = Math.hypot(player.x - c.x, player.y - c.y);
+
+      // Tempo: etwas langsamer als das gewählte Auto, wird mit der Zeit schneller; Gummiband bei großem Abstand
+      // Alle Verfolger fahren immer gleich schnell: festes Tempo (Standard 120 km/h), unabhängig von Auto, Spielzeit und Abstand
+      let target = 18.4 * settings.policeSpeed;
+      if (c.edge && c.edge.type === "alley") target = Math.min(target, 6);       // Gassen sind eng
+
+      // Fehler: kurze Unaufmerksamkeit (z. B. Blick aufs Funkgerät) lässt sie abbremsen
+      c.distract -= sec;
+      if (c.distract <= 0 && c.stun <= 0 && Math.random() < 0.05 * settings.policeMistakes * sec) c.distract = rnd(0.6, 1.5);
+      if (c.distract > 0) target *= 0.35;
+      if (c.stun > 0) { c.stun -= sec; target = 0; }
+      // realistische Beschleunigung eines Streifenwagens (0–100 km/h in ca. 7,5 s), Bremsen kräftiger
+      const dv = target - c.speed;
+      const pa = 0.02464 * Math.max(0.05, 1 - (c.speed / Math.max(target, 5)) ** 2);
+      c.speed += clamp(dv, -0.06 * dt, pa * dt);
+      c.nearCd -= sec;
+
+
+
+      // Hängt sie an einer Wand fest, geht sie zurück auf die Straße und versucht es später erneut.
+      c.noHunt = Math.max(0, c.noHunt - sec);
+      const leaveHunt = () => {
+        c.hunt = false; c.stuck = 0;
+        const n = nearestNode(c.x, c.y);
+        if (n) placeChaserAt(c, n, null);
+      };
+      if (!c.hunt && c.noHunt <= 0 && dist < 480) { c.hunt = true; c.stuck = 0; }
+      if (c.hunt && dist > 700) leaveHunt();
+
+      if (c.hunt) {
+        const want = Math.atan2(player.y + player.vy * c.lead - c.y, player.x + player.vx * c.lead - c.x);
+        c.angle += clamp(Math.atan2(Math.sin(want - c.angle), Math.cos(want - c.angle)), -0.03 * dt, 0.03 * dt);
+        const stepX = Math.cos(c.angle) * c.speed * dt, stepY = Math.sin(c.angle) * c.speed * dt;
+        const ox = c.x, oy = c.y;
+        // Gleiten an Hindernissen: erst beide Achsen, dann einzeln
+        if (!chaserBlocked(c.x + stepX, c.y + stepY)) { c.x += stepX; c.y += stepY; }
+        else if (!chaserBlocked(c.x + stepX, c.y)) c.x += stepX;
+        else if (!chaserBlocked(c.x, c.y + stepY)) c.y += stepY;
+        else {
+          // Fehler: voll gegen die Wand gefahren -> kurz benommen
+          if (c.speed > 6 && c.stun <= 0 && Math.random() < settings.policeMistakes) { c.stun = rnd(1, 1.8); burst(c.x, c.y, 8, ["#cfcfcf", "#e8e8e8"], 3, false); }
+          c.speed *= 0.5;
+        }
+        c.stuck = Math.hypot(c.x - ox, c.y - oy) < c.speed * dt * 0.4 ? c.stuck + sec : 0;
+        if (c.stuck > 0.7) { leaveHunt(); c.noHunt = 3.5; }
+      } else if (c.edge) {
+        c.s += c.speed * dt;
+        if (c.s >= c.edge.len) {
+          const old = c.edge, over = c.s - old.len;
+          c.edge = chooseEdgeFor(c, old.to, old.from) || old.rev;
+          c.s = over;
+          // Fehler: zu schnell in die Kurve -> bricht aus und rutscht in die Leitplanke/Bordstein
+          const sharp = old.dx * c.edge.dx + old.dy * c.edge.dy < 0.5;
+          if (sharp) {
+            if (c.speed > 7 && Math.random() < settings.policeMistakes * 0.6 * Math.min(1, c.speed / 14)) {
+              c.stun = rnd(1.2, 2);        // zu schnell: bleibt kurz stehen
+              c.speed *= 0.3;
+            } else c.speed *= 0.55;        // normal: bremst in der Kurve stark ab
+          }
+        }
+        const e = c.edge;
+        c.x = e.from.x + e.dx * c.s;
+        c.y = e.from.y + e.dy * c.s;
+        const want = Math.atan2(e.dy, e.dx);
+        c.angle += Math.atan2(Math.sin(want - c.angle), Math.cos(want - c.angle)) * Math.min(1, 0.08 * dt);
+      }
+
+      // Staub
+      if (c.speed > 3 && Math.random() < 0.5 * dt) {
+        emit(c.x - Math.cos(c.angle) * 14, c.y - Math.sin(c.angle) * 14, rnd(-.5, .5), rnd(-.5, .5), 0.4, 3, "#cfcfcf", { grow: 0.2, alpha: 0.25 });
+      }
+
+      return dist;
+    }
+
+    function takedown(c) {
+      c.stun = 2.2;
+      c.speed = 0;
+      sfx.takedown();
+      addPoints(500);
+      popup(L("GERAMMT! +500", "RAMMED! +500"), "#65e6a5", 24);
+      run.shake = Math.max(run.shake, 0.7);
+      burst(c.x, c.y, 12, ["#cfcfcf", "#e8e8e8"], 4, false);
+    }
+
+    // Weltrekord (höchster Punktestand aller Spieler) über den Cloudflare-Worker; keine Anti-Cheat-Prüfung
+    const leaderboardUrl = "https://waitinggames-record.kroxenstudios.workers.dev";
+    function showGlobalBest(best) {
+      for (const el of document.querySelectorAll(".global-best")) {
+        el.hidden = false;
+        el.textContent = L("🏆 Weltrekord: ", "🏆 World record: ") + (best == null ? L("noch kein Bestwert", "no score yet") : Number(best).toLocaleString(LOCALE));
+      }
+    }
+    async function loadGlobalBest() {
+      try {
+        const r = await fetch(`${leaderboardUrl}/best`);
+        showGlobalBest((await r.json()).best);
+      } catch {}
+    }
+    async function submitGlobalScore(value) {
+      try {
+        const r = await fetch(`${leaderboardUrl}/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ value })
+        });
+        showGlobalBest((await r.json()).best);
+      } catch {}
+    }
+    loadGlobalBest();
+
+    function bust() {
+      if (run.bustTimer > 0) return;
+      const lost = Math.round(run.pending);
+      const final = driftScore;
+      const isBest = final > run.best && !run.invalid;     // Dev-Modus oder ausgeschaltete Verfolger machen den Lauf ungültig
+      if (isBest) {
+        run.best = final;
+        try { localStorage.setItem("asphaltBest", String(final)); } catch {}
+        submitGlobalScore(final);
+      }
+      run.bustInfo = { score: final, time: run.time, lost, isBest };
+      run.bustTimer = 3;
+      sfx.bust();
+      run.shake = 1; run.flash = 0.6; run.flashColor = "255,40,40";
+      player.vx = 0; player.vy = 0;
+
+    }
+
+    function resetRun() {
+      run.invalid = false;
+      run.time = 0; run.tier = 1; run.safe = 0; run.bustTimer = 0; run.bustInfo = null;
+      run.chain = 0; run.pending = 0; run.drifting = false; run.comboTimer = 0; run.boost = 0; run.boostCharge = 0;
+      steerValue = 0;
+      driftScore = 0;
+      driftScoreDisplay.textContent = "0";
+      chasers.length = 0;
+      popups.length = 0;
+    }
+
+    function updateChase(dt) {
+      const sec = dt / 60;
+      run.time += sec;
+      if (devMode || !settings.chasers) run.invalid = true;     // zählt nicht für Rekorde
+      run.safe = Math.max(0, run.safe - sec);
+      surviveDisplay.textContent = fmtTime(run.time);
+
+      // Je länger man durchhält, desto mehr Punkte pro Sekunde (Stufe alle 20 s)
+      const tier = 1 + Math.floor(run.time / 20);
+      if (tier !== run.tier) {
+        run.tier = tier;
+        popup(L(`ÜBERLEBT: x${tier} PUNKTE`, `SURVIVED: x${tier} POINTS`), "#65e6a5", 22);
+      }
+      // In der Garage zu parken bringt keine Überlebens-Punkte
+      const inGarage = garage && player.x > garage.x && player.x < garage.x + garage.w &&
+        player.y > garage.y && player.y < garage.y + garage.h;
+      if (!player.crashed && !inGarage) addPoints(50 * tier * sec);
+
+      // Wellen: erst nach der Schonfrist, danach alle 30 s ein Wagen mehr (max. 4)
+      if (!settings.chasers) chasers.length = 0;
+      const want = !settings.chasers || run.time < GRACE_SECONDS ? 0 : Math.min(4, 1 + Math.floor((run.time - GRACE_SECONDS) / 30));
+      while (chasers.length < want) {
+        if (!spawnChaser()) break;
+        popup(chasers.length === 1 ? L("DU WIRST VERFOLGT", "YOU ARE BEING CHASED") : L("VERSTÄRKUNG!", "REINFORCEMENTS!"), "#ff6b6b", 24);
+        run.shake = Math.max(run.shake, 0.25);
+      }
+
+      for (const c of chasers) {
+        const dist = updateChaser(c, dt);
+        if (dist > 4200) { chasers.splice(chasers.indexOf(c), 1); spawnChaser(); continue; }
+        if (run.safe > 0 || player.crashed || c.stun > 0) continue;
+
+        if (dist < CATCH_DISTANCE) {
+          if (run.boost > 0) takedown(c); else { bust(); return; }
+        } else if (dist < NEAR_MISS_DISTANCE && c.nearCd <= 0) {
+          c.nearCd = 2.5;
+          const bonus = 150 * Math.max(1, run.chain);
+          addPoints(bonus);
+          popup(L(`KNAPP! +${bonus}`, `CLOSE CALL! +${bonus}`), "#ffd166", 20);
+        }
+      }
+    }
+
+    function afterRespawn() {
+      run.safe = 2.5;
+      run.drifting = false;
+      for (let i = chasers.length - 1; i >= 0; i--) {
+        if (Math.hypot(chasers[i].x - START.x, chasers[i].y - START.y) < 1100) {
+          chasers.splice(i, 1);
+          spawnChaser();
+        }
+      }
+    }
+
+    function driveEffects(dt, speed) {
+      const fx = Math.cos(player.angle), fy = Math.sin(player.angle);
+      const sx = -fy, sy = fx;
+      const rearX = player.x - fx * 11, rearY = player.y - fy * 11;
+      const lvl = run.drifting ? driftLevel() : 0;
+      const onRoad = isOnRoad(player.x, player.y);
+      const chance = p => Math.random() < p * dt;
+
+      if (run.drifting || (handbrakeOn && speed > 3)) {
+        for (const side of [-1, 1]) {
+          const wx = rearX + sx * 5 * side, wy = rearY + sy * 5 * side;
+          if (chance(0.9)) {
+            emit(wx, wy, player.vx * 0.15 + rnd(-.7, .7), player.vy * 0.15 + rnd(-.7, .7),
+              rnd(0.5, 0.9), rnd(4, 6), "#dcdcdc", { grow: 0.28, alpha: 0.45 });
+          }
+          if (chance(0.45 + lvl * 0.2)) {
+            emit(wx, wy, sx * side * rnd(1, 3.5) - fx * 2, sy * side * rnd(1, 3.5) - fy * 2,
+              rnd(0.2, 0.4), 1.8, LEVEL_COLORS[lvl], { add: true, drag: 0.9 });
+          }
+        }
+      }
+
+      if (run.boost > 0) {
+        const col = LEVEL_COLORS[run.boostLevel];
+        for (let i = 0; i < 2; i++) {
+          emit(rearX + rnd(-3, 3), rearY + rnd(-3, 3), -fx * (speed + 3) + rnd(-1, 1), -fy * (speed + 3) + rnd(-1, 1),
+            rnd(0.15, 0.3), 5, col, { add: true, grow: -0.12, drag: 0.92 });
+        }
+      }
+
+      // Neben der Straße wirbelt man Staub auf
+      if (!onRoad && speed > 3 && chance(0.7)) {
+        emit(rearX + rnd(-5, 5), rearY + rnd(-5, 5), rnd(-.5, .5), rnd(-.5, .5), 0.6, 3, "#8c7c55", { grow: 0.22, alpha: 0.35 });
+      }
+    }
+
+    const player = {
+      x: 360, y: 315,
+      angle: Math.PI,
+      vx: 0, vy: 0,
+      width: 30, height: 16,
+      crashed: false
+    };
+
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+    // ===================== Straßennetz, Stadt und Verkehr =====================
+    // Das Netz besteht aus Knoten im Raster (Abstand PITCH). Hauptstraßen liegen auf den geraden Rasterlinien,
+    // Gassen halbieren manche Häuserblöcke; die Autobahn (HWY_ROW) hat nur an Auffahrten Anschluss.
+    const idle = fn => "requestIdleCallback" in window
+      ? requestIdleCallback(fn, { timeout: 800 })
+      : setTimeout(fn, 60);
+    let mapInitialized = false;
+
+    // Knotenraster 261 x 51 (PITCH 350 px): die Karte ist ca. 91.000 x 17.700 px groß. Von der Garage im Westen bis zum Seebad im Osten
+    // sind es mit dem Startwagen rund 2-3 Minuten Fahrt. Zonen von West nach Ost: Vorstadt, Innenstadt, Industrie, Land/Wald, Berge, Dorf, Seebad.
+    const PITCH = 350, OFFSET = 90, NA = 261, NB = 51;
+    const nodeX = a => OFFSET + a * PITCH;
+    const nodeY = b => OFFSET + b * PITCH;
+    const nid = (a, b) => b * NA + a;
+    const BI = (NA - 1) / 2, BJ = (NB - 1) / 2;       // Häuserblöcke (2 x 2 Knoten)
+    // Autobahn A1: ganz im Süden quer über die Karte, ohne Straßen drumherum, nur über Auffahrten erreichbar
+    const LAKE_A = 212;                                 // der See beginnt ab dieser Spalte, südlich der A1
+    const ROAD = {
+      alley:   { width: 60,  limit: 2.8, rank: 1 },     // Geschwindigkeiten in px/Frame (x13 = km/h)
+      main:    { width: 110, limit: 4.4, rank: 2 },
+      country: { width: 90,  limit: 6.2, rank: 1.8 },
+      ramp:    { width: 80,  limit: 3.6, rank: 1.5 },
+      hwy:     { width: 220, limit: 9.2, rank: 3 }
+    };
+
+    // Städte (Rasterlinien, jeweils gerade Zahlen): bekommen ein Straßenraster mit Häuserblöcken
+    const TOWNS = [
+      { id: "suburb",   name: L("VORSTADT", "SUBURB"),     a0: 0,   a1: 36,  b0: 10, b1: 36, alley: 0.25, bonus: 0 },
+      { id: "downtown", name: L("INNENSTADT", "DOWNTOWN"), a0: 36,  a1: 68,  b0: 8,  b1: 36, alley: 0.6,  bonus: 250 },
+      { id: "industry", name: L("INDUSTRIE", "INDUSTRY"),  a0: 68,  a1: 90,  b0: 16, b1: 36, alley: 0.2,  bonus: 250 },
+      { id: "village",  name: L("DORF", "VILLAGE"),        a0: 184, a1: 196, b0: 12, b1: 22, alley: 0.3,  bonus: 400 },
+      { id: "resort",   name: L("SEEBAD", "SEASIDE"),      a0: 228, a1: 258, b0: 10, b1: 36, alley: 0.4,  bonus: 800 }
+    ];
+    for (const T of TOWNS) { T.x0 = nodeX(T.a0); T.x1 = nodeX(T.a1); T.y0 = nodeY(T.b0); T.y1 = nodeY(T.b1); }
+    const RURAL = {
+      farm:     { id: "farm",     name: L("LAND", "COUNTRYSIDE"), bonus: 100 },
+      forest:   { id: "forest",   name: L("WALD", "FOREST"),      bonus: 150 },
+      mountain: { id: "mountain", name: L("BERGE", "MOUNTAINS"),  bonus: 400 },
+      meadow:   { id: "meadow",   name: L("WIESEN", "MEADOWS"),   bonus: 150 },
+      lake:     { id: "lake",     name: L("SEEUFER", "LAKESIDE"), bonus: 300 }
+    };
+    const ZONE_HWY = { id: "hwy", name: L("AUTOBAHN A1", "HIGHWAY A1"), bonus: 150 };
+    const biomeOf = (a, b) => a >= LAKE_A && b >= 44 ? "lake" : a >= 140 && a < 200 ? "mountain" : a >= 92 && a < 140 ? "forest" : a >= 200 ? "meadow" : "farm";
+    const townOfBlock = (i, j) => TOWNS.find(T => 2 * i >= T.a0 && 2 * i + 2 <= T.a1 && 2 * j >= T.b0 && 2 * j + 2 <= T.b1) || null;
+    function zoneAt(x, y) {
+      const a = (x - OFFSET) / PITCH, b = (y - OFFSET) / PITCH;
+      if (x > HWY_X0 && x < HWY_X1 && Math.abs(y - hwyY(x)) < 125) return ZONE_HWY;
+      for (const T of TOWNS) if (a >= T.a0 - 0.5 && a <= T.a1 + 0.5 && b >= T.b0 - 0.5 && b <= T.b1 + 0.5) return T;
+      return RURAL[biomeOf(Math.round(a), Math.round(b))];
+    }
+
+    // ----- Geschwungene Straßen: A1, Auffahrten und Landstraßen sind Splines und laufen frei über die Karte -----
+    const HWY_X0 = nodeX(8), HWY_X1 = nodeX(258);
+    const hwyY = x => 14250 + 560 * Math.sin(x / 9000 * 6.2832 + 0.6) + 240 * Math.sin(x / 3700 * 6.2832 + 2.1);
+    const hwySlope = x => (hwyY(x + 10) - hwyY(x - 10)) / 20;
+    const TUNNEL = { x0: nodeX(168), x1: nodeX(178) };           // Tunnel durch die Berge
+    // Ausfahrten der A1: x-Position an der A1, Zielknoten im Raster (Stadtrand) und Beschilderung
+    const EXIT_DEFS = [
+      { x: nodeX(8),   to: [8, 36],   de: "VORSTADT", en: "SUBURB" },
+      { x: nodeX(30),  to: [30, 36],  de: "VORSTADT", en: "SUBURB" },
+      { x: nodeX(44),  to: [44, 36],  de: "INNENSTADT", en: "DOWNTOWN" },
+      { x: nodeX(58),  to: [58, 36],  de: "INNENSTADT", en: "DOWNTOWN" },
+      { x: nodeX(76),  to: [76, 36],  de: "INDUSTRIE", en: "INDUSTRY" },
+      { x: nodeX(88),  to: [88, 36],  de: "INDUSTRIE", en: "INDUSTRY" },
+      { x: nodeX(190), to: [190, 22], de: "DORF", en: "VILLAGE" },
+      { x: nodeX(232), to: [232, 36], de: "SEEBAD", en: "SEASIDE" },
+      { x: nodeX(250), to: [250, 36], de: "SEEBAD", en: "SEASIDE" },
+      { x: nodeX(258), to: [258, 36], de: "SEEBAD", en: "SEASIDE" }
+    ];
+    const REST_X = [nodeX(104), nodeX(156)];        // Raststätten (Schleife neben der A1)
+    const FARM_X = nodeX(96);                       // Zufahrt zum Bauernhof südlich der A1
+    const GRIDN = (a, b) => net.nodes[nid(a, b)];
+    const GARAGE_BLOCK = { i: 3, j: 17 };       // Startblock am Südrand der Vorstadt
+    const START = { x: 360, y: 315 };
+
+    const net = { nodes: [], edges: [], marks: [] };
+    const stopLines = [];
+    const lightNodes = [];
+    const decor = [];                 // reine Dekoration ohne Kollision
+    const props = [];                 // kleine feste Objekte (geparkte Autos, Container, Zapfsäulen …)
+    const lots = [];                  // Bodenflächen (Parkplatz, Park, Platz, Feld, Wald, See …)
+    const rocks = [];                 // Felsen in den Bergen
+    const solids = new Map();         // Kollisionsraster
+    const roadGrid = new Map();
+    const CELL = 400;
+    let simTime = 0;
+    let minimapCache = null;
+    let blocks = [];
+
+    // Feste Zufallsfolge, damit die Welt bei jedem Laden gleich aussieht
+    let rngState = 1337;
+    const sr = () => {
+      rngState = (rngState + 0x6D2B79F5) | 0;
+      let t = Math.imul(rngState ^ (rngState >>> 15), 1 | rngState);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const pick = list => list[Math.floor(sr() * list.length)];
+    function pickW(list) {
+      let total = 0;
+      for (const [, w] of list) total += w;
+      let r = sr() * total;
+      for (const [k, w] of list) if ((r -= w) < 0) return k;
+      return list[0][0];
+    }
+
+    const SHOP_SETS = {
+      downtown: ["BANK", "CAFÉ", "BOUTIQUE", "HOTEL", "KINO", "BÄCKEREI", "APOTHEKE", "BUCHLADEN", "BAR", "JUWELIER", "RESTAURANT", "FRISEUR", "DÖNER"].map(t),
+      suburb:   ["KIOSK", "BÄCKEREI", "FRISEUR", "APOTHEKE", "BLUMEN"].map(t),
+      village:  ["BÄCKEREI", "GASTHAUS", "METZGEREI", "KIOSK"].map(t),
+      resort:   ["EISDIELE", "STRANDBAR", "SOUVENIRS", "FISCHBRÖTCHEN", "SURFSHOP", "CAFÉ", "RESTAURANT", "HOTEL"].map(t),
+      industry: ["WERKSTATT", "BAUMARKT"].map(t)
+    };
+    const AWNINGS = [["#c0392b", "#f4f1e8"], ["#2d7dd2", "#f4f1e8"], ["#2e9e5b", "#f4f1e8"], ["#e0a526", "#f4f1e8"], ["#8e44ad", "#f4f1e8"]];
+
+    function palette() {
+      return currentLevel === "moon"
+        ? { ground: "#0a0a1a", side: "#6b6e74", road: "#3d4046", country: "#44484e", line: "#c8c8c8", build: ["#696969", "#808080", "#778899", "#a9a9a9", "#5f6670"],
+            roof: ["#555a62", "#6b7078", "#4b5058"], tower: ["#58606c", "#4b525d", "#646c78"], tree: ["#4a4f55", "#6a7078"], pine: ["#3a3e44", "#585d64"],
+            park: "#2a2f35", plaza: "#4a4d55", parking: "#33363c", lawn: ["#2f343a", "#33383e", "#2c3136"], field: ["#3a3f46", "#41464d", "#373b41"],
+            forest: "#1d2126", meadow: "#2b3036", rockground: "#2f3238", water: "#1a2433", sand: "#5c5f66", rock: ["#5d6168", "#7b8088"] }
+        : { ground: "#49694d", side: "#a3a6a0", road: "#5b5f64", country: "#585c61", line: "#e8dcae", build: ["#947b6a", "#758397", "#9a846c", "#778b76", "#a68a7a", "#7d8aa0"],
+            roof: ["#a5523f", "#7c4a3a", "#5d6d7e", "#8c6a4a"], tower: ["#5f7f99", "#52708a", "#6a8aa5", "#4b647a"], tree: ["#31583c", "#4d8052"], pine: ["#1f3f2a", "#34603f"],
+            park: "#3f6b43", plaza: "#b7a98a", parking: "#7a7e83", lawn: ["#5a8a52", "#63935a", "#547f4c"], field: ["#b9a45a", "#8fae55", "#9b7f4e"],
+            forest: "#2f5238", meadow: "#59814f", rockground: "#6d6a62", water: "#3f7fb2", sand: "#d8c58e", rock: ["#6b6a66", "#8f8c84"] };
+    }
+
+    // ----- Kollisionsraster -----
+    function addSolid(item, x0, y0, x1, y1) {
+      for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) {
+        for (let cy = Math.floor(y0 / CELL); cy <= Math.floor(y1 / CELL); cy++) {
+          const k = cx * 1000 + cy;
+          let list = solids.get(k);
+          if (!list) { list = []; solids.set(k, list); }
+          list.push(item);
+        }
+      }
+    }
+    const addSolidRect = (x, y, w, h) => addSolid({ x, y, w, h, r: 0 }, x, y, x + w, y + h);
+    const addSolidCircle = (x, y, r) => addSolid({ x, y, w: 0, h: 0, r }, x - r, y - r, x + r, y + r);
+
+    function solidHit(px, py, rad) {
+      for (let cx = Math.floor((px - rad) / CELL); cx <= Math.floor((px + rad) / CELL); cx++) {
+        for (let cy = Math.floor((py - rad) / CELL); cy <= Math.floor((py + rad) / CELL); cy++) {
+          const list = solids.get(cx * 1000 + cy);
+          if (!list) continue;
+          for (const it of list) {
+            if (it.r) {
+              if (Math.hypot(px - it.x, py - it.y) < rad + it.r) return true;
+            } else {
+              const dx = px - clamp(px, it.x, it.x + it.w), dy = py - clamp(py, it.y, it.y + it.h);
+              if (dx * dx + dy * dy < rad * rad) return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    // ----- Straßen -----
+    function addRoadRect(x, y, w, h, type) {
+      const r = { x, y, w, h, type };
+      roads.push(r);
+      for (let cx = Math.floor(x / CELL); cx <= Math.floor((x + w) / CELL); cx++) {
+        for (let cy = Math.floor(y / CELL); cy <= Math.floor((y + h) / CELL); cy++) {
+          const k = cx * 1000 + cy;
+          let list = roadGrid.get(k);
+          if (!list) { list = []; roadGrid.set(k, list); }
+          list.push(r);
+        }
+      }
+    }
+
+    // Gerades Stück einer geschwungenen Straße (Mittellinie, halbe Breite)
+    function addRoadSeg(x1, y1, x2, y2, hw, type) {
+      const r = { seg: true, x1, y1, x2, y2, hw, type };
+      for (let cx = Math.floor((Math.min(x1, x2) - hw) / CELL); cx <= Math.floor((Math.max(x1, x2) + hw) / CELL); cx++) {
+        for (let cy = Math.floor((Math.min(y1, y2) - hw) / CELL); cy <= Math.floor((Math.max(y1, y2) + hw) / CELL); cy++) {
+          const k = cx * 1000 + cy;
+          let list = roadGrid.get(k);
+          if (!list) { list = []; roadGrid.set(k, list); }
+          list.push(r);
+        }
+      }
+    }
+    function segDist(px, py, r) {
+      const dx = r.x2 - r.x1, dy = r.y2 - r.y1;
+      const t = clamp(((px - r.x1) * dx + (py - r.y1) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+      return Math.hypot(px - (r.x1 + dx * t), py - (r.y1 + dy * t));
+    }
+
+    function isOnRoad(px, py) {
+      const list = roadGrid.get(Math.floor(px / CELL) * 1000 + Math.floor(py / CELL));
+      if (!list) return false;
+      for (const r of list) {
+        if (r.seg) { if (segDist(px, py, r) <= r.hw) return true; }
+        else if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return true;
+      }
+      return false;
+    }
+
+    // Straße innerhalb von pad Pixeln um (px, py)? (für Bäume, Felsen, Bauernhöfe)
+    function roadNear(px, py, pad) {
+      for (let cx = Math.floor((px - pad) / CELL); cx <= Math.floor((px + pad) / CELL); cx++) {
+        for (let cy = Math.floor((py - pad) / CELL); cy <= Math.floor((py + pad) / CELL); cy++) {
+          const list = roadGrid.get(cx * 1000 + cy);
+          if (!list) continue;
+          for (const r of list) {
+            if (r.seg) { if (segDist(px, py, r) < r.hw + pad) return true; }
+            else if (px > r.x - pad && px < r.x + r.w + pad && py > r.y - pad && py < r.y + r.h + pad) return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function laneOffset(e, lane) {
+      if (e.type === "hwy") return 28 + 54 * lane;
+      if (e.type === "main") return 28;
+      if (e.type === "country") return 24;
+      if (e.type === "ramp") return 20;
+      return 15;
+    }
+
+    // ----- Geschwungene Straßen erzeugen -----
+    const curveRoads = [], curveChunks = [], tunnelSegs = [], restLots = [], noFill = [], hwyNodes = [], customNodes = new Map();
+    let farmSite = null, exitSigns = [], tunnelBox = null;
+
+    function addCustomNode(x, y) {
+      const n = { id: net.nodes.length, a: -1, b: -1, x, y, out: [], inn: [], maxRank: 0, maxW: 0, clear: 0, ctrl: "free", phase: 0, hwy: false, custom: true };
+      net.nodes.push(n);
+      const k = Math.floor(x / 800) * 1000 + Math.floor(y / 800);
+      const l = customNodes.get(k);
+      if (l) l.push(n); else customNodes.set(k, [n]);
+      return n;
+    }
+
+    // Catmull-Rom-Spline durch die Kontrollpunkte, danach nach Bogenlänge im Abstand step neu abgetastet
+    function splinePts(ctrl, step) {
+      const dense = [];
+      for (let i = 0; i < ctrl.length - 1; i++) {
+        const p0 = ctrl[Math.max(0, i - 1)], p1 = ctrl[i], p2 = ctrl[i + 1], p3 = ctrl[Math.min(ctrl.length - 1, i + 2)];
+        const n = Math.max(4, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 20));
+        for (let k = 0; k < n; k++) {
+          const t = k / n, t2 = t * t, t3 = t2 * t;
+          const f = c => 0.5 * (2 * p1[c] + (p2[c] - p0[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (3 * p1[c] - p0[c] - 3 * p2[c] + p3[c]) * t3);
+          dense.push([f(0), f(1)]);
+        }
+      }
+      dense.push(ctrl[ctrl.length - 1]);
+      const out = [dense[0]];
+      let acc = 0;
+      for (let i = 1; i < dense.length; i++) {
+        acc += Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1]);
+        if (acc >= step) { out.push(dense[i]); acc = 0; }
+      }
+      const last = dense[dense.length - 1];
+      if (out.length > 1 && Math.hypot(out[out.length - 1][0] - last[0], out[out.length - 1][1] - last[1]) < step * 0.5) out[out.length - 1] = last;
+      else out.push(last);
+      return out;
+    }
+
+    // Zwischenpunkte seitlich versetzen: die Straße schlängelt sich zwischen den Eckpunkten
+    function windingCtrl(points, step, amp) {
+      const out = [points[0]];
+      for (let i = 0; i < points.length - 1; i++) {
+        const A = points[i], B = points[i + 1], d = Math.hypot(B[0] - A[0], B[1] - A[1]);
+        const n = Math.floor(d / step), nx = -(B[1] - A[1]) / d, ny = (B[0] - A[0]) / d;
+        for (let k = 1; k <= n; k++) {
+          const t = k / (n + 1), off = amp * (k % 2 ? 1 : -1) * (0.5 + 0.5 * sr());
+          out.push([A[0] + (B[0] - A[0]) * t + nx * off, A[1] + (B[1] - A[1]) * t + ny * off]);
+        }
+        out.push(B);
+      }
+      return out;
+    }
+
+    // Straße als Kette kurzer Abschnitte; Start-/Endknoten dürfen vorhandene Knoten sein. typeFn(u, v) liefert den Typ je Abschnitt.
+    function addCurve(links, ctrl, startNode, endNode, typeFn) {
+      const pts = splinePts(ctrl, 120);
+      const ns = pts.map((pt, i) => i === 0 && startNode ? startNode : i === pts.length - 1 && endNode ? endNode : addCustomNode(pt[0], pt[1]));
+      const types = [];
+      for (let i = 0; i < ns.length - 1; i++) {
+        const ty = typeFn(ns[i], ns[i + 1]);
+        types.push(ty);
+        links.push({ u: ns[i], v: ns[i + 1], type: ty, custom: true });
+      }
+      let s0 = 0;
+      for (let i = 1; i <= types.length; i++) {
+        if (i === types.length || types[i] !== types[s0]) { curveRoads.push({ type: types[s0], nodes: ns.slice(s0, i + 1) }); s0 = i; }
+      }
+      return ns;
+    }
+
+    const hwyNodeAt = x => {
+      let best = hwyNodes[0], bd = Infinity;
+      for (const n of hwyNodes) { const d = Math.abs(n.x - x); if (d < bd) { bd = d; best = n; } }
+      return best;
+    };
+    // Nahe der A1 sind die Straßen Auffahrten, weiter weg Landstraßen
+    const rampNear = H => (u, v) => Math.hypot(u.x - H.x, u.y - H.y) < 700 || Math.hypot(v.x - H.x, v.y - H.y) < 700 ? "ramp" : "country";
+
+    function buildCurvedRoads(links) {
+      curveRoads.length = 0; tunnelSegs.length = 0; restLots.length = 0; noFill.length = 0; hwyNodes.length = 0; customNodes.clear();
+      exitSigns = []; farmSite = null;
+
+      // Autobahn A1 quer über die ganze Karte
+      const hc = [];
+      for (let x = HWY_X0; x < HWY_X1; x += 600) hc.push([x, hwyY(x)]);
+      hc.push([HWY_X1, hwyY(HWY_X1)]);
+      hwyNodes.push(...addCurve(links, hc, null, null, () => "hwy"));
+
+      // Ausfahrten zu den Orten
+      for (const d of EXIT_DEFS) {
+        const H = hwyNodeAt(d.x), T = GRIDN(d.to[0], d.to[1]);
+        addCurve(links, windingCtrl([[H.x, H.y], [H.x + 120, H.y - 190], [T.x, T.y]], 1400, 230), H, T, rampNear(H));
+        exitSigns.push({ node: hwyNodeAt(d.x - 400), de: d.de, en: d.en });
+      }
+
+      // Raststätten: Schleife neben der A1 an einer möglichst geraden Stelle, Tankstelle dahinter
+      for (const xt of REST_X) {
+        let best = xt, bs = 1e9;
+        for (let x = xt - 1500; x <= xt + 1500; x += 100) {
+          let m = 0;
+          for (let k = 0; k <= 1100; k += 100) m = Math.max(m, Math.abs(hwySlope(x + k)));
+          if (m < bs) { bs = m; best = x; }
+        }
+        const H0 = hwyNodeAt(best), H1 = hwyNodeAt(best + 1100);
+        const i0 = hwyNodes.indexOf(H0), i1 = hwyNodes.indexOf(H1);
+        const loop = [];
+        for (let k = 0; k <= 10; k++) {
+          const idx = i0 + Math.round(k / 10 * (i1 - i0));
+          const n = hwyNodes[idx], n2 = hwyNodes[Math.min(hwyNodes.length - 1, idx + 1)];
+          let tx = n2.x - n.x, ty = n2.y - n.y;
+          const l = Math.hypot(tx, ty) || 1;
+          tx /= l; ty /= l;
+          const off = 330 * Math.pow(Math.sin(Math.PI * k / 10), 0.6);
+          loop.push([n.x + ty * off, n.y - tx * off]);
+        }
+        addCurve(links, loop, H0, H1, () => "ramp");
+        const mid = hwyNodes[Math.round((i0 + i1) / 2)];
+        const lot = { x: mid.x - 300, y: mid.y - 600, w: 600, h: 210 };
+        restLots.push(lot);
+        noFill.push({ x: lot.x - 40, y: lot.y - 40, w: lot.w + 80, h: lot.h + 80 });
+        exitSigns.push({ node: hwyNodeAt(best - 400), de: "RASTHOF", en: "REST STOP" });
+      }
+
+      // Zufahrt zum Bauernhof (Sackgasse südlich der A1)
+      {
+        const H = hwyNodeAt(FARM_X);
+        const ns = addCurve(links, [[H.x, H.y], [H.x + 150, H.y + 260], [H.x + 380, H.y + 800], [H.x + 260, H.y + 1400]], H, null, rampNear(H));
+        const E = ns[ns.length - 1];
+        farmSite = { x: E.x, y: E.y };
+        noFill.push({ x: E.x - 320, y: E.y - 220, w: 640, h: 440 });
+        exitSigns.push({ node: hwyNodeAt(FARM_X - 400), de: "BAUERNHOF", en: "FARM" });
+      }
+
+      // Landstraßen zwischen den Orten
+      const N1 = GRIDN(52, 8), V1 = GRIDN(184, 12);                      // Nordroute: Innenstadt -> Dorf
+      addCurve(links, windingCtrl([[N1.x, N1.y], [19500, 1500], [30000, 1250], [42000, 1900], [50000, 3100], [57000, 3700], [V1.x, V1.y]], 2200, 350), N1, V1, () => "country");
+      const V2 = GRIDN(196, 12), R1 = GRIDN(236, 10);                    // Dorf -> Seebad
+      addCurve(links, windingCtrl([[V2.x, V2.y], [73500, 2800], [78500, 2000], [R1.x, R1.y]], 2200, 300), V2, R1, () => "country");
+      const I1 = GRIDN(90, 24), H3 = hwyNodeAt(nodeX(112));              // Industrie -> A1
+      addCurve(links, windingCtrl([[I1.x, I1.y], [34000, 9800], [37500, 11200], [38800, 12600], [H3.x, H3.y]], 1800, 300), I1, H3, rampNear(H3));
+    }
+
+    // Zeichen-Abschnitte: je 8 Straßenstücke als ein Pfad, inklusive vorberechneter Fahrbahnmarkierungen
+    function makeChunk(type, ns) {
+      const pts = ns.map(n => [n.x, n.y]);
+      const nrm = pts.map((pt, i) => {
+        const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+        const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+        return [-dy / l, dx / l];
+      });
+      const off = o => pts.map((pt, i) => [pt[0] + nrm[i][0] * o, pt[1] + nrm[i][1] * o]);
+      const styles = type === "hwy"
+        ? [{ o: -3, c: "#e0b43a", w: 3, d: [] }, { o: 3, c: "#e0b43a", w: 3, d: [] }, { o: -55, c: "#f2f2f2", w: 3, d: [30, 26] }, { o: 55, c: "#f2f2f2", w: 3, d: [30, 26] },
+           { o: -104, c: "#f2f2f2", w: 3, d: [] }, { o: 104, c: "#f2f2f2", w: 3, d: [] }]
+        : type === "country" ? [{ o: 0, c: "#e6dca0", w: 3, d: [34, 30] }] : [{ o: 0, c: "#e6e6e6", w: 2, d: [14, 14] }];
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const pt of pts) { x0 = Math.min(x0, pt[0]); y0 = Math.min(y0, pt[1]); x1 = Math.max(x1, pt[0]); y1 = Math.max(y1, pt[1]); }
+      return { type, pts, marks: styles.map(m => ({ c: m.c, w: m.w, d: m.d, pts: off(m.o) })), x: x0 - 130, y: y0 - 130, w: x1 - x0 + 260, h: y1 - y0 + 260 };
+    }
+
+    function buildNetwork() {
+      const nodes = net.nodes, edges = net.edges;
+      nodes.length = 0; edges.length = 0; net.marks.length = 0;
+      roads.length = 0; roadGrid.clear(); stopLines.length = 0; lightNodes.length = 0;
+
+      for (let b = 0; b < NB; b++) {
+        for (let a = 0; a < NA; a++) {
+          nodes.push({ id: nid(a, b), a, b, x: nodeX(a), y: nodeY(b), out: [], inn: [], maxRank: 0, maxW: 0,
+            clear: 0, ctrl: "free", phase: 0, hwy: false });
+        }
+      }
+
+      const links = [], seen = new Set();
+      const link = (a1, b1, a2, b2, type) => {
+        const u = nodes[nid(a1, b1)], v = nodes[nid(a2, b2)];
+        const key = u.id < v.id ? u.id * 100000 + v.id : v.id * 100000 + u.id;
+        if (seen.has(key)) return;
+        seen.add(key);
+        links.push({ u, v, type });
+      };
+
+      // Städte: Hauptstraßen auf allen geraden Rasterlinien
+      for (const T of TOWNS) {
+        for (let b = T.b0; b <= T.b1; b += 2) for (let a = T.a0; a < T.a1; a++) link(a, b, a + 1, b, "main");
+        for (let a = T.a0; a <= T.a1; a += 2) for (let b = T.b0; b < T.b1; b++) link(a, b, a, b + 1, "main");
+      }
+      // Gassen halbieren manche Blöcke (der Startblock an der Garage bleibt frei)
+      blocks = [];
+      for (let i = 0; i < BI; i++) {
+        blocks[i] = [];
+        for (let j = 0; j < BJ; j++) {
+          const T = townOfBlock(i, j);
+          let h = false, v = false;
+          if (T && !(i === GARAGE_BLOCK.i && j === GARAGE_BLOCK.j)) {
+            const r = sr(), p = T.alley;
+            if (r < p * 0.45) h = true;
+            else if (r < p * 0.85) v = true;
+            else if (r < p) { h = true; v = true; }
+          }
+          blocks[i][j] = { town: T, h, v };
+          if (h) { link(2 * i, 2 * j + 1, 2 * i + 1, 2 * j + 1, "alley"); link(2 * i + 1, 2 * j + 1, 2 * i + 2, 2 * j + 1, "alley"); }
+          if (v) { link(2 * i + 1, 2 * j, 2 * i + 1, 2 * j + 1, "alley"); link(2 * i + 1, 2 * j + 1, 2 * i + 1, 2 * j + 2, "alley"); }
+        }
+      }
+
+      buildCurvedRoads(links);
+
+      for (const l of links) {
+        const A = l.u, B = l.v, info = ROAD[l.type];
+        const len = Math.hypot(B.x - A.x, B.y - A.y);
+        const dx = (B.x - A.x) / len, dy = (B.y - A.y) / len;
+        const axis = Math.abs(dx) > 0.5 ? "x" : "y";
+        const mk = (from, to, ex, ey) => ({
+          id: edges.length, from, to, len, dx: ex, dy: ey, axis, type: l.type, limit: info.limit, rank: info.rank,
+          lanes: l.type === "hwy" ? 2 : 1, cars: [], yield: null, rev: null, custom: !!l.custom
+        });
+        const e1 = mk(A, B, dx, dy), e2 = mk(B, A, -dx, -dy);
+        e1.rev = e2; e2.rev = e1;
+        edges.push(e1);
+        e2.id = edges.length; edges.push(e2);
+        A.out.push(e1); B.inn.push(e1); B.out.push(e2); A.inn.push(e2);
+        for (const n of [A, B]) { n.maxRank = Math.max(n.maxRank, info.rank); n.maxW = Math.max(n.maxW, info.width); }
+        const w = info.width;
+        if (l.custom) addRoadSeg(A.x, A.y, B.x, B.y, w / 2, l.type);
+        else if (axis === "x") addRoadRect(Math.min(A.x, B.x), A.y - w / 2, len, w, l.type);
+        else addRoadRect(A.x - w / 2, Math.min(A.y, B.y), w, len, l.type);
+      }
+
+      // Kreuzungsquadrate füllen Ecken und Enden
+      for (const n of nodes) {
+        if (!n.out.length || n.custom) continue;
+        n.clear = n.maxW / 2 + 6;
+        const squareType = n.out.some(e => e.type === "hwy") ? "hwy" : n.out.every(e => e.type === "country" || e.type === "ramp") ? "country" : "main";
+        addRoadRect(n.x - n.maxW / 2, n.y - n.maxW / 2, n.maxW, n.maxW, squareType);
+        const mainX = n.out.filter(e => e.rank === 2 && e.axis === "x").length;
+        const mainY = n.out.filter(e => e.rank === 2 && e.axis === "y").length;
+        const hasHwy = n.out.some(e => e.type === "hwy");
+        if (!hasHwy && mainX > 0 && mainY > 0) {
+          n.ctrl = "light";
+          // "Grüne Welle" Richtung Osten/Süden: Versatz = Fahrzeit zwischen zwei Kreuzungen (ca. 2,65 s)
+          n.phase = ((-(n.a + n.b) * 1.325) % 18 + 18) % 18;
+          lightNodes.push(n);
+        }
+      }
+
+      // Vorfahrtsregeln je Zufahrt + Haltelinien
+      for (const e of edges) {
+        const n = e.to;
+        if (n.out.length < 3 || e.custom) continue;         // keine Kreuzung, nur Kurve/Durchfahrt (Landstraßen und Auffahrten ohne Vorfahrtsregeln)
+        let y = null;
+        if (n.ctrl === "light" && e.rank === 2) y = "light";
+        else if (e.rank < n.maxRank) y = "sign";
+        else if (n.maxRank <= 1 && n.out.length >= 4) y = "sign";
+        e.yield = y;
+        if (y) {
+          const off = laneOffset(e, 0), half = e.type === "hwy" ? 24 : (e.type === "main" ? 24 : 12);
+          const cx = n.x - e.dx * n.clear - e.dy * off, cy = n.y - e.dy * n.clear + e.dx * off;
+          stopLines.push({ x1: cx + e.dy * half, y1: cy - e.dx * half, x2: cx - e.dy * half, y2: cy + e.dx * half });
+        }
+      }
+
+      // Fahrbahnmarkierungen (Enden vor Kreuzungen gekürzt)
+      for (let i = 0; i < edges.length; i += 2) {
+        const e = edges[i];
+        if (e.custom) continue;
+        const trim = n => n.out.length >= 3 ? n.clear + 4 : 0;
+        const t0 = trim(e.from), t1 = trim(e.to);
+        if (e.len - t0 - t1 < 20) continue;
+        net.marks.push({
+          x1: e.from.x + e.dx * t0, y1: e.from.y + e.dy * t0, x2: e.to.x - e.dx * t1, y2: e.to.y - e.dy * t1,
+          nx: -e.dy, ny: e.dx, type: e.type
+        });
+      }
+
+      curveChunks.length = 0;
+      for (const rd of curveRoads) {
+        for (let i = 0; i < rd.nodes.length - 1; i += 8) {
+          const sl = rd.nodes.slice(i, Math.min(rd.nodes.length, i + 9));
+          if (sl.length >= 2) curveChunks.push(makeChunk(rd.type, sl));
+        }
+      }
+    }
+
+    // ----- A*-Routensuche -----
+    function findPath(start, goal, avoid) {
+      const g = new Map([[start.id, 0]]), from = new Map(), closed = new Set();
+      const heap = [[0, start]];
+      const push = item => { heap.push(item); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+      const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { let l = 2 * i + 1, r = l + 1, m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+      let guard = 0;
+      while (heap.length && guard++ < 6000) {
+        const [, n] = pop();
+        if (n === goal) {
+          const path = [n];
+          while (from.has(path[0].id)) path.unshift(from.get(path[0].id));
+          return path;
+        }
+        if (closed.has(n.id)) continue;
+        closed.add(n.id);
+        for (const e of n.out) {
+          if (avoid && n === start && e.to === avoid) continue;      // keine Wende direkt am Start
+          const cost = g.get(n.id) + e.len / e.limit;
+          if (cost < (g.get(e.to.id) ?? Infinity)) {
+            g.set(e.to.id, cost); from.set(e.to.id, n);
+            push([cost + Math.hypot(e.to.x - goal.x, e.to.y - goal.y) / 9.2, e.to]);
+          }
+        }
+      }
+      return null;
+    }
+
+    function nearestNode(px, py, maxR = 4) {
+      const a0 = Math.round((px - OFFSET) / PITCH), b0 = Math.round((py - OFFSET) / PITCH);
+      let best = null, bd = Infinity;
+      for (let r = 0; r <= maxR && !best; r++) {
+        for (let b = b0 - r; b <= b0 + r; b++) {
+          for (let a = a0 - r; a <= a0 + r; a++) {
+            if (a < 0 || b < 0 || a >= NA || b >= NB) continue;
+            const n = net.nodes[nid(a, b)];
+            if (!n.out.length) continue;
+            const d = Math.hypot(n.x - px, n.y - py);
+            if (d < bd) { bd = d; best = n; }
+          }
+        }
+      }
+      const R = maxR * PITCH;
+      for (let cx = Math.floor((px - R) / 800); cx <= Math.floor((px + R) / 800); cx++) {
+        for (let cy = Math.floor((py - R) / 800); cy <= Math.floor((py + R) / 800); cy++) {
+          const l = customNodes.get(cx * 1000 + cy);
+          if (!l) continue;
+          for (const n of l) {
+            const d = Math.hypot(n.x - px, n.y - py);
+            if (d < bd && d <= R) { bd = d; best = n; }
+          }
+        }
+      }
+      return best;
+    }
+
+    // ----- Bebauung: Blöcke, Läden, Parks, Tankstellen, Deko -----
+    function overlaps(x, y, w, h, r) { return r && x < r.x + r.w && x + w > r.x && y < r.y + r.h && y + h > r.y; }
+
+    function addBuilding(x, y, w, h, color, kind, label, front, awning, ht) {
+      buildings.push([x, y, w, h, color, kind, label, front, awning, ht || 0]);
+      addSolidRect(x, y, w, h);
+    }
+    function addProp(x, y, w, h, color, kind) { props.push({ x, y, w, h, color, kind }); addSolidRect(x, y, w, h); }
+    function addTree(x, y, r, v = 0) { trees.push([x, y, r, v]); addSolidCircle(x, y, r * 0.8); }
+
+    function placeBuilding(lx, ly, lw, lh, lot, pal, T, cbd) {
+      const x = lx + 5, y = ly + 5, w = lw - 10, h = lh - 10;
+      if (w < 40 || h < 40) return;
+      const dW = lx - lot.x, dE = lot.x + lot.w - (lx + lw), dN = ly - lot.y, dS = lot.y + lot.h - (ly + lh);
+      const m = Math.min(dW, dE, dN, dS);
+      const front = m === dN ? "n" : m === dS ? "s" : m === dW ? "w" : "e";
+      const r = sr(), id = T.id;
+      // Läden gibt es nur an den Straßenfronten, in der Innenstadt und im Seebad häufiger, in der Industrie kaum
+      const shopP = id === "downtown" ? (cbd ? 0.25 : 0.4) : id === "resort" ? 0.55 : id === "industry" ? 0.05 : 0.2;
+      if (m < 8 && r < shopP && w >= 70 && h >= 60) {
+        addBuilding(x, y, w, h, pick(pal.build), "shop", pick(SHOP_SETS[id] || SHOP_SETS.downtown), front, pick(AWNINGS));
+        return;
+      }
+      if (id === "downtown" && w >= 90 && h >= 90 && sr() < (cbd ? 0.8 : 0.35)) {
+        addBuilding(x, y, w, h, pick(pal.tower), "tower", null, front, null, cbd ? 30 + sr() * 40 : 16 + sr() * 18);
+        return;
+      }
+      if (id === "industry") { addBuilding(x, y, w, h, "#7d858c", "warehouse", null, front, null); return; }
+      if (id === "resort" && w >= 100 && h >= 80 && r < 0.7) {
+        addBuilding(x, y, w, h, pick(["#e8dcc8", "#d9e4ea", "#f0e2d0"]), "shop", t("HOTEL"), front, pick(AWNINGS));
+        return;
+      }
+      if (w < 150 && h < 150 && r < 0.8) addBuilding(x, y, w, h, pick(pal.roof), "house", null, front, null);
+      else if (r < 0.6) addBuilding(x, y, w, h, pick(pal.build), "apartment", null, front, null);
+      else addBuilding(x, y, w, h, currentLevel === "moon" ? "#58606c" : "#5f7f99", "office", null, front, null);
+    }
+
+    function splitLeaves(x, y, w, h, out, depth) {
+      const minS = 105;
+      if (depth > 3 || (w < minS * 2 && h < minS * 2) || (depth > 0 && sr() < 0.18)) { out.push([x, y, w, h]); return; }
+      const splitX = w > h ? true : h > w ? false : sr() < 0.5;
+      if (splitX && w >= minS * 2) {
+        const c = x + w * (0.38 + sr() * 0.24);
+        splitLeaves(x, y, c - x, h, out, depth + 1); splitLeaves(c, y, x + w - c, h, out, depth + 1);
+      } else if (!splitX && h >= minS * 2) {
+        const c = y + h * (0.38 + sr() * 0.24);
+        splitLeaves(x, y, w, c - y, out, depth + 1); splitLeaves(x, c, w, y + h - c, out, depth + 1);
+      } else out.push([x, y, w, h]);
+    }
+
+    const CAR_COLORS = ["#c0392b", "#2d7dd2", "#d9d9d9", "#222831", "#e0a526", "#2e9e5b"];
+
+    function fillGas(x, y, w, h, label) {
+      const pal = palette();
+      lots.push({ x, y, w, h, kind: "gas" });
+      addBuilding(x + w - 120 - 10, y + 8, 120, 62, pick(pal.build), "shop", label, "s", ["#e0a526", "#c0392b"]);
+      const cx = x + 26, cy = y + h * 0.45;
+      decor.push({ k: "canopy", x: cx, y: cy, w: Math.min(150, w - 60), h: 64 });
+      for (let i = 0; i < 2; i++) addProp(cx + 40 + i * 60, cy + 24, 10, 18, "#d94a3a", "pump");
+    }
+
+    function fillParking(x, y, w, h, label, bh) {
+      const pal = palette();
+      lots.push({ x, y, w, h, kind: "parking" });
+      const sw = Math.min(w * 0.75, 280);
+      addBuilding(x + (w - sw) / 2, y + 6, sw, bh, pick(pal.build), "shop", label, "s", pick(AWNINGS));
+      for (let yy = y + bh + 30; yy + 30 <= y + h - 6; yy += 62) {
+        for (let xx = x + 14; xx + 18 <= x + w - 6; xx += 24) {
+          if (sr() < 0.5) addProp(xx, yy, 16, 30, pick(CAR_COLORS), "car");
+        }
+      }
+    }
+
+    // Wohngrundstücke mit Rasen, Haus, Bäumen, Auto in der Einfahrt und manchmal Pool
+    function fillPlots(T, x, y, w, h, reserved) {
+      const pal = palette();
+      const size = T.id === "village" ? 190 : 165;
+      const cols = Math.max(1, Math.round(w / size)), rows = Math.max(1, Math.round(h / size));
+      const pw = w / cols, ph = h / rows;
+      for (let cx = 0; cx < cols; cx++) {
+        for (let cy = 0; cy < rows; cy++) {
+          const px = x + cx * pw, py = y + cy * ph;
+          if (overlaps(px, py, pw, ph, reserved)) continue;
+          lots.push({ x: px + 2, y: py + 2, w: pw - 4, h: ph - 4, kind: "lawn", v: Math.floor(sr() * 3) });
+          const hw = clamp(pw * (0.42 + sr() * 0.2), 48, 96), hh = clamp(ph * (0.38 + sr() * 0.2), 44, 84);
+          const hx = px + (pw - hw) / 2 + (sr() - 0.5) * 8, hy = py + 10 + sr() * Math.max(0, ph - hh - 34);
+          addBuilding(hx, hy, hw, hh, pick(pal.roof), "house", null, "s", null);
+          for (let k = 0, n = 1 + (sr() < 0.5 ? 1 : 0); k < n; k++) {
+            const tx = px + 14 + sr() * (pw - 28), ty = py + 14 + sr() * (ph - 28), tr = 8 + sr() * 5;
+            if (tx > hx - tr - 6 && tx < hx + hw + tr + 6 && ty > hy - tr - 6 && ty < hy + hh + tr + 6) continue;
+            addTree(tx, ty, tr);
+          }
+          if (hy + hh + 36 <= py + ph - 2 && sr() < 0.45) addProp(hx + hw * 0.5 - 8, hy + hh + 6, 16, 30, pick(CAR_COLORS), "car");
+          else if (sr() < 0.12 && hx + hw + 40 < px + pw) decor.push({ k: "pool", x: hx + hw + 8, y: hy + 6, w: 26, h: 40 });
+        }
+      }
+    }
+
+    function fillLot(T, x, y, w, h, reserved, cbd) {
+      const pal = palette();
+      if (w < 70 || h < 70) return;
+      const big = w >= 200 && h >= 170;
+      const MIX = {
+        suburb:   [["plots", 74], ["park", 8], ["school", 4], ["parking", 3], ["gas", 3], ["blocks", 8]],
+        downtown: [["blocks", 62], ["plaza", 9], ["park", 7], ["parkhaus", 8], ["mall", 5], ["gas", 2], ["parking", 5], ["hotel", 2]],
+        industry: [["warehouses", 28], ["containers", 24], ["tanks", 14], ["depot", 14], ["power", 6], ["gas", 4], ["parking", 4], ["blocks", 6]],
+        village:  [["plots", 48], ["farm", 22], ["orchard", 10], ["park", 10], ["plaza", 5], ["church", 5]],
+        resort:   [["blocks", 40], ["hotel", 14], ["park", 12], ["parking", 12], ["plaza", 12], ["gas", 3], ["plots", 7]]
+      };
+      let kind = reserved ? "plots" : cbd ? "blocks" : pickW(MIX[T.id]);
+      const needBig = ["parking", "gas", "warehouses", "containers", "tanks", "depot", "power", "parkhaus", "mall", "school", "farm", "hotel", "church", "orchard"];
+      if (needBig.includes(kind) && !big) kind = T.id === "suburb" || T.id === "village" ? "plots" : "blocks";
+      if (kind === "plaza" && (w < 140 || h < 140)) kind = "park";
+      const lot = { x, y, w, h };
+
+      if (kind === "plots") {
+        fillPlots(T, x, y, w, h, reserved);
+      } else if (kind === "blocks") {
+        const leaves = [];
+        splitLeaves(x, y, w, h, leaves, 0);
+        for (const [lx, ly, lw, lh] of leaves) {
+          if (overlaps(lx, ly, lw, lh, reserved)) continue;
+          if (sr() < (T.id === "downtown" ? 0.06 : 0.12)) {   // Hinterhof mit Baum und Bank
+            addTree(lx + lw / 2, ly + lh / 2, 18);
+            decor.push({ k: "bench", x: lx + lw / 2 + 24, y: ly + lh / 2 });
+            continue;
+          }
+          placeBuilding(lx, ly, lw, lh, lot, pal, T, cbd);
+        }
+      } else if (kind === "park") {
+        lots.push({ x, y, w, h, kind: "park" });
+        const pond = w > 200 && h > 200 && sr() < 0.6;
+        const px = x + w / 2, py = y + h / 2, prx = w * 0.18, pry = h * 0.15;
+        if (pond) decor.push({ k: "pond", x: px, y: py, rx: prx, ry: pry });
+        const count = Math.floor(w * h / 7000);
+        for (let i = 0; i < count; i++) {
+          const tx = x + 24 + sr() * (w - 48), ty = y + 24 + sr() * (h - 48);
+          if (pond && ((tx - px) / (prx + 26)) ** 2 + ((ty - py) / (pry + 26)) ** 2 < 1) continue;
+          if (overlaps(tx - 20, ty - 20, 40, 40, reserved)) continue;
+          addTree(tx, ty, 15 + sr() * 8);
+        }
+        decor.push({ k: "bench", x: x + w * 0.2, y: y + h * 0.5 }, { k: "bench", x: x + w * 0.8, y: y + h * 0.5 });
+      } else if (kind === "parking") {
+        fillParking(x, y, w, h, pick(["SUPERMARKT", "BAUMARKT", "DISCOUNTER"].map(t)), 74);
+      } else if (kind === "mall") {
+        fillParking(x, y, w, h, t("EINKAUFSZENTRUM"), Math.min(120, h * 0.4));
+      } else if (kind === "gas") {
+        fillGas(x, y, w, h, t("TANKSTELLE"));
+      } else if (kind === "parkhaus") {
+        lots.push({ x, y, w, h, kind: "plaza" });
+        addBuilding(x + 12, y + 12, w - 24, h - 24, "#7b8087", "parkhaus", "P", "s", null, 16);
+      } else if (kind === "hotel") {
+        lots.push({ x, y, w, h, kind: "lawn", v: 1 });
+        const bh = h * 0.5;
+        addBuilding(x + 14, y + 12, w - 28, bh, pick(["#e8dcc8", "#d9e4ea", "#f0e2d0"]), "shop", t("HOTEL"), "s", pick(AWNINGS));
+        decor.push({ k: "pool", x: x + w * 0.2, y: y + bh + 34, w: w * 0.6, h: Math.max(30, h - bh - 70) });
+        for (let k = 0; k < 6; k++) addTree(x + 20 + k * (w - 40) / 5, y + h - 16, 9 + sr() * 3);
+      } else if (kind === "school") {
+        lots.push({ x, y, w, h, kind: "plaza" });
+        addBuilding(x + 10, y + 10, w - 20, Math.min(80, h * 0.35), "#b5654a", "school", t("SCHULE"), "s", null);
+        decor.push({ k: "pitch", x: x + 20, y: y + h * 0.5, w: w - 40, h: h * 0.45 - 14 });
+        addTree(x + 14, y + h * 0.42, 12); addTree(x + w - 14, y + h * 0.42, 12);
+      } else if (kind === "church") {
+        lots.push({ x, y, w, h, kind: "plaza" });
+        const cx = x + w / 2, cy = y + h / 2;
+        addBuilding(cx - 32, cy - 48, 64, 96, "#b9ae9d", "church", null, "s", null, 40);
+        for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + 0.4; addTree(cx + Math.cos(a) * Math.min(w, h) * 0.4, cy + Math.sin(a) * Math.min(w, h) * 0.4, 13); }
+      } else if (kind === "farm") {
+        lots.push({ x, y, w, h, kind: "field", v: Math.floor(sr() * 3) });
+        addBuilding(x + 16, y + 16, w * 0.42, h * 0.3, "#9b3a2e", "barn", null, "s", null);
+        addBuilding(x + w - 90, y + 20, 64, 52, pick(pal.roof), "house", null, "s", null);
+        decor.push({ k: "tank", x: x + w - 50, y: y + h * 0.55, r: 22 });
+        addSolidCircle(x + w - 50, y + h * 0.55, 22);
+      } else if (kind === "orchard") {
+        lots.push({ x, y, w, h, kind: "meadow" });
+        for (let yy = y + 30; yy < y + h - 20; yy += 50) for (let xx = x + 30; xx < x + w - 20; xx += 50) addTree(xx, yy, 11);
+      } else if (kind === "warehouses") {
+        lots.push({ x, y, w, h, kind: "industry" });
+        const n = Math.max(1, Math.floor(w / 220)), bw = (w - 24) / n;
+        for (let k = 0; k < n; k++) addBuilding(x + 12 + k * bw + 4, y + 12, bw - 8, h * 0.5, "#7d858c", "warehouse", null, "s", null);
+        for (let k = 0; k < 6; k++) {
+          const cw = 40, ch = 16, cx = x + 14 + sr() * (w - cw - 28), cy = y + h * 0.66 + sr() * (h * 0.3 - ch - 8);
+          addProp(cx, cy, cw, ch, pick(["#c0392b", "#2d7dd2", "#e0a526", "#2e9e5b", "#8e44ad"]), "container");
+        }
+      } else if (kind === "containers") {
+        lots.push({ x, y, w, h, kind: "industry" });
+        const cols = ["#c0392b", "#2d7dd2", "#e0a526", "#2e9e5b", "#8e44ad", "#d9d9d9"];
+        let row = 0;
+        for (let yy = y + 14; yy + 16 <= y + h - 10; yy += 22, row++) {
+          if (row % 3 === 2) continue;
+          let col = 0;
+          for (let xx = x + 12; xx + 40 <= x + w - 8; xx += 46, col++) if (col % 4 !== 3 && sr() < 0.8) addProp(xx, yy, 40, 16, pick(cols), "container");
+        }
+      } else if (kind === "tanks") {
+        lots.push({ x, y, w, h, kind: "industry" });
+        const n = Math.max(2, Math.min(6, Math.floor(w * h / 22000)));
+        for (let k = 0; k < n; k++) {
+          const r = 28 + sr() * 18, tx = x + r + 14 + ((k % 3) + 0.5) * (w - 2 * r - 28) / 3, ty = y + r + 14 + Math.floor(k / 3) * (h - 2 * r - 28) / 2;
+          decor.push({ k: "tank", x: tx, y: ty, r });
+          addSolidCircle(tx, ty, r);
+        }
+      } else if (kind === "depot") {
+        lots.push({ x, y, w, h, kind: "industry" });
+        addBuilding(x + 12, y + 12, w * 0.5, h * 0.4, "#7d858c", "warehouse", null, "s", null);
+        for (let xx = x + 20; xx + 22 <= x + w - 10; xx += 32) if (sr() < 0.7) addProp(xx, y + h * 0.62, 22, 58, pick(["#c0392b", "#2d7dd2", "#e8e8e8"]), "truck");
+      } else if (kind === "power") {
+        lots.push({ x, y, w, h, kind: "industry" });
+        addBuilding(x + 12, y + h * 0.55, w * 0.55, h * 0.35, "#7d858c", "warehouse", null, "s", null);
+        for (let k = 0; k < 2; k++) {
+          const r = 56 + sr() * 12, tx = x + w * (0.3 + k * 0.4), ty = y + h * 0.28;
+          decor.push({ k: "cooling", x: tx, y: ty, r });
+          addSolidCircle(tx, ty, r);
+        }
+      } else {
+        lots.push({ x, y, w, h, kind: "plaza" });
+        const cx = x + w / 2, cy = y + h / 2;
+        decor.push({ k: "fountain", x: cx, y: cy });
+        addSolidCircle(cx, cy, 26);
+        for (let i = 0; i < 6; i++) {
+          const a = i * Math.PI / 3 + 0.5;
+          addTree(cx + Math.cos(a) * Math.min(w, h) * 0.38, cy + Math.sin(a) * Math.min(w, h) * 0.38, 14);
+        }
+        for (let i = 0; i < 3; i++) {
+          addProp(x + 14 + sr() * (w - 70), y + 10 + (i % 2) * (h - 36), 32, 20, pick(["#c0392b", "#2d7dd2", "#e0a526"]), "stall");
+        }
+      }
+    }
+
+    // Land außerhalb der Städte: Felder, Wiesen, Wald, Felsen. Nahe der Straßen dichter, weiter weg etwas lichter.
+    function fillRural(i, j) {
+      const x = nodeX(2 * i), y = nodeY(2 * j), w = 2 * PITCH, h = 2 * PITCH;
+      const cxm = x + w / 2, cym = y + h / 2;
+      const bio = biomeOf(2 * i + 1, 2 * j + 1);
+      if (bio === "lake") return;
+      const dens = roadNear(cxm, cym, 1500) ? 1 : 0.6;
+      const r = sr();
+      const kind = bio === "farm" ? (r < 0.45 ? "field" : r < 0.65 ? "meadow" : "forest")
+        : bio === "forest" ? (r < 0.9 ? "forest" : "meadow")
+        : bio === "mountain" ? (r < 0.62 ? "rock" : r < 0.92 ? "forest" : "meadow")
+        : (r < 0.55 ? "meadow" : "forest");
+      lots.push({ x, y, w, h, kind: kind === "rock" ? "rockground" : kind, v: Math.floor(sr() * 3) });
+      const spot = (pad, rad) => {
+        for (let k = 0; k < 10; k++) {
+          const tx = x + 20 + sr() * (w - 40), ty = y + 20 + sr() * (h - 40);
+          if (roadNear(tx, ty, pad + rad)) continue;
+          let blocked = false;
+          for (const nf of noFill) if (overlaps(tx - rad, ty - rad, rad * 2, rad * 2, nf)) { blocked = true; break; }
+          if (!blocked) return [tx, ty];
+        }
+        return null;
+      };
+      const scatter = (n, pine, rmin, rvar) => { for (let k = 0; k < n; k++) { const p = spot(60, rmin + rvar); if (p) addTree(p[0], p[1], rmin + sr() * rvar, pine ? 1 : 0); } };
+      if (kind === "forest") {
+        scatter(Math.round(52 * dens), bio === "mountain", 15, 10);
+        if (sr() < 0.05 && !roadNear(cxm, cym, 200)) {          // einsame Hütte im Wald
+          addBuilding(cxm - 30, cym - 24, 60, 48, pick(palette().roof), "house", null, "s", null);
+        }
+      } else if (kind === "rock") {
+        for (let k = 0; k < Math.round(13 * dens); k++) {
+          const rr = 26 + sr() * 66, p = spot(70, rr);
+          if (p) { rocks.push([p[0], p[1], rr, sr()]); addSolidCircle(p[0], p[1], rr * 0.85); }
+        }
+        scatter(Math.round(16 * dens), true, 14, 8);
+      } else if (kind === "field") {
+        if (sr() < 0.22 && !roadNear(cxm, cym, 260)) {
+          addBuilding(cxm - 90, cym - 60, 110, 70, "#9b3a2e", "barn", null, "s", null);
+          addBuilding(cxm + 50, cym - 50, 54, 46, pick(palette().roof), "house", null, "s", null);
+          decor.push({ k: "tank", x: cxm + 60, y: cym + 50, r: 22 });
+          addSolidCircle(cxm + 60, cym + 50, 22);
+        } else scatter(Math.round(7 * dens), false, 11, 6);     // Hecken und Feldbäume
+      } else {
+        scatter(Math.round(14 * dens), false, 12, 10);
+        if (sr() < 0.07 && !roadNear(cxm, cym, 260)) decor.push({ k: "pond", x: cxm, y: cym, rx: 70 + sr() * 60, ry: 45 + sr() * 30 });
+        if (sr() < 0.08 && !roadNear(cxm, cym, 200)) { decor.push({ k: "turbine", x: cxm, y: cym }); addSolidCircle(cxm, cym, 10); }
+      }
+    }
+
+    function generateWorld() {
+      const lv = 55, gap = 20;       // halbe Breite einer Hauptstraße + Gehweg/Abstand zu den Gebäuden
+      // Der Startblock lässt Garage und Ausfahrt frei
+      const gx0 = nodeX(2 * GARAGE_BLOCK.i) + lv + gap, gy0 = nodeY(2 * GARAGE_BLOCK.j) + lv + gap;
+      garage = { x: gx0 + 60, y: gy0 + 60, w: 240, h: 170, color: "#4a4a4a", label: "GARAGE" };
+      START.x = garage.x + 130; START.y = garage.y + 85;
+      const reservedGarage = { x: garage.x - 80, y: garage.y - 25, w: 345, h: 240 };
+
+      for (let i = 0; i < BI; i++) {
+        for (let j = 0; j < BJ; j++) {
+          const bl = blocks[i][j], T = bl.town;
+          if (!T) { fillRural(i, j); continue; }
+          const cbd = T.id === "downtown" && Math.abs(i - 26) <= 4 && Math.abs(j - 11) <= 3;
+          const x0 = nodeX(2 * i) + lv + gap, x1 = nodeX(2 * i + 2) - lv - gap;
+          const y0 = nodeY(2 * j) + lv + gap, y1 = nodeY(2 * j + 2) - lv - gap;
+          let xs = [[x0, x1]], ys = [[y0, y1]];
+          if (bl.v) { const xm = nodeX(2 * i + 1); xs = [[x0, xm - 40], [xm + 40, x1]]; }
+          if (bl.h) { const ym = nodeY(2 * j + 1); ys = [[y0, ym - 40], [ym + 40, y1]]; }
+          const isGarage = i === GARAGE_BLOCK.i && j === GARAGE_BLOCK.j;
+          for (const [ax, bx] of xs) for (const [ay, by] of ys) fillLot(T, ax, ay, bx - ax, by - ay, isGarage ? reservedGarage : null, cbd);
+        }
+      }
+
+      // Raststätten und Bauernhof (liegen über dem Bodenbelag des Landes)
+      for (const l of restLots) fillGas(l.x, l.y, l.w, l.h, t("RASTHOF"));
+      if (farmSite) {
+        const f = farmSite;
+        lots.push({ x: f.x - 300, y: f.y - 200, w: 600, h: 400, kind: "field", v: 0 });
+        addBuilding(f.x + 40, f.y - 70, 110, 70, "#9b3a2e", "barn", null, "s", null);
+        addBuilding(f.x - 160, f.y - 60, 54, 46, pick(palette().roof), "house", null, "s", null);
+        decor.push({ k: "tank", x: f.x + 90, y: f.y + 60, r: 22 });
+        addSolidCircle(f.x + 90, f.y + 60, 22);
+      }
+
+      // Tunnel: Mauern (Kollision) links und rechts der A1 im Gebirge
+      tunnelSegs.length = 0;
+      for (let i = 0; i < net.edges.length; i += 2) {
+        const e = net.edges[i];
+        if (e.type !== "hwy" || Math.min(e.from.x, e.to.x) < TUNNEL.x0 || Math.max(e.from.x, e.to.x) > TUNNEL.x1) continue;
+        tunnelSegs.push({ x1: e.from.x, y1: e.from.y, x2: e.to.x, y2: e.to.y });
+        for (let s = 0; s < e.len; s += 40) {
+          for (const side of [-1, 1]) addSolidCircle(e.from.x + e.dx * s - e.dy * 128 * side, e.from.y + e.dy * s + e.dx * 128 * side, 18);
+        }
+      }
+
+      tunnelBox = tunnelSegs.length ? [TUNNEL.x0 - 200, Math.min(...tunnelSegs.map(g => Math.min(g.y1, g.y2))) - 200, TUNNEL.x1 - TUNNEL.x0 + 400, Math.max(...tunnelSegs.map(g => Math.max(g.y1, g.y2))) - Math.min(...tunnelSegs.map(g => Math.min(g.y1, g.y2))) + 400] : null;
+
+      // See im Südosten, unterhalb der A1
+      const lakeX = nodeX(LAKE_A), lakeY = nodeY(45);
+      lots.push({ x: lakeX, y: lakeY - 170, w: world.width - lakeX, h: 170, kind: "sand" });
+      lots.push({ x: lakeX, y: lakeY, w: world.width - lakeX, h: world.height - lakeY, kind: "water" });
+      addSolidRect(lakeX, lakeY, world.width - lakeX, world.height - lakeY);
+
+      // Straßenmöbel: Laternen, Straßenbäume, Haltestellen, Leitplanken an der Autobahn
+      for (let i = 0; i < net.edges.length; i += 2) {
+        const e = net.edges[i];
+        const w = ROAD[e.type].width;
+        const nx = -e.dy, ny = e.dx;
+        if (e.type === "hwy") {
+          if (Math.min(e.from.x, e.to.x) >= TUNNEL.x0 && Math.max(e.from.x, e.to.x) <= TUNNEL.x1) continue;     // im Tunnel keine Leitplanken
+          for (const side of [-1, 1]) {
+            const blocked = n => n.out.some(o => o.type !== "hwy" && (o.dx * nx + o.dy * ny) * side > 0.5);
+            if (blocked(e.from) || blocked(e.to)) continue;
+            decor.push({ k: "rail", x1: e.from.x + nx * side * (w / 2 + 3), y1: e.from.y + ny * side * (w / 2 + 3), x2: e.to.x + nx * side * (w / 2 + 3), y2: e.to.y + ny * side * (w / 2 + 3) });
+          }
+          decor.push({ k: "lamp", x: e.from.x + e.dx * 60, y: e.from.y + e.dy * 60 });
+          continue;
+        }
+        if (e.type === "alley") continue;
+        if (e.type === "country" || e.type === "ramp") {
+          for (let s = 60, n = 0; s < e.len - 30; s += 120, n++) {
+            if (sr() < 0.14) { const side = n % 2 ? 1 : -1; decor.push({ k: "streettree", x: e.from.x + e.dx * s + nx * side * (w / 2 + 12), y: e.from.y + e.dy * s + ny * side * (w / 2 + 12) }); }
+          }
+          continue;
+        }
+        for (let s = 60; s < e.len - 60; s += 120) {
+          const side = Math.floor(s / 120) % 2 ? 1 : -1;
+          const px = e.from.x + e.dx * s + nx * side * (w / 2 + 6), py = e.from.y + e.dy * s + ny * side * (w / 2 + 6);
+          if (sr() < 0.5) decor.push({ k: "lamp", x: px, y: py });
+          else if (sr() < 0.4) decor.push({ k: "streettree", x: e.from.x + e.dx * s - nx * side * (w / 2 + 12), y: e.from.y + e.dy * s - ny * side * (w / 2 + 12) });
+        }
+        if (e.len > 200 && sr() < 0.07) {
+          const side = sr() < 0.5 ? 1 : -1, s = e.len * 0.5;
+          decor.push({ k: "busstop", x: e.from.x + e.dx * s + nx * side * (w / 2 + 12), y: e.from.y + e.dy * s + ny * side * (w / 2 + 12), horiz: e.axis === "x" });
+        }
+      }
+
+      // Hinweisschilder vor den Ausfahrten der A1
+      for (const sg of exitSigns) {
+        const sl = hwySlope(sg.node.x), l = Math.hypot(sl, 1);
+        decor.push({ k: "sign", x: sg.node.x + sl / l * 150, y: sg.node.y - 150 / l, text: L(sg.de, sg.en) });
+      }
+
+      // Garage am Start; die Westseite ist die offene Ausfahrt
+      const wall = 16;
+      for (const [gx, gy, gw, gh] of [[garage.x, garage.y, garage.w, wall], [garage.x, garage.y + garage.h - wall, garage.w, wall], [garage.x + garage.w - wall, garage.y, wall, garage.h]]) {
+        buildings.push([gx, gy, gw, gh, garage.color, "wall", null, null, null, 0]);
+        addSolidRect(gx, gy, gw, gh);
+      }
+    }
+
+    function spawnCoins() {
+      const edges = net.edges.filter((e, i) => i % 2 === 0 && e.type !== "alley");
+      const cum = [];
+      let total = 0;
+      for (const e of edges) { total += e.len; cum.push(total); }
+      for (let i = 0; i < 480; i++) {
+        const r = Math.random() * total;
+        let lo = 0, hi = cum.length - 1;
+        while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] < r) lo = m + 1; else hi = m; }
+        const e = edges[lo];
+        const s = Math.random() * e.len, off = (Math.random() - 0.5) * (ROAD[e.type].width * 0.6);
+        coins.push({
+          x: e.from.x + e.dx * s - e.dy * off, y: e.from.y + e.dy * s + e.dx * off,
+          value: [100, 100, 250, 500][Math.floor(Math.random() * 4)], respawn: 0
+        });
+      }
+    }
+
+    const MM_W = 300, MM_H = Math.round(MM_W * world.height / world.width);
+    function buildMinimapCache() {
+      const w = MM_W, h = MM_H;
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      const m = cv.getContext("2d");
+      const sx = w / world.width, sy = h / world.height;
+      const moon = currentLevel === "moon";
+      m.fillStyle = moon ? "#14141f" : "#2f4a35";
+      m.fillRect(0, 0, w, h);
+      // Landschaft grob andeuten: Wald, Berge, See
+      m.fillStyle = moon ? "#191925" : "#28402e"; m.fillRect(nodeX(92) * sx, 0, (nodeX(140) - nodeX(92)) * sx, h);
+      m.fillStyle = moon ? "#262633" : "#47493f"; m.fillRect(nodeX(140) * sx, 0, (nodeX(200) - nodeX(140)) * sx, h);
+      m.fillStyle = moon ? "#0d0d18" : "#2e5f86"; m.fillRect(nodeX(LAKE_A) * sx, nodeY(45) * sy, w - nodeX(LAKE_A) * sx, h - nodeY(45) * sy);
+      m.fillStyle = moon ? "#2c2c3a" : "#4a5a4e";
+      for (const T of TOWNS) m.fillRect(T.x0 * sx, T.y0 * sy, (T.x1 - T.x0) * sx, (T.y1 - T.y0) * sy);
+      for (const kind of ["alley", "main", "country", "ramp", "hwy"]) {
+        m.fillStyle = kind === "hwy" ? "#e8b04a" : kind === "alley" ? "#6f7378" : kind === "country" ? "#b9b29a" : "#9a9ea3";
+        for (const r of roads) {
+          if (r.type !== kind) continue;
+          m.fillRect(r.x * sx, r.y * sy, Math.max(kind === "hwy" ? 2 : 1, r.w * sx), Math.max(kind === "hwy" ? 2 : 1, r.h * sy));
+        }
+      }
+      m.lineCap = "round";
+      for (const ch of curveChunks) {
+        m.strokeStyle = ch.type === "hwy" ? "#e8b04a" : "#b9b29a";
+        m.lineWidth = ch.type === "hwy" ? 2 : 1;
+        m.beginPath();
+        ch.pts.forEach((pt, i) => i ? m.lineTo(pt[0] * sx, pt[1] * sy) : m.moveTo(pt[0] * sx, pt[1] * sy));
+        m.stroke();
+      }
+      minimapCache = cv;
+    }
+
+    // Räumlicher Index für das Zeichnen: nur Objekte in Bildnähe werden durchlaufen (die Welt ist riesig)
+    const IDX = 1024;
+    const IX = {};
+    function buildIndex(list, bounds, maxSize) {
+      const cells = new Map(), always = [];
+      for (const it of list) {
+        const [x, y, w, h] = bounds(it);
+        if (w > maxSize || h > maxSize) { always.push(it); continue; }
+        const k = Math.floor(x / IDX) * 1024 + Math.floor(y / IDX);
+        const c = cells.get(k);
+        if (c) c.push(it); else cells.set(k, [it]);
+      }
+      return { cells, always, pad: maxSize };
+    }
+    function queryIndex(ix) {
+      if (!ix) return [];               // Karte noch nicht erzeugt
+      const out = ix.always.slice();
+      const x0 = Math.floor((viewX - ix.pad) / IDX), x1 = Math.floor((viewX + viewW) / IDX);
+      const y0 = Math.floor((viewY - ix.pad) / IDX), y1 = Math.floor((viewY + viewH) / IDX);
+      for (let cx = x0; cx <= x1; cx++) {
+        for (let cy = y0; cy <= y1; cy++) {
+          const c = ix.cells.get(cx * 1024 + cy);
+          if (c) for (const it of c) out.push(it);
+        }
+      }
+      return out;
+    }
+    // Umrisse der Dekorationsobjekte (links oben, Breite, Höhe)
+    function decorBox(d) {
+      if (d.k === "rail") return [Math.min(d.x1, d.x2) - 6, Math.min(d.y1, d.y2) - 6, Math.abs(d.x2 - d.x1) + 12, Math.abs(d.y2 - d.y1) + 12];
+      if (d.rx) return [d.x - d.rx - 4, d.y - d.ry - 4, d.rx * 2 + 8, d.ry * 2 + 8];
+      if (d.w) return [d.x, d.y, d.w, d.h];
+      const r = d.r ? d.r + 8 : d.k === "turbine" ? 100 : 70;
+      return [d.x - r, d.y - r, r * 2, r * 2];
+    }
+    function buildIndexes() {
+      IX.curves = buildIndex(curveChunks, c => [c.x, c.y, c.w, c.h], 1600);
+      IX.roads = buildIndex(roads, r => [r.x - 8, r.y - 8, r.w + 16, r.h + 16], 420);
+      IX.lots = buildIndex(lots, l => [l.x, l.y, l.w, l.h], 720);
+      IX.buildings = buildIndex(buildings, b => [b[0] - 14, b[1] - 14, b[2] + 28, b[3] + 60], 720);
+      IX.trees = buildIndex(trees, tr => [tr[0] - 30, tr[1] - 30, 60, 60], 60);
+      IX.rocks = buildIndex(rocks, rk => [rk[0] - rk[2] - 10, rk[1] - rk[2] - 10, rk[2] * 2 + 20, rk[2] * 2 + 20], 240);
+      IX.props = buildIndex(props, p => [p.x, p.y, p.w + 4, p.h + 4], 100);
+      IX.decor = buildIndex(decor, decorBox, 420);
+      IX.marks = buildIndex(net.marks, m => [Math.min(m.x1, m.x2) - 120, Math.min(m.y1, m.y2) - 120, Math.abs(m.x2 - m.x1) + 240, Math.abs(m.y2 - m.y1) + 240], 700);
+      IX.stops = buildIndex(stopLines, l => [Math.min(l.x1, l.x2) - 4, Math.min(l.y1, l.y2) - 4, Math.abs(l.x2 - l.x1) + 8, Math.abs(l.y2 - l.y1) + 8], 100);
+    }
+
+    function generateMap() {
+      mapInitialized = true;
+      rngState = 1337;
+      buildings.length = 0; trees.length = 0; rocks.length = 0; npcs.length = 0; coins.length = 0;
+      parkingSpots.length = 0; decor.length = 0; props.length = 0; lots.length = 0; solids.clear();
+      buildNetwork();
+      generateWorld();
+      spawnCoins();
+      buildIndexes();
+      buildMinimapCache();
+      // Start in der Garage, Verkehr rund um den Start
+      player.x = START.x; player.y = START.y; player.angle = Math.PI; player.vx = 0; player.vy = 0;
+      for (let i = 0; i < 50; i++) trySpawnNpc(500, 3200);
+    }
+
+    function initializeMapLazy() {
+      if (mapInitialized) return;
+      generateMap();
+    }
+
+    // ===================== NPC-Verkehr =====================
+    const NPC_COLORS = ["#ffc857", "#d68cff", "#ff986b", "#9be564", "#5ec8ff", "#e8e8e8", "#c0392b", "#2d7dd2"];
+    const NPC_MOON_COLORS = ["#c0c0c0", "#b0c4de", "#dcdcdc", "#f0f8ff", "#e6e6fa"];
+    const VEHICLE_LENGTH = { car: 32, van: 38, truck: 58, bus: 68 };
+
+    // Ampelzyklus 18 s: 8 s Ost-West grün, 1 s Rot für alle, 8 s Nord-Süd grün, 1 s Rot für alle
+    function lightIsGreen(n, axis) {
+      const t = (simTime + n.phase) % 18;
+      return axis === "x" ? t < 8 : (t >= 9 && t < 17);
+    }
+    function lightColor(n, axis) {
+      const t = (simTime + n.phase) % 18;
+      if (axis === "x") return t < 6.8 ? "#4cff6a" : t < 8 ? "#ffc933" : "#ff4b4b";
+      return t >= 9 && t < 15.8 ? "#4cff6a" : t >= 15.8 && t < 17 ? "#ffc933" : "#ff4b4b";
+    }
+
+    function setNpcEdge(c, e) {
+      if (c.edge) {
+        const i = c.edge.cars.indexOf(c);
+        if (i >= 0) c.edge.cars.splice(i, 1);
+      }
+      c.edge = e;
+      e.cars.push(c);
+      c.lane = Math.min(c.lane, e.lanes - 1);
+      c.cleared = false; c.signOK = false; c.wait = 0;
+      // Abbiegen: nächste Kante und Richtung (für Blinker und Tempo)
+      c.nextEdge = null; c.turn = 0;
+      const nextNode = c.path[c.pi + 1];
+      if (nextNode) {
+        c.nextEdge = e.to.out.find(o => o.to === nextNode) || null;
+        if (c.nextEdge) {
+          const cross = e.dx * c.nextEdge.dy - e.dy * c.nextEdge.dx, dot = e.dx * c.nextEdge.dx + e.dy * c.nextEdge.dy;
+          c.turn = dot < -0.5 ? 2 : Math.abs(cross) > 0.5 ? Math.sign(cross) : 0;   // 1 = rechts, -1 = links
+        }
+      }
+    }
+
+    function newDestination(c, from, avoid) {
+      for (let tries = 0; tries < 8; tries++) {
+        const ang = Math.random() * Math.PI * 2, r = 800 + Math.random() * 3500;
+        const dest = nearestNode(from.x + Math.cos(ang) * r, from.y + Math.sin(ang) * r);
+        if (!dest || dest === from || dest.out.length < 2) continue;
+        const path = findPath(from, dest, avoid);
+        if (path && path.length > 2) { c.path = path; c.pi = 0; c.dest = dest; return true; }
+      }
+      return false;
+    }
+
+    function trySpawnNpc(minDist, maxDist) {
+      const ang = Math.random() * Math.PI * 2, r = minDist + Math.random() * (maxDist - minDist);
+      const n = nearestNode(player.x + Math.cos(ang) * r, player.y + Math.sin(ang) * r);
+      if (!n) return false;
+      const e = n.out[Math.floor(Math.random() * n.out.length)];
+      if (!e || e.len < 80) return false;
+      const s = 20 + Math.random() * (e.len - 100);
+      // Neue Autos erscheinen nur außerhalb des sichtbaren Bereichs, direkt auf ihrer Fahrspur (kein Springen zwischen den Spuren)
+      const seen = Math.hypot(canvas.width, canvas.height) / Math.max(0.3, run.zoom) / 2 + 200;
+      minDist = Math.max(minDist, seen); maxDist = Math.max(maxDist, minDist + 1800);
+      const lane0 = e.type === "hwy" ? (Math.random() < 0.5 ? 0 : 1) : 0;
+      const off0 = laneOffset(e, lane0);
+      const x = e.from.x + e.dx * s - e.dy * off0, y = e.from.y + e.dy * s + e.dx * off0;
+      if (Math.hypot(x - player.x, y - player.y) < minDist) return false;
+
+      const roll = Math.random();
+      const kind = e.type === "alley" ? (roll < 0.9 ? "car" : "van")
+        : roll < 0.78 ? "car" : roll < 0.88 ? "van" : roll < (e.type === "hwy" ? 0.97 : 0.94) ? "truck" : "bus";
+      const length = VEHICLE_LENGTH[kind];
+      const lane = lane0;
+      for (const o of e.cars) if (o.lane === lane && Math.abs(o.s - s) < 70) return false;
+
+      const colors = currentLevel === "moon" ? NPC_MOON_COLORS : NPC_COLORS;
+      const c = {
+        kind, length, lane, color: kind === "bus" ? "#e0b020" : kind === "van" ? "#f0f0f0" : kind === "truck" ? ["#c0392b", "#2d7dd2", "#e8e8e8"][Math.floor(Math.random() * 3)] : colors[Math.floor(Math.random() * colors.length)],
+        mult: (kind === "car" ? 0.85 + Math.random() * 0.2 : 0.72 + Math.random() * 0.12),
+        s, speed: e.limit * 0.6, x, y, angle: Math.atan2(e.dy, e.dx), jx: 0, jy: 0, edge: null,
+        path: null, pi: 0, dest: null, nextEdge: null, turn: 0, cleared: false, signOK: false, wait: 0, idle: 0, braking: false
+      };
+      if (!newDestination(c, e.to, e.from)) return false;
+      c.path.unshift(e.from);            // c.path[0] = Ziel der aktuellen Kante wird über pi geführt
+      c.pi = 1;
+      setNpcEdge(c, e);
+      npcs.push(c);
+      return true;
+    }
+
+    function nodeClear(n, self) {
+      for (const o of npcs) {
+        if (o !== self && o.speed > 0.4 && Math.hypot(o.x - n.x, o.y - n.y) < 80) return false;
+      }
+      return Math.hypot(player.x - n.x, player.y - n.y) > 90;
+    }
+
+    function stepNpc(c, dt) {
+      const sec = dt / 60;
+      const e = c.edge;
+      const dp = Math.hypot(c.x - player.x, c.y - player.y);
+      if (dp > 4200) return false;
+
+      if (c.pushed) {
+        // frei rutschendes Auto: reibt aus, prallt an Hindernissen ab, fährt nach kurzer Ruhe wieder los
+        c.x += c.vx * dt; c.y += c.vy * dt; c.angle += c.va * dt;
+        const f = Math.pow(0.94, dt);
+        c.vx *= f; c.vy *= f; c.va *= Math.pow(0.9, dt);
+        if (solidHit(c.x, c.y, 9)) { c.x -= c.vx * dt; c.y -= c.vy * dt; c.vx *= -0.25; c.vy *= -0.25; }
+        c.speed = Math.hypot(c.vx, c.vy);
+        c.restT = c.speed < 0.15 ? c.restT + sec : 0;
+        if (c.restT > 2.5) return rejoinNetwork(c);
+        return true;
+      }
+
+      let vt = e.limit * c.mult;
+      if (c.turn !== 0 && e.len - c.s < 150) vt = Math.min(vt, c.turn === 2 ? 1.2 : 2.3);
+
+      // Abstand zum Vordermann (gleiche Spur, auch auf der nächsten Kante) und zum Spieler
+      let gap = Infinity, leadSpeed = 0;
+      for (const o of e.cars) {
+        if (o === c || o.s <= c.s) continue;
+        // andere Spur zählt nur, wenn beide gleich in dieselbe Abzweigung einbiegen (Spuren laufen dort zusammen)
+        if (o.lane !== c.lane && !(c.nextEdge && o.nextEdge === c.nextEdge && e.len - c.s < 220)) continue;
+        const g = o.s - c.s - (o.length + c.length) / 2 - 6;
+        if (g < gap) { gap = g; leadSpeed = o.speed; }
+      }
+      if (c.nextEdge && gap > 120) {
+        const lane = Math.min(c.lane, c.nextEdge.lanes - 1);
+        for (const o of c.nextEdge.cars) {
+          if (o.lane !== lane) continue;
+          const g = e.len - c.s + o.s - (o.length + c.length) / 2 - 6;
+          if (g < gap) { gap = g; leadSpeed = o.speed; }
+        }
+      }
+      for (const o of pushedNow) {
+        const ox = o.x - c.x, oy = o.y - c.y;
+        const a = ox * e.dx + oy * e.dy, l = Math.abs(-ox * e.dy + oy * e.dx);
+        if (a > 0 && a < 120 && l < 24) {
+          const g = a - (o.length + c.length) / 2 - 6;
+          if (g < gap) { gap = g; leadSpeed = 0; }
+        }
+      }
+      // alle anderen Autos (auch auf kreuzenden Straßen oder anderen Spuren) nach ihrer echten Position beachten
+      for (const o of npcs) {
+        if (o === c) continue;
+        const ox = o.x - c.x, oy = o.y - c.y;
+        const a = ox * e.dx + oy * e.dy;
+        if (a <= 0 || a > Math.min(320, 110 + c.speed * 30)) continue;      // schneller = weiter vorausschauen
+        if (Math.abs(-ox * e.dy + oy * e.dx) > 20 + a * 0.04) continue;
+        const g = a - (o.length + c.length) / 2 - 6;
+        if (g < gap) { gap = g; leadSpeed = o.pushed ? 0 : Math.max(0, o.speed * Math.cos(o.angle - c.angle)); }
+      }
+      const rx = player.x - c.x, ry = player.y - c.y;
+      const ahead = rx * e.dx + ry * e.dy, lat = Math.abs(-rx * e.dy + ry * e.dx);
+      if (ahead > 0 && ahead < 110 && lat < 24) {
+        const g = ahead - 34;
+        if (g < gap) { gap = g; leadSpeed = Math.max(0, player.vx * e.dx + player.vy * e.dy); }
+      }
+      if (gap < Infinity) vt = Math.min(vt, gap < 4 ? leadSpeed * 0.5 : leadSpeed * 0.9 + Math.sqrt(2 * 0.04 * (gap - 4)));
+
+      // Haltelinie: rote Ampel, Stoppschild/Vorfahrt achten
+      if (e.yield && !c.cleared) {
+        const d = e.len - e.to.clear - c.length / 2 - c.s;
+        if (d < 0.5 && (e.yield === "light" ? lightIsGreen(e.to, e.axis) : c.signOK)) c.cleared = true;
+        else if (d < -6) c.cleared = true;
+        else {
+          const stop = e.yield === "light" ? !lightIsGreen(e.to, e.axis) : !c.signOK;
+          if (stop) {
+            vt = Math.min(vt, d <= 0.5 ? 0 : Math.sqrt(2 * 0.06 * d));
+            if (e.yield === "sign" && c.speed < 0.15 && d < 8) {
+              c.wait += sec;
+              if (c.wait > 1.2 && nodeClear(e.to, c)) c.signOK = true;
+            }
+          } else if (d < 2) c.cleared = true;
+        }
+      }
+
+      c.braking = vt < c.speed - 0.05;
+      c.speed = Math.max(0, c.speed + clamp(vt - c.speed, -(gap < 8 ? 0.25 : 0.08) * dt, 0.0105 * dt));   // Notbremsung bei sehr kleinem Abstand   // ca. 8 km/h pro Sekunde, wie ein normaler Pkw
+      c.s += c.speed * dt;
+      c.idle = c.speed < 0.05 ? c.idle + sec : 0;
+      if (c.idle > 45 && dp > 700) return false;
+
+      if (c.s >= e.len) {
+        const node = e.to;
+        let next = null;
+        if (node === c.dest) {
+          // Ziel erreicht: sichtbare Wagen fahren zum nächsten Ziel weiter, unsichtbare verschwinden
+          if (dp < 700 && newDestination(c, node, e.from)) next = node.out.find(o => o.to === c.path[1]);
+          else return false;
+        } else next = c.nextEdge;
+        if (!next) return false;
+        const oldX = c.x, oldY = c.y;
+        c.s -= e.len;
+        c.pi++;
+        setNpcEdge(c, next);
+        // Sprung zwischen den Spuren glätten (jx/jy klingen ab)
+        const off2 = laneOffset(next, c.lane);
+        c.jx = oldX - (next.from.x + next.dx * c.s - next.dy * off2);
+        c.jy = oldY - (next.from.y + next.dy * c.s + next.dx * off2);
+      }
+
+      const cur = c.edge, off = laneOffset(cur, c.lane);
+      c.jx *= Math.pow(0.9, dt); c.jy *= Math.pow(0.9, dt);
+      c.x = cur.from.x + cur.dx * c.s - cur.dy * off + c.jx;
+      c.y = cur.from.y + cur.dy * c.s + cur.dx * off + c.jy;
+      const want = Math.atan2(cur.dy, cur.dx);
+      c.angle += Math.atan2(Math.sin(want - c.angle), Math.cos(want - c.angle)) * Math.min(1, 0.18 * dt);
+      return true;
+    }
+
+    // Weggeschobenes Auto wieder in den Verkehr einreihen: nächste passende Fahrspur suchen
+    function rejoinNetwork(c) {
+      const n = nearestNode(c.x, c.y);
+      if (!n) return false;
+      const hx = Math.cos(c.angle), hy = Math.sin(c.angle);
+      let best = null, bestScore = Infinity, bestS = 0;
+      for (const e0 of n.out) {
+        for (const e of [e0, e0.rev]) {
+          if (!e) continue;
+          const rx = c.x - e.from.x, ry = c.y - e.from.y;
+          const s = clamp(rx * e.dx + ry * e.dy, 0, e.len);
+          const lat = Math.abs(-rx * e.dy + ry * e.dx);
+          const score = lat + (hx * e.dx + hy * e.dy > 0.3 ? 0 : 400) + (e.to.out.length < 2 ? 300 : 0);
+          if (score < bestScore) { bestScore = score; best = e; bestS = s; }
+        }
+      }
+      if (!best || !newDestination(c, best.to, best.from)) return false;
+      c.path.unshift(best.from);
+      c.pi = 1;
+      c.pushed = false; c.vx = c.vy = c.va = 0; c.speed = 0; c.idle = 0;
+      c.s = bestS;
+      setNpcEdge(c, best);
+      const off = laneOffset(best, c.lane);
+      c.jx = c.x - (best.from.x + best.dx * c.s - best.dy * off);
+      c.jy = c.y - (best.from.y + best.dy * c.s + best.dx * off);
+      return true;
+    }
+
+    let pushedNow = [];
+
+    function updateTraffic(dt) {
+      simTime += dt / 60;
+      pushedNow = npcs.filter(o => o.pushed);
+      for (let i = npcs.length - 1; i >= 0; i--) {
+        if (!stepNpc(npcs[i], dt)) {
+          const c = npcs[i];
+          const k = c.edge.cars.indexOf(c);
+          if (k >= 0) c.edge.cars.splice(k, 1);
+          npcs.splice(i, 1);
+        }
+      }
+      const target = settings.traffic;
+      for (let tries = 0; npcs.length < target && tries < 2; tries++) trySpawnNpc(650, 3000);
+    }
+
+    const formatMoney = value => `${value.toLocaleString(LOCALE)} €`;
+
+    function updateCreditsDisplay() {
+      creditsDisplay.textContent = devMode ? "∞ €" : formatMoney(credits);
+    }
+
+    function updateCarButtons() {
+      document.querySelectorAll("#carSelect button, #settingsCars button").forEach(button => {
+        const i = Number(button.dataset.index);
+        const owned = ownedCars.has(i) || devMode;
+        const tuned = owned ? upgradeTotal(i) : 0;
+        button.textContent = owned
+          ? `${i + 1} · ${cars[i].name}${tuned ? ` 🔧${tuned}` : ""}`
+          : `${cars[i].name} · ${formatMoney(cars[i].price)}`;
+        button.classList.toggle("active", i === selectedCar);
+        button.classList.toggle("locked", !owned);
+      });
+    }
+
+    function selectCar(index) {
+      const car = cars[index];
+      if (!car) return;
+
+      if (!ownedCars.has(index)) {
+        // Dev-Modus: Auto kostenlos freigeschaltet (wird dann nicht gespeichert)
+        if (!devMode && credits < car.price) return;
+        if (!devMode) credits -= car.price; else devUsed = true;
+        ownedCars.add(index);
+
+
+        // Rakete (Index 7) schaltet Moon-Level frei
+        if (index === 7 || devMode) {
+          moonLevelUnlocked = true;
+          if (index === 7 && !devMode) devLog("🌙 Moon-Level entsperrt!");
+        }
+      }
+
+      selectedCar = index;
+      ST = carStats(index);
+      carNameDisplay.textContent = car.name;
+      updateCreditsDisplay();
+      updateCarButtons();
+      setLevelLabel();
+      saveGame();
+      if (workshopOpen) renderWorkshop();
+    }
+
+    // Anzeige oben rechts: aktuelle Zone (Vorstadt, Innenstadt, Autobahn …) bzw. Mond
+    let currentZone = null;
+    function setLevelLabel() {
+      levelInfo.textContent = currentLevel === "moon" ? L("🌙 MOND", "🌙 MOON") : (currentZone ? currentZone.name : TOWNS[0].name);
+    }
+
+    // ---------- Tuning (Werkstatt) ----------
+    // Jede Stufe verbessert das Auto, die Kosten steigen mit Stufe und Fahrzeugpreis.
+    const UPGRADES = [
+      { key: "engine", max: 5, mult: 1.0, name: L("Motor", "Engine"),
+        desc: L("Mehr Leistung: schnellere Beschleunigung", "More power: quicker acceleration") },
+      { key: "turbo",  max: 3, mult: 1.8, name: L("Turbolader", "Turbocharger"),
+        desc: L("Mehr Schub, höhere Spitze, längerer Boost", "More boost pressure, higher top speed, longer boost") },
+      { key: "tires",  max: 4, mult: 0.8, name: L("Reifen", "Tyres"),
+        desc: L("Mehr Grip und besseres Einlenken", "More grip and sharper turn-in") },
+      { key: "brakes", max: 4, mult: 0.7, name: L("Bremsen", "Brakes"),
+        desc: L("Kürzerer Bremsweg", "Shorter braking distance") },
+      { key: "weight", max: 3, mult: 1.2, name: L("Leichtbau", "Weight reduction"),
+        desc: L("Weniger Gewicht: Beschleunigung und Wendigkeit", "Less weight: acceleration and agility") }
+    ];
+    const upgrades = {};            // Auto-Index -> { engine: 0..5, turbo: 0..3, ... }
+    const upgradesOf = i => upgrades[i] || (upgrades[i] = { engine: 0, turbo: 0, tires: 0, brakes: 0, weight: 0 });
+    const upgradeTotal = i => { const u = upgrades[i]; return u ? Object.values(u).reduce((a, b) => a + b, 0) : 0; };
+    const upgradeCost = (i, up) => Math.round((250 + cars[i].price * 0.18) * up.mult * (1 + upgradesOf(i)[up.key] * 0.85) / 10) * 10;
+
+    // Fahrwerte eines Autos inkl. Tuning. a0 und brake in px/Frame² (1 km/h pro Sekunde = 1/780 px/Frame²)
+    function carStats(i) {
+      const c = cars[i], u = upgradesOf(i);
+      const t100 = c.t100 * (1 - 0.055 * u.engine) * (1 - 0.04 * u.turbo) * (1 - 0.03 * u.weight);
+      const maxSpeed = c.maxSpeed * (1 + 0.035 * u.turbo + 0.01 * u.weight);
+      // Schub nimmt zur Höchstgeschwindigkeit hin ab: v(t) = vmax * tanh(a0*t/vmax)  ->  0-100 km/h in genau t100 Sekunden
+      const a0kmhps = maxSpeed * Math.atanh(Math.min(0.9, 100 / maxSpeed)) / t100;
+      const brakeKmhps = (32 + 2.5 * i) * (1 + 0.15 * u.brakes);
+      return {
+        name: c.name, maxSpeed, t100, a0: a0kmhps / 780, brake: brakeKmhps / 780, brakeKmhps,
+        turn: c.turn * (1 + 0.04 * u.tires + 0.02 * u.weight),
+        grip: Math.min(0.97, c.grip + 0.006 * u.tires),
+        boostMul: 1 + 0.15 * u.turbo, turbo: u.turbo
+      };
+    }
+    let ST = carStats(0);           // Werte des gewählten Autos
+
+    function buyUpgrade(key) {
+      const up = UPGRADES.find(x => x.key === key), u = upgradesOf(selectedCar);
+      if (!up || u[key] >= up.max) return;
+      const cost = upgradeCost(selectedCar, up);
+      if (!devMode && credits < cost) return;
+      if (!devMode) credits -= cost; else devUsed = true;
+      u[key]++;
+      ST = carStats(selectedCar);
+      updateCreditsDisplay(); updateCarButtons(); saveGame(); renderWorkshop();
+      sfx.level(Math.min(3, u[key]));
+    }
+
+    // ---------- Speichern (localStorage: Geld, Autos, Tuning, entdeckte Orte) ----------
+    // Auf GitHub Pages gibt es keinen Server: der Spielstand liegt im Browser (pro Gerät/Browser), bis die Websitedaten gelöscht werden.
+    const SAVE_KEY = "asphaltSave";
+    const discovered = new Set();
+    let devUsed = false, wiping = false, lastSaved = "";
+    function snapshot() {
+      return { v: 1, credits: Math.round(credits), owned: [...ownedCars], selected: selectedCar, upgrades,
+        moon: moonLevelUnlocked, zones: [...discovered] };
+    }
+    function applySave(s) {
+      if (!s || typeof s !== "object") return false;
+      if (Number.isFinite(s.credits)) credits = Math.max(0, Math.round(s.credits));
+      if (Array.isArray(s.owned)) { ownedCars.clear(); ownedCars.add(0); for (const i of s.owned) if (cars[i]) ownedCars.add(i); }
+      for (const k of Object.keys(upgrades)) delete upgrades[k];
+      if (s.upgrades && typeof s.upgrades === "object") {
+        for (const [k, u] of Object.entries(s.upgrades)) {
+          if (!cars[k] || !u) continue;
+          for (const up of UPGRADES) { const n = Math.floor(Number(u[up.key])); if (n > 0) upgradesOf(k)[up.key] = Math.min(up.max, n); }
+        }
+      }
+      if (Number.isInteger(s.selected) && ownedCars.has(s.selected)) selectedCar = s.selected;
+      moonLevelUnlocked = !!s.moon || ownedCars.has(7);
+      discovered.clear();
+      if (Array.isArray(s.zones)) for (const z of s.zones) discovered.add(String(z));
+      return true;
+    }
+    function saveGame() {
+      if (devMode) devUsed = true;
+      if (devUsed || wiping) return;            // Dev-Modus verfälscht nichts im Spielstand
+      const json = JSON.stringify(snapshot());
+      if (json === lastSaved) return;
+      try { localStorage.setItem(SAVE_KEY, json); lastSaved = json; } catch {}
+    }
+    try { const raw = localStorage.getItem(SAVE_KEY); if (raw && applySave(JSON.parse(raw))) lastSaved = raw; } catch {}
+    ST = carStats(selectedCar);
+    setInterval(saveGame, 3000);
+    addEventListener("pagehide", saveGame);
+    document.addEventListener("visibilitychange", () => { if (document.hidden) saveGame(); });
+    // Speicher als "dauerhaft" anfragen, damit der Browser den Spielstand nicht von selbst aufräumt
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
+
+    function exportSave() {
+      const code = btoa(JSON.stringify(snapshot()));
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(() => alert(L("Spielstand-Code kopiert.", "Save code copied.")), () => prompt(L("Spielstand-Code:", "Save code:"), code));
+      else prompt(L("Spielstand-Code:", "Save code:"), code);
+    }
+    function importSave() {
+      const code = prompt(L("Spielstand-Code einfügen:", "Paste save code:"));
+      if (!code) return;
+      try {
+        if (!applySave(JSON.parse(atob(code.trim())))) throw 0;
+        selectCar(selectedCar); saveGame();
+        alert(L("Spielstand geladen.", "Save loaded."));
+      } catch { alert(L("Der Code ist ungültig.", "That code is invalid.")); }
+    }
+    function wipeSave() {
+      if (!confirm(L("Geld, Autos und Tuning wirklich löschen?", "Really delete money, cars and tuning?"))) return;
+      wiping = true;
+      try { localStorage.removeItem(SAVE_KEY); } catch {}
+      location.reload();
+    }
+    document.querySelector("#saveExport").addEventListener("click", exportSave);
+    document.querySelector("#saveImport").addEventListener("click", importSave);
+    document.querySelector("#saveWipe").addEventListener("click", wipeSave);
+
+    // Werkstatt-Fenster
+    const workshopPage = document.querySelector("#workshopPage");
+    let workshopOpen = false;
+    function renderWorkshop() {
+      const u = upgradesOf(selectedCar), st = ST;
+      const num = (v, d = 1) => v.toLocaleString(LOCALE, { maximumFractionDigits: d, minimumFractionDigits: d });
+      const owned = [...ownedCars].sort((a, b) => a - b);
+      let html = `<div class="car-select">${owned.map(i => `<button data-car="${i}" class="${i === selectedCar ? "active" : ""}">${cars[i].name}</button>`).join("")}</div>`;
+      html += `<p class="ws-balance">${L("Guthaben", "Balance")}: <b>${devMode ? "∞ €" : formatMoney(credits)}</b></p>`;
+      html += `<div class="ws-stats"><span>0–100 km/h <b>${num(st.t100)} s</b></span><span>${L("Spitze", "Top speed")} <b>${Math.round(st.maxSpeed)} km/h</b></span>` +
+        `<span>${L("Bremsen 100–0", "Braking 100–0")} <b>${num(100 / st.brakeKmhps)} s</b></span><span>Grip <b>${Math.round(st.grip * 100)} %</b></span></div>`;
+      for (const up of UPGRADES) {
+        const lv = u[up.key], maxed = lv >= up.max, cost = maxed ? 0 : upgradeCost(selectedCar, up);
+        const can = devMode || credits >= cost;
+        html += `<div class="up-row"><div><b>${up.name}</b><div class="pips">${Array.from({ length: up.max }, (_, k) => `<i class="${k < lv ? "on" : ""}"></i>`).join("")}</div><small>${up.desc}</small></div>` +
+          `<button data-up="${up.key}" ${maxed || !can ? "disabled" : ""}>${maxed ? "Max." : formatMoney(cost)}</button></div>`;
+      }
+      workshopPage.querySelector("#wsBody").innerHTML = html;
+    }
+    function toggleWorkshop() {
+      if (!started || settingsOpen) return;
+      workshopOpen = !workshopOpen;
+      workshopPage.hidden = !workshopOpen;
+      keys.clear();
+      for (const k of Object.keys(touchInput)) touchInput[k] = false;
+      if (workshopOpen) renderWorkshop();
+    }
+    workshopPage.addEventListener("click", e => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (b.dataset.up) buyUpgrade(b.dataset.up);
+      else if (b.dataset.car) selectCar(Number(b.dataset.car));
+    });
+    document.querySelector("#workshopClose").addEventListener("click", toggleWorkshop);
+    document.querySelector("#workshopButton").addEventListener("click", toggleWorkshop);
+    document.querySelector("#workshopButton2").addEventListener("click", toggleWorkshop);
+
+    const settingsCarsEl = document.querySelector("#settingsCars");
+    cars.forEach((car, index) => {
+      for (const parent of [carSelect, settingsCarsEl]) {
+        const button = document.createElement("button");
+        button.dataset.index = index;
+        button.addEventListener("click", () => selectCar(index));
+        parent.appendChild(button);
+      }
+    });
+    selectCar(selectedCar);
+
+    // Handhelds (Steam Deck, ROG Ally …) senden Tasten UND haben einen Touchscreen:
+    // Touch-Steuerung deshalb nie dauerhaft ausblenden, sobald Touch möglich ist oder benutzt wurde.
+    let touchSeen = false;
+    function setKeyboardMode() {
+      if (settings.touchMode === 1) return;
+      if (settings.touchMode === 0 && (keyboardMode || touchSeen || navigator.maxTouchPoints > 0)) return;
+      if (keyboardMode) return;
+      keyboardMode = true;
+      touchControls.classList.add("hidden");
+      keyboardHelp.classList.add("visible");
+    }
+    addEventListener("pointerdown", e => {
+      if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+      touchSeen = true;
+      if (!keyboardMode) return;
+      keyboardMode = false;
+      applyTouchMode();
+    }, { passive: true });
+
+    addEventListener("keydown", event => {
+      const key = event.key.toLowerCase();
+
+      if (key === "escape" && !started && !settingsOpen) { location.href = "../index.html"; return; }   // Startseite: zurück zur Spielauswahl
+      if (workshopOpen) {
+        if (key === "escape" || key === "t") toggleWorkshop();
+        return;
+      }
+      if (key === "t" && started && !settingsOpen && !event.repeat) { toggleWorkshop(); return; }
+      if (key === "escape" || (key === "p" && started)) {
+        if (started || settingsOpen) toggleSettings();
+        return;
+      }
+      if (settingsOpen) return;     // im Menü keine Spieleingaben
+
+      // Dev-Modus: F12 oder ` (backtick)
+      if (key === "f12" || key === "`") {
+        event.preventDefault();
+        devMode = !devMode;
+        devLog(`Dev-Modus: ${devMode ? "AN" : "AUS"}`);
+        return;
+      }
+
+      // Dev-Commands
+      if (devMode && key === "m") {
+        currentLevel = currentLevel === "city" ? "moon" : "city";
+        devLog(`Level: ${currentLevel.toUpperCase()}`);
+        
+        return;
+      }
+      if (devMode && key === "r") {
+        credits += 100000; devUsed = true;
+        updateCreditsDisplay();
+        devLog(`+100k Credits`);
+        return;
+      }
+      if (devMode && key === "u") {
+        moonLevelUnlocked = !moonLevelUnlocked;
+        devLog(`Moon-Level: ${moonLevelUnlocked ? "UNLOCKED" : "LOCKED"}`);
+        return;
+      }
+
+      if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) {
+        event.preventDefault();
+      }
+
+      if (key === "f" && !event.repeat) { toggleFullscreen(); return; }
+
+      if (!started) {
+        if (key === "enter" || key === " ") startGame();
+        return;
+      }
+
+      setKeyboardMode();
+      keys.add(key);
+
+      if (/^[1-8]$/.test(key)) {
+        const index = Number(key) - 1;
+        if (ownedCars.has(index)) selectCar(index);
+      }
+    });
+
+    addEventListener("keyup", event => keys.delete(event.key.toLowerCase()));
+    addEventListener("blur", () => keys.clear());
+
+    document.querySelectorAll("[data-control]").forEach(button => {
+      const control = button.dataset.control;
+
+      const press = event => {
+        event.preventDefault();
+        touchInput[control] = true;
+        button.classList.add("pressed");
+        if (button.setPointerCapture && event.pointerId !== undefined) {
+          button.setPointerCapture(event.pointerId);
+        }
+      };
+
+      const release = event => {
+        event.preventDefault();
+        touchInput[control] = false;
+        button.classList.remove("pressed");
+      };
+
+      button.addEventListener("pointerdown", press);
+      button.addEventListener("pointerup", release);
+      button.addEventListener("pointercancel", release);
+      button.addEventListener("lostpointercapture", release);
+    });
+
+    // Zusätzliche Richtungssteuerung per Finger: Position links/rechts der Bildmitte lenkt (Einstellung "fingerSteer")
+    let fingerSteer = null;
+    {
+      let fpid = null;
+      const set = e => {
+        const r = canvas.getBoundingClientRect();
+        fingerSteer = clamp((e.clientX - (r.left + r.width / 2)) / (r.width * 0.3), -1, 1);
+      };
+      canvas.addEventListener("pointerdown", e => {
+        if (!settings.fingerSteer || e.pointerType === "mouse" || !started || settingsOpen) return;
+        fpid = e.pointerId; set(e);
+        if (canvas.setPointerCapture) canvas.setPointerCapture(fpid);
+      });
+      canvas.addEventListener("pointermove", e => { if (e.pointerId === fpid) set(e); });
+      const end = e => { if (e.pointerId === fpid) { fpid = null; fingerSteer = null; } };
+      canvas.addEventListener("pointerup", end);
+      canvas.addEventListener("pointercancel", end);
+      canvas.addEventListener("lostpointercapture", end);
+    }
+
+    {
+      let startAngle = 0, startValue = 0, pid = null;
+      const angleAt = e => {
+        const r = wheelEl.getBoundingClientRect();
+        // das gedrehte Quadrat hat dasselbe Zentrum wie das ungedrehte
+        return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2));
+      };
+      wheelEl.addEventListener("pointerdown", e => {
+        e.preventDefault();
+        pid = e.pointerId; wheelActive = true;
+        startAngle = angleAt(e); startValue = wheelValue;
+        if (wheelEl.setPointerCapture) wheelEl.setPointerCapture(pid);
+      });
+      wheelEl.addEventListener("pointermove", e => {
+        if (!wheelActive || e.pointerId !== pid) return;
+        let d = angleAt(e) - startAngle;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        wheelValue = clamp(startValue + d / WHEEL_MAX, -1, 1);
+        wheelEl.style.transform = `rotate(${wheelValue * WHEEL_MAX}rad)`;
+      });
+      const end = e => { if (e.pointerId === pid) { wheelActive = false; pid = null; } };
+      wheelEl.addEventListener("pointerup", end);
+      wheelEl.addEventListener("pointercancel", end);
+      wheelEl.addEventListener("lostpointercapture", end);
+    }
+
+    const startPage = document.querySelector("#startPage");
+    // Anonyme Zählung des Spielstarts mit GoatCounter (Zählpixel: kein Skript, keine Cookies; nicht auf localhost)
+    let startCounted = false;
+    function countStart() {
+      if (startCounted) return;
+      startCounted = true;
+      const h = location.hostname;
+      if (!/^https?:$/.test(location.protocol) || h === "localhost" || h === "127.0.0.1") return;
+      new Image().src = "https://kroxenstudios.goatcounter.com/count?p=" + encodeURIComponent("/asphalt-arkade/start") +
+        "&t=" + encodeURIComponent("Asphalt Arkade – Spielstart") + "&e=true&rnd=" + Math.random().toString(36).slice(2);
+    }
+    function startGame() {
+      started = true;
+      countStart();
+      startPage.classList.add("hidden");
+      resetRun();
+      initializeMapLazy();
+      // Handy: beim Start gleich ins echte Vollbild (braucht eine Berührung/Klick, daher hier)
+      if (matchMedia("(pointer: coarse)").matches && !document.fullscreenElement && !document.webkitFullscreenElement && !fakeFullscreen) toggleFullscreen();
+    }
+    // Eingabemodus aus dem Start-Klick ableiten (nur für diese Sitzung, wird nicht gespeichert)
+    let lastPointerType = "";
+    let inputMode = null;   // "touch" | "mouse"
+    const baseDevice = { touchMode: settings.touchMode, fingerSteer: settings.fingerSteer };
+    let lastTouchAt = -1e9;
+    addEventListener("pointerdown", e => { lastPointerType = e.pointerType; }, true);
+    // iOS Safari meldet pointerType am Klick teils falsch/leer -> touchstart zusätzlich auswerten
+    addEventListener("touchstart", () => { lastTouchAt = performance.now(); lastPointerType = "touch"; }, { capture: true, passive: true });
+    function setInputMode(mode) {
+      inputMode = mode;
+      settings.touchMode = mode === "touch" ? 1 : 2;
+      settings.fingerSteer = mode === "touch";
+      keyboardMode = false;
+      refreshSettingsUI();
+    }
+    function askOtherMode() {
+      const other = inputMode === "touch" ? "mouse" : "touch";
+      const bar = document.createElement("div");
+      bar.style.cssText = "position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:50;display:flex;gap:8px;align-items:center;padding:8px 12px;background:#10151cee;color:#fff;border:1px solid #ffffff44;border-radius:10px;font:14px sans-serif";
+      bar.innerHTML = `<span>${other === "touch" ? L("Mit dem Finger steuern?", "Steer with your finger?") : L("Mit Maus/Tastatur steuern?", "Steer with mouse/keyboard?")}</span><button data-y>${L("Ja, wechseln", "Yes, switch")}</button><button data-n>${L("Nein", "No")}</button>`;
+      bar.querySelector("[data-y]").onclick = () => { setInputMode(other); bar.remove(); };
+      bar.querySelector("[data-n]").onclick = () => bar.remove();
+      document.body.appendChild(bar);
+      setTimeout(() => bar.remove(), 15000);
+    }
+    document.querySelector("#startButton").addEventListener("click", e => {
+      const type = performance.now() - lastTouchAt < 1500 ? "touch" : (e.pointerType || lastPointerType);
+      if (type) setInputMode(type === "mouse" ? "mouse" : "touch");
+      startGame();
+      if (!inputMode) return;
+      let waited = 0;
+      const timer = setInterval(() => {
+        waited += 500;
+        if (Math.hypot(player.vx, player.vy) > 0.5) return clearInterval(timer);
+        if (waited >= 10000) { clearInterval(timer); askOtherMode(); }
+      }, 500);
+    });
+
+    function pressed(touchKey, ...keyboardKeys) {
+      return touchInput[touchKey] || keyboardKeys.some(key => keys.has(key));
+    }
+
+    function circleTouchesRect(cx, cy, radius, rect) {
+      const closestX = clamp(cx, rect[0], rect[0] + rect[2]);
+      const closestY = clamp(cy, rect[1], rect[1] + rect[3]);
+      const dx = cx - closestX;
+      const dy = cy - closestY;
+      return dx * dx + dy * dy < radius * radius;
+    }
+
+    let hitInfo = null;      // Kontakt mit einem NPC-Auto (Normale, Kontaktpunkt) oder null
+
+    function hasCollision() {
+      hitInfo = null;
+      const radius = 12;
+      if (solidHit(player.x, player.y, radius)) return true;
+
+      // NPC-Autos: genaue Hitbox = gedrehtes Rechteck in Fahrzeuggröße; das Spielerauto zählt als drei kleine Kreise
+      const pc = Math.cos(player.angle), ps = Math.sin(player.angle);
+      for (const npc of npcs) {
+        if (Math.hypot(player.x - npc.x, player.y - npc.y) > npc.length / 2 + 24) continue;
+        const nc = Math.cos(npc.angle), ns = Math.sin(npc.angle);
+        const hl = npc.length / 2, hw = (npc.kind === "bus" ? 20 : npc.kind === "truck" ? 19 : npc.kind === "van" ? 17 : 16) / 2;
+        for (const off of [-9, 0, 9]) {
+          const sx = player.x + pc * off, sy = player.y + ps * off;
+          const dx = sx - npc.x, dy = sy - npc.y;
+          const lx = dx * nc + dy * ns, ly = -dx * ns + dy * nc;      // in Fahrzeugkoordinaten
+          const ex = lx - clamp(lx, -hl, hl), ey = ly - clamp(ly, -hw, hw);
+          const d2 = ex * ex + ey * ey;
+          if (d2 < 7 * 7) {
+            // Normale (vom NPC zum Spieler) in Weltkoordinaten
+            let lnx = ex, lny = ey;
+            const lm = Math.sqrt(d2);
+            if (lm > 0.01) { lnx /= lm; lny /= lm; }
+            else { const m = Math.hypot(lx, ly) || 1; lnx = lx / m; lny = ly / m; }
+            const wx = lnx * nc - lny * ns, wy = lnx * ns + lny * nc;
+            hitInfo = { npc, nx: wx, ny: wy, cx: sx - wx * lm, cy: sy - wy * lm };
+            return true;
+          }
+        }
+      }
+
+      return player.x < 15 || player.y < 15 ||
+        player.x > world.width - 15 || player.y > world.height - 15;
+    }
+
+    // Anstoßen: Impuls wird zwischen Spieler und NPC aufgeteilt, schwere Fahrzeuge bewegen sich weniger
+    const NPC_MASS = { car: 1, van: 1.4, truck: 3, bus: 4 };
+    const RESTITUTION = 0.15;
+
+    function pushNpc(h) {
+      const npc = h.npc, mn = NPC_MASS[npc.kind] || 1;
+      const pnx = -h.nx, pny = -h.ny;                      // Richtung Spieler -> NPC
+      const nvx = npc.pushed ? npc.vx : (npc.edge ? npc.edge.dx * npc.speed : 0);
+      const nvy = npc.pushed ? npc.vy : (npc.edge ? npc.edge.dy * npc.speed : 0);
+      const vn = (player.vx - nvx) * pnx + (player.vy - nvy) * pny;     // Annäherungsgeschwindigkeit
+      if (vn < 0.08) return 0;                              // nur echte Stöße schieben
+      const J = (1 + RESTITUTION) * vn / (1 + 1 / mn);
+      player.vx -= pnx * J; player.vy -= pny * J;
+
+      if (!npc.pushed) {
+        // aus dem Straßenverkehr lösen: ab jetzt frei beweglich
+        if (npc.edge) { const i = npc.edge.cars.indexOf(npc); if (i >= 0) npc.edge.cars.splice(i, 1); }
+        npc.pushed = true; npc.vx = nvx; npc.vy = nvy; npc.va = 0; npc.restT = 0;
+        npc.turn = 0; npc.braking = false;
+      }
+      const dvx = pnx * J / mn, dvy = pny * J / mn;
+      npc.vx += dvx; npc.vy += dvy;
+      npc.va += ((h.cx - npc.x) * dvy - (h.cy - npc.y) * dvx) / (mn * 2500);   // seitlicher Stoß dreht das Auto
+      npc.va = clamp(npc.va, -0.12, 0.12);
+      return vn;
+    }
+
+    function startCrash() {
+      if (player.crashed) return;
+      loseCombo();
+      run.shake = 1;
+      run.flash = 0.5; run.flashColor = "255,120,40";
+      burst(player.x, player.y, 40, ["#ff9a2e", "#ffd166", "#ff4b24", "#ffffff"], 9);
+
+      // Rakete: Fliegt zum Mond!
+      if (selectedCar === 7) {
+        player.crashed = true;
+        player.vx = 0;
+        player.vy = 0;
+        crashPosition = { x: player.x, y: player.y };
+        crashTimer = 1.5;
+        crashOverlay.classList.add("active");
+        speedDisplay.textContent = "0";
+        devLog("🚀 Rakete startet zum Mond!");
+        return;
+      }
+
+      // Normaler Crash
+      player.crashed = true;
+      player.vx = 0;
+      player.vy = 0;
+      crashPosition = { x: player.x, y: player.y };
+      crashTimer = 1.15;
+      crashOverlay.classList.add("active");
+      speedDisplay.textContent = "0";
+    }
+
+    function respawn() {
+      // Rakete: Zum Mond teleportiert!
+      if (selectedCar === 7) {
+        currentLevel = "moon";
+        moonLevelUnlocked = true;
+        generateMap();
+        levelInfo.textContent = L("🌙 MOND", "🌙 MOON");
+        devLog("🌙 Angekommen auf dem Mond!");
+      }
+
+      // Respawn in der Garage
+      player.x = START.x;
+      player.y = START.y;
+      player.angle = Math.PI;
+      player.vx = 0;
+      player.vy = 0;
+      player.crashed = false;
+      crashPosition = null;
+      lastTrailPosition = null;
+      crashOverlay.classList.remove("active");
+      afterRespawn();
+    }
+
+    function addTireMarks() {
+      const speed = Math.hypot(player.vx, player.vy) * 13;
+      const steering = pressed("left", "a", "arrowleft") ||
+                       pressed("right", "d", "arrowright");
+
+      if (!(run.drifting || handbrakeOn) || !steering || speed < 30) {
+        lastTrailPosition = null;
+        return;
+      }
+
+      const rearX = player.x - Math.cos(player.angle) * 11;
+      const rearY = player.y - Math.sin(player.angle) * 11;
+      const sideX = Math.cos(player.angle + Math.PI / 2) * 5;
+      const sideY = Math.sin(player.angle + Math.PI / 2) * 5;
+      const left = { x: rearX + sideX, y: rearY + sideY };
+      const right = { x: rearX - sideX, y: rearY - sideY };
+
+      if (lastTrailPosition) {
+        tireMarks.push({ from: lastTrailPosition.left, to: left });
+        tireMarks.push({ from: lastTrailPosition.right, to: right });
+
+        if (tireMarks.length > MAX_TIRE_MARKS) {
+          tireMarks.splice(0, tireMarks.length - MAX_TIRE_MARKS);
+        }
+      }
+
+      lastTrailPosition = { left, right };
+    }
+
+    // ---------- Sound ----------
+    // Alles wird live per WebAudio erzeugt (keine Audiodateien, keine Lizenzfragen - frei nutzbar, CC0).
+    const sfx = (() => {
+      let ac = null, master, engOsc, engOsc2, engGain, ignGain, ignLfo, ignOut, skidGain, sirenOsc, sirenGain, noiseBuf;
+      const ok = () => ac && settings.sound;
+
+      function init() {
+        if (ac) { if (ac.state === "suspended") ac.resume(); return; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        ac = new AC();
+        master = ac.createGain(); master.connect(ac.destination);
+        // Rauschen für Zündung, Reifenquietschen und Aufprall
+        noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        // Motor, tiefer Teil: Sägezahn (Grundbrummen) + Sinus eine Oktave darunter, durch Tiefpass
+        const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 420;
+        engGain = ac.createGain(); engGain.gain.value = 0;
+        engOsc = ac.createOscillator(); engOsc.type = "sawtooth";
+        engOsc2 = ac.createOscillator(); engOsc2.type = "sine";
+        engOsc.connect(lp); engOsc2.connect(lp); lp.connect(engGain); engGain.connect(master);
+        engOsc.start(); engOsc2.start();
+        // Zündung: mittelhohes Rauschen, im Takt der Zündungen ein- und ausgeblendet (knatternd)
+        const ign = ac.createBufferSource(); ign.buffer = noiseBuf; ign.loop = true;
+        const ibp = ac.createBiquadFilter(); ibp.type = "bandpass"; ibp.frequency.value = 1400; ibp.Q.value = 1.2;
+        ignGain = ac.createGain(); ignGain.gain.value = 0.5;
+        ignLfo = ac.createOscillator(); ignLfo.type = "square";
+        const lfoDepth = ac.createGain(); lfoDepth.gain.value = 0.5;
+        ignLfo.connect(lfoDepth); lfoDepth.connect(ignGain.gain);
+        ignOut = ac.createGain(); ignOut.gain.value = 0;
+        ign.connect(ibp); ibp.connect(ignGain); ignGain.connect(ignOut); ignOut.connect(master);
+        ign.start(); ignLfo.start();
+        const skid = ac.createBufferSource(); skid.buffer = noiseBuf; skid.loop = true;
+        const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1800; bp.Q.value = 3;
+        skidGain = ac.createGain(); skidGain.gain.value = 0;
+        skid.connect(bp); bp.connect(skidGain); skidGain.connect(master); skid.start();
+        // Sirene
+        sirenOsc = ac.createOscillator(); sirenOsc.type = "triangle";
+        sirenGain = ac.createGain(); sirenGain.gain.value = 0;
+        sirenOsc.connect(sirenGain); sirenGain.connect(master); sirenOsc.start();
+      }
+
+      // pro Frame: Motor, Quietschen, Sirene
+      function update(speedRatio, sliding, siren, rpm = speedRatio) {
+        if (!ac) return;
+        const t = ac.currentTime, on = settings.sound;
+        master.gain.setTargetAtTime(on ? settings.volume : 0, t, 0.05);
+        const r = clamp(rpm, 0, 1.3);
+        const f = 38 + r * 80;                      // tiefes Brummen
+        const fire = 9 + r * 30;                    // Zündungen pro Sekunde
+        engOsc.frequency.setTargetAtTime(f, t, 0.08);
+        engOsc2.frequency.setTargetAtTime(f * 0.5, t, 0.08);
+        ignLfo.frequency.setTargetAtTime(fire, t, 0.08);
+        engGain.gain.setTargetAtTime(started ? 0.22 + r * 0.14 : 0, t, 0.1);
+        ignOut.gain.setTargetAtTime(started ? 0.05 + r * 0.07 : 0, t, 0.1);
+        skidGain.gain.setTargetAtTime(sliding > 0 ? Math.min(0.2, sliding * 0.25) : 0, t, 0.06);
+        // Sirene: Hi-Lo-Ton, Lautstärke nach Abstand des nächsten Verfolgers
+        if (siren > 0) {
+          sirenOsc.frequency.setTargetAtTime(Math.floor(t * 1.6) % 2 ? 640 : 860, t, 0.02);
+          sirenGain.gain.setTargetAtTime(siren * 0.07, t, 0.1);
+        } else sirenGain.gain.setTargetAtTime(0, t, 0.15);
+      }
+
+      function tone(freq, dur, type, vol, slideTo) {
+        if (!ok()) return;
+        const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+        o.type = type; o.frequency.setValueAtTime(freq, t);
+        if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+        g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+      }
+
+      function noise(dur, vol, freq) {
+        if (!ok()) return;
+        const t = ac.currentTime, src = ac.createBufferSource(), g = ac.createGain(), f = ac.createBiquadFilter();
+        src.buffer = noiseBuf; f.type = "lowpass"; f.frequency.value = freq;
+        g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t + dur);
+      }
+
+      return {
+        init, update,
+        hit(power = 1) { noise(0.25, 0.5 * power, 900); tone(90, 0.2, "sine", 0.5 * power, 40); },
+        turbo(level) { tone(300, 0.35, "sawtooth", 0.15, 300 + level * 400); noise(0.3, 0.15, 3000); },
+        level(level) { tone(500 + level * 150, 0.12, "square", 0.08); },
+        takedown() { noise(0.3, 0.5, 1200); tone(140, 0.3, "square", 0.25, 50); tone(660, 0.15, "square", 0.1); },
+        bust() { tone(440, 0.25, "square", 0.2, 220); setTimeout(() => tone(330, 0.5, "square", 0.2, 110), 200); },
+        lost() { tone(300, 0.25, "triangle", 0.15, 120); },
+        blowoff() { noise(0.22, 0.12, 5000); tone(1800, 0.2, "sine", 0.03, 900); }
+      };
+    })();
+    // Browser erlauben Ton erst nach einer Berührung/Taste
+    for (const ev of ["pointerdown", "keydown", "touchstart"]) addEventListener(ev, () => sfx.init(), { passive: true });
+
+    // Simulierte Gangschaltung (6 Gänge): die Drehzahl steigt in jedem Gang und fällt beim Hochschalten
+    let turboGas = false;
+    function rpmFraction(speedRatio) {
+      if (speedRatio < 0.01) return 0.1;
+      return 0.2 + 0.8 * ((speedRatio * 6) % 1);
+    }
+
+    // Zone unter dem Auto bestimmen; neue Orte bringen einmalig Geld (wird gespeichert)
+    let zoneTimer = 0;
+    function updateZone(dt) {
+      zoneTimer -= dt;
+      if (zoneTimer > 0) return;
+      zoneTimer = 12;
+      const z = zoneAt(player.x, player.y);
+      if (z === currentZone) return;
+      currentZone = z;
+      setLevelLabel();
+      if (currentLevel !== "city" || discovered.has(z.id)) return;
+      discovered.add(z.id);
+      if (z.bonus > 0 && started && !devMode) {
+        credits += z.bonus;
+        updateCreditsDisplay();
+        popup(L(`NEU ENTDECKT: ${z.name} +${z.bonus} €`, `DISCOVERED: ${z.name} +${z.bonus} €`), "#7ee0ff", 22);
+      }
+      saveGame();
+    }
+
+    function update(dt) {
+      if (!started || settingsOpen || workshopOpen) { sfx.update(0, 0, 0); return; }
+
+      updateParticles(dt);
+      updateZone(dt);
+      const zoomTarget = settings.zoomLevel * (settings.zoom
+        ? 1 - Math.min(0.2, Math.hypot(player.vx, player.vy) / (ST.maxSpeed / 13) * 0.2) - (run.boost > 0 ? 0.05 : 0)
+        : 1);
+      run.zoom += (zoomTarget - run.zoom) * Math.min(1, 0.06 * dt);
+
+      // Erwischt: kurzer Bildschirm, danach Neustart des Laufs in der Garage
+      if (run.bustTimer > 0) {
+        run.bustTimer -= dt / 60;
+        if (run.bustTimer <= 0) {
+          resetRun();
+          player.x = START.x; player.y = START.y; player.angle = Math.PI;
+          player.vx = 0; player.vy = 0; player.crashed = false;
+          crashPosition = null; lastTrailPosition = null;
+          crashOverlay.classList.remove("active");
+          speedDisplay.textContent = "0";
+        }
+        return;
+      }
+
+      updateTraffic(dt);
+      updateChase(dt);
+      if (run.bustTimer > 0) return;
+
+      {
+        const sp = Math.hypot(player.vx, player.vy) / (ST.maxSpeed / 13);
+        let near = 1e9;
+        for (const c of chasers) near = Math.min(near, Math.hypot(c.x - player.x, c.y - player.y));
+        sfx.update(player.crashed ? 0 : sp, (run.drifting || handbrakeOn) && sp > 0.15 ? driftAmount + 0.3 : 0, near < 1500 ? 1 - near / 1500 : 0, player.crashed ? 0 : rpmFraction(sp));
+      }
+
+      if (player.crashed) {
+        crashTimer -= dt / 60;
+        if (crashTimer <= 0) respawn();
+        return;
+      }
+
+      const car = ST;
+      const oldX = player.x;
+      const oldY = player.y;
+      const forwardX = Math.cos(player.angle);
+      const forwardY = Math.sin(player.angle);
+      const speed = Math.hypot(player.vx, player.vy);
+      const forwardSpeed = player.vx * forwardX + player.vy * forwardY;
+      // Querkomponente zu Beginn des Frames: Gas und Bremse zählen nicht als "Querschlupf", sonst würde der Grip einen Teil des Schubs auffressen
+      const preSideX = player.vx - forwardX * forwardSpeed, preSideY = player.vy - forwardY * forwardSpeed;
+
+      const rawSteer =
+        (pressed("left", "a", "arrowleft") ? -1 : 0) +
+        (pressed("right", "d", "arrowright") ? 1 : 0);
+
+      // Progressive Lenkung: ein kurzer Tipp bewirkt nur einen winzigen Einschlag,
+      // je länger man hält, desto weiter schlägt das Lenkrad ein. Loslassen zentriert zügig.
+      if (!wheelActive && wheelValue !== 0) {          // Lenkrad federt zurück
+        wheelValue -= Math.sign(wheelValue) * Math.min(Math.abs(wheelValue), 0.09 * dt);
+        wheelEl.style.transform = `rotate(${wheelValue * WHEEL_MAX}rad)`;
+      }
+      if (wheelActive || wheelValue !== 0) {
+        steerValue = wheelValue * settings.wheelLimit;   // Lenkrad: Einschlag = Drehwinkel, begrenzt
+      } else if (fingerSteer !== null) {
+        steerValue += (fingerSteer * settings.wheelLimit - steerValue) * Math.min(1, 0.25 * dt);
+      } else if (rawSteer === 0) {
+        steerValue -= Math.sign(steerValue) * Math.min(Math.abs(steerValue), settings.steerReturn * dt);
+      } else if (Math.sign(steerValue) === -rawSteer) {
+        steerValue += rawSteer * settings.steerReverse * dt;          // Gegenlenken geht schneller
+      } else {
+        steerValue += rawSteer * settings.steerRise * dt;
+      }
+      steerValue = clamp(steerValue, -1, 1);
+      const steering = Math.sign(steerValue) * Math.pow(Math.abs(steerValue), settings.steerCurve);
+      player.steerValue = steerValue;
+
+      // Realistische Beschleunigung: der Schub fällt zur Höchstgeschwindigkeit hin ab (0-100 km/h-Zeit siehe cars/Tuning)
+      const gasOn = pressed("gas", "w", "arrowup");
+      const vmaxPx = car.maxSpeed / 13 * (run.boost > 0 ? 1.3 : 1);
+      const thrustLeft = Math.max(0, 1 - (speed / vmaxPx) ** 2);
+      if (gasOn) {
+        const thrust = car.a0 * settings.accel * thrustLeft;
+        player.vx += forwardX * thrust * dt;
+        player.vy += forwardY * thrust * dt;
+      }
+      // Turbolader: beim Gaswegnehmen zischt das Schubumluftventil
+      if (car.turbo > 0 && turboGas && !gasOn && speed > 4) sfx.blowoff();
+      turboGas = gasOn;
+
+      // Boost: lädt sich beim Driften, B / Boost-Knopf zündet ihn (verbraucht die ganze Ladung)
+      if (run.drifting) run.boostCharge = Math.min(1, run.boostCharge + dt / 60 * 0.1);
+      const boostKey = pressed("boost", "b");
+      if (boostKey && !boostHeld && run.boost <= 0 && run.boostCharge >= BOOST_MIN_CHARGE) {
+        run.boostLevel = run.boostCharge > 0.7 ? 3 : run.boostCharge > 0.4 ? 2 : 1;
+        run.boost = run.boostCharge * BOOST_MAX_SECONDS * ST.boostMul;
+        run.boostCharge = 0;
+        run.shake = Math.max(run.shake, 0.35);
+        run.flash = 0.35; run.flashColor = "120,200,255";
+        sfx.turbo(run.boostLevel);
+        popup("BOOST!", LEVEL_COLORS[run.boostLevel], 28);
+        burst(player.x, player.y, 24, [LEVEL_COLORS[run.boostLevel], "#ffffff"], 7);
+      }
+      boostHeld = boostKey;
+      boostButton.style.setProperty("--charge", run.boostCharge);
+      boostButton.classList.toggle("ready", run.boostCharge >= BOOST_MIN_CHARGE);
+
+      if (run.boost > 0) {
+        const bt = (car.a0 * 3.4 + 0.03) * thrustLeft;
+        player.vx += forwardX * bt * dt;
+        player.vy += forwardY * bt * dt;
+        run.boost -= dt / 60;
+      }
+
+      if (pressed("brake", "s", "arrowdown")) {
+        if (forwardSpeed > 0.4) {                      // Bremsen: feste Verzögerung (ca. 32-45 km/h pro Sekunde)
+          const d = Math.min(car.brake * dt, forwardSpeed);
+          player.vx -= forwardX * d;
+          player.vy -= forwardY * d;
+        } else if (forwardSpeed > -2.2) {              // Rückwärts: langsam, höchstens ca. 28 km/h
+          const rev = Math.max(car.a0, 0.008) * 0.7 * dt;
+          player.vx -= forwardX * rev;
+          player.vy -= forwardY * rev;
+        }
+      }
+
+      // Drift ist immer aktiv; die Leertaste ist die Handbremse (Hinterräder blockieren: bremst und bricht das Heck aus)
+      const handbrake = pressed("drift", " ");
+      handbrakeOn = handbrake && speed > 1.2;
+      const drifting = speed > 1.2;
+
+      // Das Auto dreht sich nur moderat ein, damit ein kontrollierter Slide
+      // (Querwinkel ca. 30-45 Grad) entsteht statt einer Pirouette
+      if (steering && speed > 0.15) {
+        const direction = forwardSpeed >= 0 ? 1 : -1;
+        const highSpeedDamping = 1 - 0.3 * Math.min(1, speed / (car.maxSpeed / 13));
+        player.angle += steering * car.turn * (handbrake ? 1.1 : 0.9) * highSpeedDamping *
+          direction * Math.min(speed / 2, 1.5) * dt;
+      }
+
+      const sideX = preSideX;
+      const sideY = preSideY;
+      // Driftgrip wächst mit dem Querwinkel, so bleibt der Slide beherrschbar
+      const driftSlip = speed > 0.5 ? Math.atan2(Math.hypot(sideX, sideY), Math.abs(forwardSpeed)) : 0;
+      driftAmount += ((driftSlip > 0.2 || handbrakeOn ? 1 : 0) - driftAmount) * 0.08 * dt;
+      // Bei niedrigem Tempo greift der normale Grip, mit Tempo nimmt der Drift-Grip überhand
+      const slideGrip = 0.95 - 0.1 * clamp((driftSlip - 0.4) / 0.5, 0, 1);
+      const grip = handbrake
+        ? 0.975
+        : car.grip + (slideGrip - car.grip) * clamp(speed / 6, 0, 1);
+      player.vx -= sideX * (1 - grip) * dt;
+      player.vy -= sideY * (1 - grip) * dt;
+
+      // Rollwiderstand/Motorbremse nur ohne Gas; abseits der Straße bremsen Gras und Sand zusätzlich
+      if (!gasOn) { const roll = Math.pow(0.9993, dt); player.vx *= roll; player.vy *= roll; }
+      if (!isOnRoad(player.x, player.y)) { const off = Math.pow(0.9982, dt); player.vx *= off; player.vy *= off; }
+      if (handbrake) {
+        const hb = Math.pow(0.975, dt);
+        player.vx *= hb; player.vy *= hb;
+      }
+
+      const maxVelocity = vmaxPx;
+      const currentSpeed = Math.hypot(player.vx, player.vy);
+      if (currentSpeed > maxVelocity) {
+        player.vx = player.vx / currentSpeed * maxVelocity;
+        player.vy = player.vy / currentSpeed * maxVelocity;
+      }
+
+      player.x += player.vx * dt;
+      player.y += player.vy * dt;
+
+      if (hasCollision()) {
+        const kmhAtImpact = Math.hypot(player.vx, player.vy) * 13;
+
+        if (hitInfo && hitInfo.npc && selectedCar !== 7) {
+          // andere Autos werden weggeschoben
+          const closing = pushNpc(hitInfo) * 13;
+          if (closing > 35) {
+            sfx.hit(Math.min(1, closing / 120));
+            loseCombo();
+            run.shake = Math.max(run.shake, 0.3);
+            burst(hitInfo.cx, hitInfo.cy, 8, ["#ffd166", "#ffffff"], 5, true);
+          }
+          player.x = oldX;
+          player.y = oldY;
+          lastTrailPosition = null;
+        } else if (kmhAtImpact >= 15 && selectedCar === 7) {
+          // Keine Explosion mehr: das Auto bleibt einfach stehen (nur die Rakete startet weiterhin zum Mond)
+          startCrash();
+        } else {
+          if (kmhAtImpact >= 15) {
+            sfx.hit(Math.min(1, kmhAtImpact / 120));
+            loseCombo();                 // harter Aufprall unterbricht die Drift-Kombo
+            run.shake = Math.max(run.shake, 0.35);
+            burst(player.x, player.y, 8, ["#cfcfcf", "#8c7c55"], 3, false);
+          }
+          player.x = oldX;
+          player.y = oldY;
+          player.vx = 0;
+          player.vy = 0;
+          lastTrailPosition = null;
+        }
+      } else {
+        const activelyDrifting =
+          drifting && Math.abs(steerValue) > 0.2;
+
+        // Drift-Kombo: Punkte (und Geld) werden erst eingelöst, wenn man ~2 s nicht driftet,
+        // ohne zu crashen oder erwischt zu werden. Weitere Drifts davor verlängern die Kombo.
+        const slip = speed > 0.5 ? Math.atan2(Math.hypot(sideX, sideY), Math.abs(forwardSpeed)) : 0;
+        updateDriftCombo(dt, activelyDrifting, speed, slip);
+        driveEffects(dt, Math.hypot(player.vx, player.vy));
+
+        addTireMarks();
+      }
+
+      for (const coin of coins) {
+        if (coin.respawn > 0) { coin.respawn -= dt; continue; }
+        if (Math.abs(player.x - coin.x) > 40 || Math.abs(player.y - coin.y) > 40) continue;
+        if (Math.hypot(player.x - coin.x, player.y - coin.y) < 28) {
+          if (!devMode) credits += coin.value;
+          coin.respawn = 60 * 40;
+          updateCreditsDisplay();
+          burst(coin.x, coin.y, 12, ["#ffd166", "#fff3b0"], 5);
+          popup(`+${coin.value} €`, "#ffd166", 18);
+        }
+      }
+
+      const kmh = Math.round(Math.hypot(player.vx, player.vy) * 13);
+      speedDisplay.textContent = kmh;
+      rpmDisplay.textContent = Math.round(850 + rpmFraction(kmh / car.maxSpeed) * 5700);
+    }
+
+    let uiScale = 1;     // >1 auf kleinen Bildschirmen: Anzeigen im Canvas werden vergrößert
+    let viewX = 0, viewY = 0, viewW = canvas.width, viewH = canvas.height;
+    let camCx = 0, camCy = 0, camRot = 0;     // Kamerazentrum (Welt) und Drehung (rad)
+    const visible = (x, y, w, h) =>
+      x + w > viewX && x < viewX + viewW &&
+      y + h > viewY && y < viewY + viewH;
+
+    function drawWorld() {
+      const pal = palette();
+      ctx.fillStyle = pal.ground;
+      ctx.fillRect(0, 0, world.width, world.height);
+
+      if (currentLevel === "moon") {
+        ctx.fillStyle = "#ffffff";
+        for (let i = 0; i < 200; i++) {
+          const x = (i * 73 + i * i) % world.width;
+          const y = (i * 113 - i * i * 0.5) % world.height;
+          ctx.fillRect(x, y, (i % 3) === 0 ? 1 : 0.5, (i % 3) === 0 ? 1 : 0.5);
+        }
+      }
+
+      // Bodenflächen (Rasen, Felder, Wald, Parks, Parkplätze, Tankstellen, Plätze, Industrie, See)
+      for (const l of queryIndex(IX.lots)) {
+        if (!visible(l.x, l.y, l.w, l.h)) continue;
+        const k = l.kind;
+        ctx.fillStyle = k === "park" ? pal.park : k === "plaza" ? pal.plaza : k === "industry" ? "#80807a"
+          : k === "lawn" ? pal.lawn[l.v] : k === "field" ? pal.field[l.v] : k === "forest" ? pal.forest : k === "meadow" ? pal.meadow
+          : k === "rockground" ? pal.rockground : k === "water" ? pal.water : k === "sand" ? pal.sand : pal.parking;
+        ctx.fillRect(l.x, l.y, l.w, l.h);
+        if (k === "field") {
+          ctx.strokeStyle = "rgba(0,0,0,0.09)"; ctx.lineWidth = 3;
+          ctx.beginPath();
+          const vertical = l.v !== 1;
+          for (let o = 14; o < (vertical ? l.w : l.h); o += 26) {
+            if (vertical) { ctx.moveTo(l.x + o, l.y); ctx.lineTo(l.x + o, l.y + l.h); } else { ctx.moveTo(l.x, l.y + o); ctx.lineTo(l.x + l.w, l.y + o); }
+          }
+          ctx.stroke();
+        } else if (k === "water") {
+          ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 2;
+          ctx.beginPath();
+          const x0 = Math.max(l.x, viewX), x1 = Math.min(l.x + l.w, viewX + viewW), y0 = Math.max(l.y, viewY), y1 = Math.min(l.y + l.h, viewY + viewH);
+          for (let yy = Math.ceil(y0 / 90) * 90; yy < y1; yy += 90) {
+            for (let xx = Math.ceil(x0 / 160) * 160 + (yy / 90 % 2) * 80; xx < x1; xx += 160) { ctx.moveTo(xx, yy); ctx.lineTo(xx + 34, yy); }
+          }
+          ctx.stroke();
+        } else if (k === "parking") {
+          ctx.strokeStyle = "rgba(255,255,255,0.55)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          for (let yy = l.y + 104; yy + 30 <= l.y + l.h - 6; yy += 62) {
+            for (let xx = l.x + 12; xx <= l.x + l.w - 8; xx += 24) { ctx.moveTo(xx, yy - 2); ctx.lineTo(xx, yy + 32); }
+          }
+          ctx.stroke();
+        }
+      }
+
+      // Gehwege (nur in Städten), dann Fahrbahnen (Autobahn dunkler)
+      const nearRoads = queryIndex(IX.roads);
+      ctx.fillStyle = pal.side;
+      for (const r of nearRoads) {
+        if ((r.type === "main" || r.type === "alley") && visible(r.x - 8, r.y - 8, r.w + 16, r.h + 16)) ctx.fillRect(r.x - 8, r.y - 8, r.w + 16, r.h + 16);
+      }
+      let last = "";
+      for (const r of nearRoads) {
+        if (!visible(r.x, r.y, r.w, r.h)) continue;
+        if (r.type !== last) {
+          last = r.type;
+          ctx.fillStyle = r.type === "hwy" ? "#45494e" : r.type === "ramp" || r.type === "country" ? pal.country : pal.road;
+        }
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+      }
+      // Geschwungene Straßen (A1, Auffahrten, Landstraßen)
+      const nearCurves = queryIndex(IX.curves);
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      for (const ch of nearCurves) {
+        if (!visible(ch.x, ch.y, ch.w, ch.h)) continue;
+        ctx.strokeStyle = ch.type === "hwy" ? "#45494e" : pal.country;
+        ctx.lineWidth = ROAD[ch.type].width;
+        ctx.beginPath();
+        ch.pts.forEach((pt, i) => i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]));
+        ctx.stroke();
+      }
+
+      // Markierungen
+      const seg = (m, o) => {
+        ctx.beginPath();
+        ctx.moveTo(m.x1 + m.nx * o, m.y1 + m.ny * o);
+        ctx.lineTo(m.x2 + m.nx * o, m.y2 + m.ny * o);
+        ctx.stroke();
+      };
+      ctx.lineCap = "butt";
+      for (const m of queryIndex(IX.marks)) {
+        if (!visible(Math.min(m.x1, m.x2) - 120, Math.min(m.y1, m.y2) - 120, Math.abs(m.x2 - m.x1) + 240, Math.abs(m.y2 - m.y1) + 240)) continue;
+        if (m.type === "hwy") {
+          ctx.setLineDash([]);
+          ctx.strokeStyle = "#e0b43a"; ctx.lineWidth = 3;
+          seg(m, -3); seg(m, 3);
+          ctx.strokeStyle = "#f2f2f2";
+          ctx.setLineDash([30, 26]);
+          seg(m, -55); seg(m, 55);
+          ctx.setLineDash([]);
+          seg(m, -104); seg(m, 104);
+        } else if (m.type === "main") {
+          ctx.strokeStyle = pal.line; ctx.lineWidth = 3; ctx.setLineDash([26, 22]);
+          seg(m, 0);
+        } else if (m.type === "country") {
+          ctx.strokeStyle = "#e6dca0"; ctx.lineWidth = 3; ctx.setLineDash([34, 30]);
+          seg(m, 0);
+        } else if (m.type === "ramp") {
+          ctx.strokeStyle = "#e6e6e6"; ctx.lineWidth = 2; ctx.setLineDash([14, 14]);
+          seg(m, 0);
+        } else {
+          ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1.5; ctx.setLineDash([8, 16]);
+          seg(m, 0);
+        }
+      }
+      ctx.setLineDash([]);
+      ctx.lineCap = "butt";
+      for (const ch of nearCurves) {
+        if (!visible(ch.x, ch.y, ch.w, ch.h)) continue;
+        for (const m of ch.marks) {
+          ctx.strokeStyle = m.c; ctx.lineWidth = m.w; ctx.setLineDash(m.d);
+          ctx.beginPath();
+          m.pts.forEach((pt, i) => i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]));
+          ctx.stroke();
+        }
+      }
+      ctx.setLineDash([]);
+
+      // Haltelinien und Zebrastreifen an Ampeln
+      ctx.strokeStyle = "#f2f2f2"; ctx.lineWidth = 4;
+      for (const l of queryIndex(IX.stops)) {
+        if (!visible(Math.min(l.x1, l.x2) - 4, Math.min(l.y1, l.y2) - 4, Math.abs(l.x2 - l.x1) + 8, Math.abs(l.y2 - l.y1) + 8)) continue;
+        ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(245,245,245,0.85)";
+      for (const n of lightNodes) {
+        if (!visible(n.x - 90, n.y - 90, 180, 180)) continue;
+        for (const e of n.out) {
+          ctx.save();
+          ctx.translate(n.x + e.dx * (n.clear - 18), n.y + e.dy * (n.clear - 18));
+          ctx.rotate(Math.atan2(e.dy, e.dx));
+          for (let k = -3; k <= 3; k++) ctx.fillRect(-5, k * 14 - 4, 10, 8);
+          ctx.restore();
+        }
+      }
+
+      ctx.strokeStyle = "rgba(24, 27, 29, 0.58)";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      for (const mark of tireMarks) {
+        if (!visible(mark.from.x - 6, mark.from.y - 6, 12, 12)) continue;
+        ctx.beginPath();
+        ctx.moveTo(mark.from.x, mark.from.y);
+        ctx.lineTo(mark.to.x, mark.to.y);
+        ctx.stroke();
+      }
+
+      for (const coin of coins) {
+        if (coin.respawn > 0 || !visible(coin.x - 14, coin.y - 14, 28, 28)) continue;
+        ctx.fillStyle = "#ffd166";
+        ctx.beginPath();
+        ctx.arc(coin.x, coin.y, 11, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#b8862b";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillStyle = "#b8862b";
+        ctx.font = "bold 12px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("€", coin.x, coin.y + 4);
+      }
+
+      // Garage
+      if (garage) {
+        ctx.fillStyle = "#55595e";
+        ctx.fillRect(garage.x, garage.y, garage.w, garage.h);
+        ctx.fillStyle = "#ff6b35";
+        ctx.font = "bold 20px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("GARAGE", garage.x + garage.w / 2, garage.y + garage.h / 2 + 10);
+      }
+
+      // Dekoration am Boden
+      const nearDecor = queryIndex(IX.decor);
+      for (const d of nearDecor) {
+        if (d.k === "rail") {
+          if (!visible(Math.min(d.x1, d.x2) - 6, Math.min(d.y1, d.y2) - 6, Math.abs(d.x2 - d.x1) + 12, Math.abs(d.y2 - d.y1) + 12)) continue;
+          ctx.strokeStyle = "#a9afb5"; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(d.x1, d.y1); ctx.lineTo(d.x2, d.y2); ctx.stroke();
+          continue;
+        }
+        const [bx, by, bw, bh] = decorBox(d);
+        if (!visible(bx, by, bw, bh)) continue;
+        if (d.k === "pool") {
+          ctx.fillStyle = "#cfd8dc"; ctx.fillRect(d.x - 4, d.y - 4, d.w + 8, d.h + 8);
+          ctx.fillStyle = "#4fb3d9"; ctx.fillRect(d.x, d.y, d.w, d.h);
+        } else if (d.k === "pitch") {
+          ctx.fillStyle = "#4f8f4a"; ctx.fillRect(d.x, d.y, d.w, d.h);
+          ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 2;
+          ctx.strokeRect(d.x + 6, d.y + 6, d.w - 12, d.h - 12);
+          ctx.beginPath(); ctx.moveTo(d.x + d.w / 2, d.y + 6); ctx.lineTo(d.x + d.w / 2, d.y + d.h - 6); ctx.stroke();
+          ctx.beginPath(); ctx.arc(d.x + d.w / 2, d.y + d.h / 2, Math.min(d.w, d.h) * 0.15, 0, Math.PI * 2); ctx.stroke();
+        } else if (d.k === "pond") {
+          ctx.fillStyle = "#4a86b8"; ctx.strokeStyle = "#2f5f86"; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.ellipse(d.x, d.y, d.rx, d.ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        } else if (d.k === "bench") {
+          ctx.fillStyle = "#7a5a3a"; ctx.fillRect(d.x - 11, d.y - 3.5, 22, 7);
+        } else if (d.k === "fountain") {
+          ctx.fillStyle = "#8fb3cf"; ctx.strokeStyle = "#d8e6ee"; ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.arc(d.x, d.y, 26, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(d.x, d.y, 8, 0, Math.PI * 2); ctx.fill();
+        } else if (d.k === "busstop") {
+          ctx.fillStyle = "#2f6f9e";
+          if (d.horiz) ctx.fillRect(d.x - 20, d.y - 5, 40, 10); else ctx.fillRect(d.x - 5, d.y - 20, 10, 40);
+        }
+      }
+
+      for (const p of queryIndex(IX.props)) {
+        if (!visible(p.x, p.y, p.w, p.h)) continue;
+        ctx.fillStyle = "rgba(0,0,0,0.22)";
+        ctx.fillRect(p.x + 3, p.y + 3, p.w, p.h);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        if (p.kind === "car") {
+          ctx.fillStyle = "rgba(20,30,40,0.75)";
+          ctx.fillRect(p.x + 2, p.y + 6, p.w - 4, 6);
+          ctx.fillRect(p.x + 2, p.y + p.h - 9, p.w - 4, 4);
+        } else if (p.kind === "container") {
+          ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let xx = p.x + 5; xx < p.x + p.w; xx += 5) { ctx.moveTo(xx, p.y); ctx.lineTo(xx, p.y + p.h); }
+          ctx.stroke();
+        } else if (p.kind === "stall") {
+          ctx.fillStyle = "#f4f1e8";
+          for (let xx = p.x; xx < p.x + p.w; xx += 8) ctx.fillRect(xx, p.y, 4, p.h);
+        } else if (p.kind === "pump") {
+          ctx.fillStyle = "#f4f1e8"; ctx.fillRect(p.x + 2, p.y + 3, p.w - 4, 5);
+        } else if (p.kind === "truck") {
+          ctx.fillStyle = "#2b3440"; ctx.fillRect(p.x + 2, p.y + 2, p.w - 4, 14);
+          ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.fillRect(p.x + 3, p.y + 20, p.w - 6, 3);
+        }
+      }
+
+      for (const rk of queryIndex(IX.rocks)) {
+        const [x, y, r, sh] = rk;
+        if (!visible(x - r - 10, y - r - 10, r * 2 + 20, r * 2 + 20)) continue;
+        ctx.fillStyle = "rgba(0,0,0,0.22)";
+        ctx.beginPath(); ctx.ellipse(x + r * 0.15, y + r * 0.2, r * 1.05, r * 0.95, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = pal.rock[0];
+        ctx.beginPath(); ctx.ellipse(x, y, r, r * (0.8 + sh * 0.2), sh * 3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = pal.rock[1];
+        ctx.beginPath(); ctx.ellipse(x - r * 0.18, y - r * 0.2, r * 0.6, r * 0.5, sh * 3, 0, Math.PI * 2); ctx.fill();
+      }
+
+      for (const [x, y, r, v] of queryIndex(IX.trees)) {
+        if (!visible(x - 30, y - 30, 60, 60)) continue;
+        const col = v ? pal.pine : pal.tree;
+        ctx.fillStyle = col[0];
+        ctx.beginPath(); ctx.arc(x, y, r * 1.15, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = col[1];
+        ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.25, r * 0.78, 0, Math.PI * 2); ctx.fill();
+      }
+
+      for (const b of queryIndex(IX.buildings)) {
+        const [x, y, w, h, color, kind, label, front, awning, ht] = b;
+        if (!visible(x - 14, y - 14, w + 28 + ht, h + 30 + ht)) continue;
+        if (kind === "wall") {
+          ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.fillRect(x + 6, y + 8, w, h);
+          ctx.fillStyle = color; ctx.fillRect(x, y, w, h);
+          continue;
+        }
+        ctx.fillStyle = "rgba(0,0,0,0.2)";
+        ctx.fillRect(x + 10 + ht * 0.5, y + 12 + ht * 0.6, w, h);
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, w, h);
+
+        if (kind === "house") {
+          // Satteldach: Firstlinie und dunklere Hälfte
+          ctx.fillStyle = "rgba(0,0,0,0.16)";
+          if (w >= h) ctx.fillRect(x, y + h / 2, w, h / 2); else ctx.fillRect(x + w / 2, y, w / 2, h);
+          ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 3;
+          ctx.beginPath();
+          if (w >= h) { ctx.moveTo(x + 4, y + h / 2); ctx.lineTo(x + w - 4, y + h / 2); } else { ctx.moveTo(x + w / 2, y + 4); ctx.lineTo(x + w / 2, y + h - 4); }
+          ctx.stroke();
+        } else if (kind === "office") {
+          ctx.fillStyle = "rgba(190,225,245,0.5)";
+          ctx.fillRect(x + 8, y + 8, w - 16, h - 16);
+          ctx.strokeStyle = "rgba(20,40,60,0.35)"; ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let xx = x + 8; xx < x + w - 8; xx += 22) { ctx.moveTo(xx, y + 8); ctx.lineTo(xx, y + h - 8); }
+          for (let yy = y + 8; yy < y + h - 8; yy += 22) { ctx.moveTo(x + 8, yy); ctx.lineTo(x + w - 8, yy); }
+          ctx.stroke();
+        } else if (kind === "tower") {
+          // Hochhaus: Glasfassade, abgesetzter Dachaufbau, oft mit Hubschrauberlandeplatz
+          ctx.fillStyle = "rgba(255,255,255,0.16)";
+          ctx.fillRect(x + 6, y + 6, w - 12, h - 12);
+          ctx.strokeStyle = "rgba(10,30,50,0.35)"; ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let xx = x + 6; xx < x + w - 6; xx += 16) { ctx.moveTo(xx, y + 6); ctx.lineTo(xx, y + h - 6); }
+          for (let yy = y + 6; yy < y + h - 6; yy += 16) { ctx.moveTo(x + 6, yy); ctx.lineTo(x + w - 6, yy); }
+          ctx.stroke();
+          ctx.fillStyle = "rgba(0,0,0,0.2)";
+          ctx.fillRect(x + w * 0.28, y + h * 0.28, w * 0.44, h * 0.44);
+          if (w >= 110 && Math.floor(x * 0.37 + y * 0.11) % 3 === 0) {
+            ctx.strokeStyle = "#e8e8e8"; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2, Math.min(w, h) * 0.2, 0, Math.PI * 2); ctx.stroke();
+          }
+        } else if (kind === "parkhaus") {
+          ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.lineWidth = 3;
+          ctx.beginPath();
+          for (let yy = y + 14; yy < y + h; yy += 14) { ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); }
+          ctx.stroke();
+        } else if (kind === "school") {
+          ctx.fillStyle = "rgba(0,0,0,0.16)"; ctx.fillRect(x, y + h / 2, w, h / 2);
+          ctx.fillStyle = "#d8d0b8";
+          for (let wx = x + 14; wx < x + w - 20; wx += 30) ctx.fillRect(wx, y + h - 16, 14, 8);
+        } else if (kind === "church") {
+          ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.fillRect(x + w / 2, y, w / 2, h);
+          ctx.fillStyle = "#8f8576"; ctx.fillRect(x + w / 2 - 14, y + 4, 28, 28);
+          ctx.fillStyle = "#fff"; ctx.fillRect(x + w / 2 - 1.5, y + 8, 3, 20); ctx.fillRect(x + w / 2 - 6, y + 13, 12, 3);
+        } else if (kind === "barn") {
+          ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.fillRect(x + w / 2, y, w / 2, h);
+          ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(x + w / 2, y + 3); ctx.lineTo(x + w / 2, y + h - 3); ctx.stroke();
+        } else if (kind === "warehouse") {
+          ctx.strokeStyle = "rgba(0,0,0,0.22)"; ctx.lineWidth = 2;
+          ctx.beginPath();
+          for (let xx = x + 22; xx < x + w; xx += 22) { ctx.moveTo(xx, y); ctx.lineTo(xx, y + h); }
+          ctx.stroke();
+          ctx.fillStyle = "#3b4048";
+          for (let xx = x + 20; xx + 30 < x + w; xx += 70) ctx.fillRect(xx, y + h - 6, 30, 6);
+        } else {
+          ctx.fillStyle = "rgba(255,255,255,0.14)";
+          ctx.fillRect(x + 12, y + 12, w - 24, 12);
+          ctx.fillStyle = "#d8d0b8";
+          for (let wx = x + 30; wx < x + w - 20; wx += 55) {
+            for (let wy = y + 45; wy < y + h - 20; wy += 55) ctx.fillRect(wx, wy, 18, 14);
+          }
+        }
+
+        if (kind === "shop" && awning) {
+          // Markise über dem Gehweg und Schild
+          const stripe = 14;
+          const horizontal = front === "n" || front === "s";
+          const len = horizontal ? w : h;
+          for (let k = 0; k * stripe < len; k++) {
+            ctx.fillStyle = awning[k % 2];
+            const o = k * stripe, l = Math.min(stripe, len - o);
+            if (front === "n") ctx.fillRect(x + o, y - 11, l, 11);
+            else if (front === "s") ctx.fillRect(x + o, y + h, l, 11);
+            else if (front === "w") ctx.fillRect(x - 11, y + o, 11, l);
+            else ctx.fillRect(x + w, y + o, 11, l);
+          }
+          if (label && w >= 70) {
+            ctx.font = "bold 11px system-ui";
+            ctx.textAlign = "center";
+            const tw = Math.min(w - 8, ctx.measureText(label).width + 12);
+            ctx.fillStyle = "rgba(20,24,30,0.78)";
+            ctx.fillRect(x + w / 2 - tw / 2, y + h / 2 - 9, tw, 18);
+            ctx.fillStyle = "#fff";
+            ctx.fillText(label, x + w / 2, y + h / 2 + 4);
+          }
+        }
+
+        if (label && kind !== "shop" && w >= 40) {
+          ctx.font = kind === "parkhaus" ? "bold 34px system-ui" : "bold 11px system-ui";
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#fff";
+          ctx.fillText(label, x + w / 2, y + h / 2 + (kind === "parkhaus" ? 12 : 4));
+        }
+
+        ctx.strokeStyle = "rgba(35,28,24,0.6)";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(x, y, w, h);
+      }
+
+      // Laternen und Straßenbäume stehen am Gehwegrand; Tanks, Silos und Kühltürme ragen hoch
+      for (const d of nearDecor) {
+        if (d.k === "tank" || d.k === "cooling") {
+          if (!visible(d.x - d.r - 8, d.y - d.r - 8, d.r * 2 + 16, d.r * 2 + 16)) continue;
+          ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.beginPath(); ctx.arc(d.x + d.r * 0.25, d.y + d.r * 0.3, d.r, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = d.k === "tank" ? "#c9ced3" : "#aeb4ba"; ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 3; ctx.stroke();
+          ctx.fillStyle = d.k === "tank" ? "#e4e8eb" : "#585e64"; ctx.beginPath(); ctx.arc(d.x - d.r * 0.12, d.y - d.r * 0.12, d.r * (d.k === "tank" ? 0.6 : 0.62), 0, Math.PI * 2); ctx.fill();
+          continue;
+        }
+        if (d.k !== "lamp" && d.k !== "streettree") continue;
+        if (!visible(d.x - 12, d.y - 12, 24, 24)) continue;
+        if (d.k === "lamp") {
+          ctx.fillStyle = "#3a3d42"; ctx.beginPath(); ctx.arc(d.x, d.y, 3.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = currentLevel === "moon" ? "#fff1a8" : "#ffe9a8"; ctx.beginPath(); ctx.arc(d.x, d.y, 1.8, 0, Math.PI * 2); ctx.fill();
+        } else {
+          ctx.fillStyle = pal.tree[0]; ctx.beginPath(); ctx.arc(d.x, d.y, 9, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = pal.tree[1]; ctx.beginPath(); ctx.arc(d.x - 2, d.y - 2, 6, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+
+    // Wagen des Verkehrs: Pkw, Transporter, Lkw, Bus; mit Bremslicht und Blinker
+    function drawNpc(c) {
+      if (!visible(c.x - 50, c.y - 50, 100, 100)) return;
+      const W = c.kind === "bus" ? 20 : c.kind === "truck" ? 19 : 16;
+      if (c.kind === "car") {
+        drawCar(c.x, c.y, c.angle, c.color);
+      } else {
+        const L = c.length;
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.angle);
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.fillRect(-L / 2 + 2, -W / 2 + 3, L, W);
+        if (c.kind === "truck") {
+          ctx.fillStyle = c.color; ctx.fillRect(-L / 2, -W / 2, L * 0.7, W);
+          ctx.fillStyle = "rgba(255,255,255,0.18)"; ctx.fillRect(-L / 2 + 2, -W / 2 + 2, L * 0.7 - 4, 4);
+          ctx.fillStyle = "#2b3440"; ctx.fillRect(-L / 2 + L * 0.72, -W / 2 + 1, L * 0.28, W - 2);
+          ctx.fillStyle = "#9fc4dd"; ctx.fillRect(L / 2 - 6, -W / 2 + 3, 4, W - 6);
+        } else if (c.kind === "bus") {
+          ctx.fillStyle = c.color; ctx.fillRect(-L / 2, -W / 2, L, W);
+          ctx.fillStyle = "#263746";
+          for (let k = -L / 2 + 6; k < L / 2 - 8; k += 9) { ctx.fillRect(k, -W / 2 + 2, 6, 3); ctx.fillRect(k, W / 2 - 5, 6, 3); }
+          ctx.fillStyle = "#9fc4dd"; ctx.fillRect(L / 2 - 5, -W / 2 + 3, 3, W - 6);
+        } else {
+          ctx.fillStyle = c.color; ctx.fillRect(-L / 2, -W / 2, L, W);
+          ctx.fillStyle = "rgba(0,0,0,0.12)"; ctx.fillRect(-L / 2, -W / 2, L * 0.65, W);
+          ctx.fillStyle = "#9fc4dd"; ctx.fillRect(L / 2 - 8, -W / 2 + 3, 5, W - 6);
+        }
+        ctx.fillStyle = "#fff1a8";
+        ctx.fillRect(L / 2 - 2, -W / 2 + 1, 2.5, 3); ctx.fillRect(L / 2 - 2, W / 2 - 4, 2.5, 3);
+        ctx.fillStyle = "#ff5b5b";
+        ctx.fillRect(-L / 2, -W / 2 + 1, 2.5, 3); ctx.fillRect(-L / 2, W / 2 - 4, 2.5, 3);
+        ctx.restore();
+      }
+
+      const blinking = (c.turn !== 0) && c.edge && (c.edge.len - c.s < 170) && Math.floor(simTime * 3) % 2 === 0;
+      if (c.braking || blinking) {
+        const L = c.length;
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.angle);
+        if (c.braking) {
+          ctx.fillStyle = "rgba(255,40,40,0.9)";
+          ctx.fillRect(-L / 2 - 1, -W / 2 + 1, 3, 4); ctx.fillRect(-L / 2 - 1, W / 2 - 5, 3, 4);
+        }
+        if (blinking) {
+          ctx.fillStyle = "#ffb000";
+          const sy = c.turn === -1 ? -W / 2 - 1 : W / 2 - 2;       // rechts = +y, links = -y
+          if (c.turn === 2) { ctx.fillRect(L / 2 - 3, W / 2 - 2, 4, 3); }
+          else { ctx.fillRect(L / 2 - 3, sy, 4, 3); ctx.fillRect(-L / 2 - 1, sy, 4, 3); }
+        }
+        ctx.restore();
+      }
+    }
+
+    // Alles, was über den Autos liegt: Tankstellendächer, Ampeln
+    function drawOverlay() {
+      // Tunnel: Mauern und halbtransparentes Dach (ein durchgehender Pfad, damit sich das Dach nicht doppelt abdunkelt)
+      if (tunnelSegs.length && tunnelBox && visible(tunnelBox[0], tunnelBox[1], tunnelBox[2], tunnelBox[3])) {
+        ctx.lineCap = "butt"; ctx.lineJoin = "round";
+        ctx.strokeStyle = "rgba(24,26,31,0.66)";
+        ctx.lineWidth = 262;
+        ctx.beginPath();
+        let px = NaN, py = NaN;
+        for (const sg of tunnelSegs) {
+          if (sg.x1 !== px || sg.y1 !== py) ctx.moveTo(sg.x1, sg.y1);
+          ctx.lineTo(sg.x2, sg.y2);
+          px = sg.x2; py = sg.y2;
+        }
+        ctx.stroke();
+        // Mauern links und rechts des Dachs
+        ctx.strokeStyle = "#6a6f75"; ctx.lineWidth = 20;
+        ctx.beginPath();
+        for (const sg of tunnelSegs) {
+          const dx = sg.x2 - sg.x1, dy = sg.y2 - sg.y1, l = Math.hypot(dx, dy) || 1, nx = -dy / l * 140, ny = dx / l * 140;
+          for (const side of [-1, 1]) { ctx.moveTo(sg.x1 + nx * side, sg.y1 + ny * side); ctx.lineTo(sg.x2 + nx * side, sg.y2 + ny * side); }
+        }
+        ctx.stroke();
+      }
+      ctx.lineCap = "butt";
+      for (const d of queryIndex(IX.decor)) {
+        if (d.k === "canopy") {
+          if (!visible(d.x, d.y, d.w, d.h)) continue;
+          ctx.fillStyle = "rgba(224,165,38,0.55)";
+          ctx.fillRect(d.x, d.y, d.w, d.h);
+          ctx.strokeStyle = "rgba(120,80,10,0.8)"; ctx.lineWidth = 3;
+          ctx.strokeRect(d.x, d.y, d.w, d.h);
+        } else if (d.k === "sign") {
+          if (!visible(d.x - 70, d.y - 20, 140, 40)) continue;
+          ctx.fillStyle = "#1d7a4b"; ctx.fillRect(d.x - 64, d.y - 14, 128, 28);
+          ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.strokeRect(d.x - 62, d.y - 12, 124, 24);
+          ctx.fillStyle = "#fff"; ctx.font = "bold 13px system-ui"; ctx.textAlign = "center";
+          ctx.fillText("→ " + d.text, d.x, d.y + 5);
+        } else if (d.k === "turbine") {
+          if (!visible(d.x - 100, d.y - 100, 200, 200)) continue;
+          ctx.fillStyle = "#e8eaec"; ctx.beginPath(); ctx.arc(d.x, d.y, 6, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = "#f5f6f7"; ctx.lineWidth = 4; ctx.lineCap = "round";
+          const a0 = simTime * 0.9 + d.x * 0.013;
+          ctx.beginPath();
+          for (let k = 0; k < 3; k++) { const a = a0 + k * Math.PI * 2 / 3; ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + Math.cos(a) * 90, d.y + Math.sin(a) * 90); }
+          ctx.stroke();
+          ctx.lineCap = "butt";
+        }
+      }
+      for (const n of lightNodes) {
+        if (!visible(n.x - 90, n.y - 90, 180, 180)) continue;
+        const g = n.clear + 6;
+        const lamps = [
+          [-g, g, "x"], [g, -g, "x"],     // Ost-/West-Verkehr
+          [g, g, "y"], [-g, -g, "y"]      // Süd-/Nord-Verkehr
+        ];
+        for (const [ox, oy, axis] of lamps) {
+          ctx.fillStyle = "#1c1f24";
+          ctx.fillRect(n.x + ox - 4, n.y + oy - 4, 8, 8);
+          ctx.fillStyle = lightColor(n, axis);
+          ctx.beginPath(); ctx.arc(n.x + ox, n.y + oy, 3, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+
+    function drawCar(x, y, angle, color, isPlayer = false) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+
+      // Schatten
+      ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+      ctx.fillRect(-15, -6, 30, 14);
+      ctx.translate(1, 1);
+
+      const carIndex = isPlayer ? selectedCar : -1;
+
+      // RAKETE (Index 7) - spezielles Raketendesign
+      if (carIndex === 7) {
+        // Raketenkorper (spitz zulaufend)
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(-12, -5);
+        ctx.lineTo(15, -3);
+        ctx.lineTo(15, 3);
+        ctx.lineTo(-12, 5);
+        ctx.lineTo(-8, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Triebwerke
+        ctx.fillStyle = "#1a1a2e";
+        ctx.fillRect(-12, -4, 4, 2);
+        ctx.fillRect(-12, 2, 4, 2);
+
+        // Flammen-Effekt beim Driften
+        if (isPlayer && driftAmount > 0.1) {
+          ctx.fillStyle = `rgba(255, 100, 30, ${driftAmount * 0.6})`;
+          ctx.fillRect(-13, -2, 2 + driftAmount * 4, 4);
+          ctx.fillStyle = `rgba(255, 200, 0, ${driftAmount * 0.3})`;
+          ctx.fillRect(-13, -1, 1 + driftAmount * 2, 2);
+        }
+
+        // Fenster
+        ctx.fillStyle = "#e0f2ff";
+        ctx.fillRect(2, -2, 4, 4);
+
+        // Lichter
+        ctx.fillStyle = "#fff1a8";
+        ctx.fillRect(12, -3, 2, 2);
+        ctx.fillRect(12, 1, 2, 2);
+
+        ctx.restore();
+        return;
+      }
+
+      // KLEINWAGEN (Index 0) - kurz und rund
+      if (carIndex === 0 || color === "#57d6a1") {
+        ctx.fillStyle = "#17191d";
+        ctx.fillRect(-8, -9, 5, 3);
+        ctx.fillRect(3, -9, 5, 3);
+        ctx.fillRect(-8, 6, 5, 3);
+        ctx.fillRect(3, 6, 5, 3);
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 12, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+        ctx.fillRect(-10, -4, 20, 3);
+
+        ctx.fillStyle = "#263746";
+        ctx.fillRect(-5, -3, 3, 3);
+        ctx.fillRect(2, -3, 3, 3);
+      }
+      // LIMOUSINE (Index 1) - lang und elegant
+      else if (carIndex === 1 || color === "#68a8ff") {
+        ctx.fillStyle = "#17191d";
+        ctx.fillRect(-10, -10, 6, 4);
+        ctx.fillRect(6, -10, 6, 4);
+        ctx.fillRect(-10, 6, 6, 4);
+        ctx.fillRect(6, 6, 6, 4);
+
+        ctx.fillStyle = color;
+        ctx.fillRect(-14, -7, 32, 14);
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+        ctx.fillRect(-13, -5, 30, 4);
+
+        ctx.fillStyle = "#263746";
+        ctx.fillRect(-10, -3, 4, 3);
+        ctx.fillRect(-3, -3, 4, 3);
+        ctx.fillRect(4, -3, 4, 3);
+      }
+      // SPORTWAGEN (Index 2) - flach und aggressiv
+      else if (carIndex === 2 || color === "#ff6868") {
+        ctx.fillStyle = "#17191d";
+        ctx.fillRect(-10, -8, 6, 3);
+        ctx.fillRect(6, -8, 6, 3);
+        ctx.fillRect(-10, 5, 6, 3);
+        ctx.fillRect(6, 5, 6, 3);
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(-14, -5);
+        ctx.lineTo(12, -4);
+        ctx.lineTo(14, 0);
+        ctx.lineTo(12, 4);
+        ctx.lineTo(-14, 5);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+        ctx.fillRect(-13, -3, 25, 3);
+
+        ctx.fillStyle = "#1a1a2e";
+        ctx.fillRect(-7, -2, 3, 3);
+        ctx.fillRect(-1, -2, 3, 3);
+      }
+      // MUSCLE CAR (Index 3) - groß und kantig
+      else if (carIndex === 3 || color === "#ff9d3c") {
+        ctx.fillStyle = "#17191d";
+        ctx.fillRect(-11, -10, 6, 4);
+        ctx.fillRect(7, -10, 6, 4);
+        ctx.fillRect(-11, 6, 6, 4);
+        ctx.fillRect(7, 6, 6, 4);
+
+        ctx.fillStyle = color;
+        ctx.fillRect(-15, -8, 34, 16);
+
+        ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+        ctx.fillRect(-2, -8, 4, 16);
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+        ctx.fillRect(-13, -6, 30, 4);
+
+        ctx.fillStyle = "#1a1a2e";
+        ctx.fillRect(-9, -2, 4, 3);
+        ctx.fillRect(3, -2, 4, 3);
+      }
+      // RALLYE-AUTO (Index 4) - robust und eckig
+      else if (carIndex === 4 || color === "#f2f5f8") {
+        ctx.fillStyle = "#17191d";
+        ctx.fillRect(-10, -10, 6, 3);
+        ctx.fillRect(6, -10, 6, 3);
+        ctx.fillRect(-10, 7, 6, 3);
+        ctx.fillRect(6, 7, 6, 3);
+
+        ctx.fillStyle = color;
+        ctx.fillRect(-13, -7, 28, 14);
+
+        ctx.fillStyle = "rgba(150, 150, 150, 0.2)";
+        ctx.fillRect(-12, -5, 26, 3);
+
+        ctx.fillStyle = "#4a5a6a";
+        ctx.fillRect(-8, -2, 3, 3);
+        ctx.fillRect(1, -2, 3, 3);
+        ctx.fillRect(8, -2, 3, 3);
+      }
+      // SUPERSPORTLER (Index 5) - niedrig und futuristisch
+      else if (carIndex === 5 || color === "#d68cff") {
+        ctx.fillStyle = "#17191d";
+        ctx.fillRect(-10, -8, 6, 3);
+        ctx.fillRect(6, -8, 6, 3);
+        ctx.fillRect(-10, 5, 6, 3);
+        ctx.fillRect(6, 5, 6, 3);
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(-12, -4);
+        ctx.lineTo(14, -3);
+        ctx.lineTo(15, 0);
+        ctx.lineTo(14, 3);
+        ctx.lineTo(-12, 4);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+        ctx.fillRect(-11, -2, 24, 2);
+
+        ctx.fillStyle = "#1a3a4a";
+        ctx.fillRect(-6, -1, 3, 2);
+        ctx.fillRect(1, -1, 3, 2);
+      }
+      // HYPERCAR (Index 6) - extrem niedrig und breites Design
+      else if (carIndex === 6 || color === "#ffe14d") {
+        ctx.fillStyle = "#17191d";
+        ctx.fillRect(-11, -8, 6, 3);
+        ctx.fillRect(7, -8, 6, 3);
+        ctx.fillRect(-11, 5, 6, 3);
+        ctx.fillRect(7, 5, 6, 3);
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(-13, -3);
+        ctx.lineTo(15, -2);
+        ctx.lineTo(16, 0);
+        ctx.lineTo(15, 2);
+        ctx.lineTo(-13, 3);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-11, -2);
+        ctx.lineTo(13, -1);
+        ctx.stroke();
+
+        ctx.fillStyle = "#2a3a4a";
+        ctx.fillRect(-5, -1, 3, 2);
+        ctx.fillRect(2, -1, 3, 2);
+      }
+      else {
+        // Fallback
+        ctx.fillStyle = "#17191d";
+        ctx.fillRect(-10, -10, 8, 4);
+        ctx.fillRect(5, -10, 8, 4);
+        ctx.fillRect(-10, 6, 8, 4);
+        ctx.fillRect(5, 6, 8, 4);
+
+        ctx.fillStyle = color;
+        ctx.fillRect(-15, -7, 30, 14);
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+        ctx.fillRect(-13, -6, 26, 5);
+
+        ctx.fillStyle = "#263746";
+        ctx.fillRect(-5, -5, 11, 10);
+      }
+
+      ctx.fillStyle = "#fff1a8";
+      ctx.fillRect(12, -5, 3, 3);
+      ctx.fillRect(12, 2, 3, 3);
+
+      ctx.fillStyle = "#ff5b5b";
+      ctx.fillRect(-15, -5, 3, 3);
+      ctx.fillRect(-15, 2, 3, 3);
+
+      ctx.restore();
+    }
+
+    function drawParticles(additive) {
+      ctx.save();
+      if (additive) ctx.globalCompositeOperation = "lighter";
+      for (const p of particles) {
+        if (p.add !== additive || !visible(p.x - 10, p.y - 10, 20, 20)) continue;
+        ctx.globalAlpha = Math.max(0, p.alpha * p.life / p.max);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawPolice(c) {
+      if (!visible(c.x - 40, c.y - 40, 80, 80)) return;
+      const on = sirenPhase();
+      drawCar(c.x, c.y, c.angle, "#232b38");
+
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.rotate(c.angle);
+      ctx.fillStyle = "#f2f5f8";
+      ctx.fillRect(-9, -7, 2, 14);                      // weißer Streifen
+      ctx.fillStyle = on ? "#ff3b3b" : "#3b4a66";
+      ctx.fillRect(-3, -6, 4, 5);
+      ctx.fillStyle = on ? "#3b4a66" : "#3b7bff";
+      ctx.fillRect(-3, 1, 4, 5);
+      // Blaulicht-Schein
+      ctx.globalCompositeOperation = "lighter";
+      const g = ctx.createRadialGradient(0, on ? -3 : 3, 0, 0, on ? -3 : 3, 46);
+      g.addColorStop(0, on ? "rgba(255,60,60,0.55)" : "rgba(60,120,255,0.55)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(-50, -50, 100, 100);
+      ctx.restore();
+
+      if (c.stun > 0) {
+        ctx.save();
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 14px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("💫", c.x, c.y - 20);
+        ctx.restore();
+      }
+    }
+
+    function drawRunHud() {
+      const ui = uiScale;
+      const W = canvas.width / ui, H = canvas.height / ui;
+      const on = sirenPhase();
+      ctx.save();
+      ctx.scale(ui, ui);
+
+      // Tempo-Linien am Bildrand
+      const maxV = ST.maxSpeed / 13;
+      const sp = Math.hypot(player.vx, player.vy) / maxV;
+      if (settings.speedLines && !player.crashed && (sp > 0.6 || run.boost > 0)) {
+        const count = Math.round((sp - 0.5) * 24) + (run.boost > 0 ? 10 : 0);
+        ctx.strokeStyle = run.boost > 0 ? LEVEL_COLORS[run.boostLevel] : "#ffffff";
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < count; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const r0 = Math.min(W, H) * rnd(0.42, 0.62), len = rnd(30, 90);
+          ctx.globalAlpha = rnd(0.06, 0.22);
+          ctx.beginPath();
+          ctx.moveTo(W / 2 + Math.cos(a) * r0 * 1.5, H / 2 + Math.sin(a) * r0);
+          ctx.lineTo(W / 2 + Math.cos(a) * (r0 + len) * 1.5, H / 2 + Math.sin(a) * (r0 + len));
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Farb-Blitz (Crash, Turbo, Erwischt)
+      if (run.flash > 0) {
+        ctx.fillStyle = `rgba(${run.flashColor},${Math.min(0.5, run.flash * 0.5)})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+    
+      let nearest = Infinity;
+      for (const c of chasers) nearest = Math.min(nearest, Math.hypot(c.x - player.x, c.y - player.y));
+      if (nearest < 450) {
+        const k = 1 - nearest / 450;
+        const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.85);
+        g.addColorStop(0, "rgba(0,0,0,0)");
+        g.addColorStop(1, on ? `rgba(255,40,40,${0.45 * k})` : `rgba(40,90,255,${0.45 * k})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      // Pfeile zu Verfolgern außerhalb des Bildes
+      for (const c of chasers) {
+        const dx = c.x - camCx, dy = c.y - camCy, cr = Math.cos(camRot), sr = Math.sin(camRot);
+        const sx = W / 2 + (dx * cr - dy * sr) * run.zoom / ui, sy = H / 2 + (dx * sr + dy * cr) * run.zoom / ui;
+        if (sx > 0 && sx < W && sy > 0 && sy < H) continue;
+        const ang = Math.atan2(sy - H / 2, sx - W / 2);
+        const m = 26;
+        const k = Math.min((W / 2 - m) / Math.max(1e-4, Math.abs(Math.cos(ang))),
+                           (H / 2 - m) / Math.max(1e-4, Math.abs(Math.sin(ang))));
+        const d = Math.hypot(c.x - player.x, c.y - player.y);
+        ctx.save();
+        ctx.translate(W / 2 + Math.cos(ang) * k, H / 2 + Math.sin(ang) * k);
+        ctx.rotate(ang);
+        ctx.globalAlpha = clamp(1.25 - d / 2500, 0.35, 1);
+        ctx.fillStyle = on ? "#ff4b4b" : "#4b8bff";
+        ctx.beginPath();
+        ctx.moveTo(14, 0); ctx.lineTo(-8, -9); ctx.lineTo(-8, 9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.textAlign = "center";
+
+      // Schonfrist
+      if (run.bustTimer <= 0 && run.time < GRACE_SECONDS) {
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 18px system-ui";
+        ctx.shadowColor = "#000"; ctx.shadowBlur = 6;
+        ctx.fillText(`${Math.ceil(GRACE_SECONDS - run.time)}`, W / 2, H - 22);
+        ctx.shadowBlur = 0;
+      }
+
+      // Drift-Kombo: Multiplikator, Punkte, Turbo-Ladung bzw. Einlöse-Frist
+      if (run.pending > 0 || run.chain > 0) {
+        const mult = Math.max(1, run.chain + (run.drifting ? Math.floor(run.driftTime / 1.5) : 0));
+        const w = 280, h = 74, x = W / 2 - w / 2, y = H - h - 40;
+        ctx.fillStyle = "rgba(10,14,20,0.82)";
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = run.drifting ? LEVEL_COLORS[driftLevel()] : "#ffffff44";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+
+        ctx.fillStyle = "#ffd166";
+        ctx.font = "bold 22px system-ui";
+        ctx.fillText(`DRIFT x${mult}`, W / 2, y + 28);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 18px system-ui";
+        ctx.fillText(Math.round(run.pending).toLocaleString(LOCALE), W / 2, y + 50);
+
+        ctx.fillStyle = "#ffffff22";
+        ctx.fillRect(x + 12, y + 58, w - 24, 7);
+        if (run.drifting) {
+          const lvl = driftLevel();
+          const from = lvl === 0 ? 0 : LEVEL_AT[lvl - 1];
+          const to = lvl >= LEVEL_AT.length ? LEVEL_AT[LEVEL_AT.length - 1] : LEVEL_AT[lvl];
+          const f = lvl >= LEVEL_AT.length ? 1 : (run.driftTime - from) / (to - from);
+          ctx.fillStyle = LEVEL_COLORS[Math.min(LEVEL_COLORS.length - 1, lvl + (f > 0 ? 1 : 0))];
+          ctx.fillRect(x + 12, y + 58, (w - 24) * clamp(f, 0, 1), 7);
+        } else if (run.comboTimer > 0) {
+          ctx.fillStyle = "#65e6a5";
+          ctx.fillRect(x + 12, y + 58, (w - 24) * clamp(run.comboTimer / 2, 0, 1), 7);
+          ctx.fillStyle = "#c5d0db";
+          ctx.font = "11px system-ui";
+          ctx.fillText(L("weiter driften – sonst wird eingelöst", "keep drifting – or it gets cashed in"), W / 2, y - 6);
+        }
+      }
+
+      // Boost-Ladeanzeige (oben Mitte); B zündet
+      {
+        const bw = 150, bx = W / 2 - bw / 2, by = 12;
+        ctx.fillStyle = "rgba(10,14,20,0.7)";
+        ctx.fillRect(bx - 3, by - 3, bw + 6, 14);
+        ctx.fillStyle = run.boost > 0 ? "#ffffff" : run.boostCharge >= BOOST_MIN_CHARGE ? "#65e6ff" : "#5b7a99";
+        ctx.fillRect(bx, by, bw * (run.boost > 0 ? clamp(run.boost / BOOST_MAX_SECONDS, 0, 1) : run.boostCharge), 8);
+        ctx.fillStyle = "#c5d0db";
+        ctx.font = "bold 10px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText(run.boost > 0 ? "BOOST" : run.boostCharge >= BOOST_MIN_CHARGE ? L("BOOST bereit – B", "BOOST ready – B") : L("BOOST lädt beim Driften", "BOOST charges while drifting"), W / 2, by + 24);
+      }
+
+      // Pop-up-Meldungen
+      let py = H * 0.34;
+      for (let i = popups.length - 1; i >= 0; i--) {
+        const p = popups[i];
+        const t = 1 - p.life / 1.6;
+        ctx.globalAlpha = clamp(p.life / 0.5, 0, 1);
+        ctx.font = `800 ${p.size * (t < 0.1 ? 0.7 + t * 3 : 1)}px system-ui`;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = "#000"; ctx.shadowBlur = 8;
+        ctx.fillText(p.text, W / 2, py - t * 24);
+        py += p.size + 6;
+      }
+      ctx.restore();
+    }
+
+    function drawBustScreen() {
+      if (run.bustTimer <= 0 || !run.bustInfo) return;
+      const W = canvas.width / uiScale, H = canvas.height / uiScale, b = run.bustInfo;
+      ctx.save();
+      ctx.scale(uiScale, uiScale);
+      ctx.fillStyle = "rgba(8,10,16,0.78)";
+      ctx.fillRect(0, 0, W, H);
+      ctx.textAlign = "center";
+      ctx.shadowColor = "#000"; ctx.shadowBlur = 8;
+      ctx.fillStyle = sirenPhase() ? "#ff4b4b" : "#4b8bff";
+      ctx.font = "900 46px system-ui";
+      ctx.fillText(L("ERWISCHT!", "BUSTED!"), W / 2, H / 2 - 40);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 22px system-ui";
+      ctx.fillText(L(`${b.score.toLocaleString(LOCALE)} Punkte · ${fmtTime(b.time)} überlebt`, `${b.score.toLocaleString(LOCALE)} points · survived ${fmtTime(b.time)}`), W / 2, H / 2 + 6);
+      ctx.fillStyle = b.isBest ? "#ffd166" : "#c5d0db";
+      ctx.font = "16px system-ui";
+      ctx.fillText(b.isBest ? L("NEUER REKORD!", "NEW BEST!") : L("Rekord: ", "Best: ") + run.best.toLocaleString(LOCALE), W / 2, H / 2 + 36);
+      if (b.lost > 0) {
+        ctx.fillStyle = "#ff8a8a";
+        ctx.fillText(L(`${b.lost.toLocaleString(LOCALE)} Kombo-Punkte nicht eingelöst`, `${b.lost.toLocaleString(LOCALE)} combo points not cashed in`), W / 2, H / 2 + 60);
+      }
+      ctx.restore();
+    }
+
+    function drawFireball() {
+      if (!player.crashed || !crashPosition) return;
+
+      // Rakete: Spezielle Animation
+      if (selectedCar === 7) {
+        const maxTimer = 1.5;
+        const progress = 1 - crashTimer / maxTimer;
+        const rocketY = crashPosition.y - progress * 300;
+
+        ctx.save();
+
+        // Raketen-Flammen nach unten
+        const flameLength = progress * 200;
+        ctx.fillStyle = `rgba(255, 100, 30, ${(1 - progress) * 0.8})`;
+        ctx.fillRect(crashPosition.x - 8, crashPosition.y + 15, 16, flameLength);
+
+        ctx.fillStyle = `rgba(255, 200, 0, ${(1 - progress) * 0.8})`;
+        ctx.fillRect(crashPosition.x - 5, crashPosition.y + 15, 10, flameLength * 0.7);
+
+        // Rakete fliegt hoch und verblasst
+        ctx.globalAlpha = Math.max(0, 1 - progress);
+        ctx.fillStyle = "#4df0ff";
+        ctx.fillRect(crashPosition.x - 15, rocketY - 7, 30, 14);
+
+        // Glanz
+        ctx.fillStyle = `rgba(200, 200, 255, ${(1 - progress) * 0.3})`;
+        ctx.fillRect(crashPosition.x - 13, rocketY - 6, 26, 5);
+
+        ctx.restore();
+        return;
+      }
+
+      // Normaler Crash
+      const progress = 1 - crashTimer / 1.15;
+      const radius = 18 + progress * 55;
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - progress * 0.75);
+
+      ctx.fillStyle = "#ff4b24";
+      ctx.beginPath();
+      ctx.arc(crashPosition.x, crashPosition.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#ffad32";
+      ctx.beginPath();
+      ctx.arc(crashPosition.x, crashPosition.y, radius * 0.68, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#fff0a6";
+      ctx.beginPath();
+      ctx.arc(crashPosition.x, crashPosition.y, radius * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function render() {
+      // Beim schnellen Fahren zoomt die Kamera etwas heraus (run.zoom < 1)
+      const zoom = run.zoom;
+      viewW = canvas.width / zoom;
+      viewH = canvas.height / zoom;
+
+      // Kamera dreht sich mit dem Auto (Fahrtrichtung zeigt immer nach oben); weiches Nachführen
+      const camTarget = settings.rotateCamera && !player.crashed ? -Math.PI / 2 - player.angle : 0;
+      if (settings.rotateCamera || Math.abs(camRot) > 0.001) {
+        const diff = Math.atan2(Math.sin(camTarget - camRot), Math.cos(camTarget - camRot));
+        camRot += diff * 0.18;
+        if (Math.abs(diff) < 0.001) camRot = camTarget;
+      }
+      const rotated = Math.abs(camRot) > 0.001;
+      const shakeAmp = settings.shake ? run.shake * run.shake * 14 : 0;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      if (rotated) {
+        // Sichtbereich = Hüllrechteck des gedrehten Bildes, zentriert auf dem Auto
+        camCx = player.x; camCy = player.y;
+        const hw = viewW / 2, hh = viewH / 2, c = Math.abs(Math.cos(camRot)), s = Math.abs(Math.sin(camRot));
+        const ex = c * hw + s * hh, ey = s * hw + c * hh;
+        viewX = camCx - ex; viewY = camCy - ey; viewW = ex * 2; viewH = ey * 2;
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.scale(zoom, zoom);
+        ctx.rotate(camRot);
+        ctx.translate(-camCx + rnd(-shakeAmp, shakeAmp), -camCy + rnd(-shakeAmp, shakeAmp));
+      } else {
+        const cameraX = clamp(player.x - viewW / 2, 0, Math.max(0, world.width - viewW));
+        const cameraY = clamp(player.y - viewH / 2, 0, Math.max(0, world.height - viewH));
+        viewX = cameraX; viewY = cameraY;
+        camCx = cameraX + viewW / 2; camCy = cameraY + viewH / 2;
+        ctx.scale(zoom, zoom);
+        ctx.translate(-cameraX + rnd(-shakeAmp, shakeAmp), -cameraY + rnd(-shakeAmp, shakeAmp));
+      }
+
+      drawWorld();
+      drawParticles(false);
+
+      for (const npc of npcs) drawNpc(npc);
+      for (const c of chasers) drawPolice(c);
+
+      if (!player.crashed) {
+        drawCar(player.x, player.y, player.angle, cars[selectedCar].color, true);
+      } else {
+        drawFireball();
+      }
+      drawOverlay();
+      drawParticles(true);
+
+      ctx.restore();
+      drawRunHud();
+      drawMinimap();
+      drawBustScreen();
+
+      // Dev-Info
+      if (devMode) {
+        ctx.fillStyle = "#00ff00";
+        ctx.font = "10px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText("DEV-MODUS (` zum Deaktivieren)", 4, 14);
+        devOutput.slice(-5).forEach((line, i) => {
+          ctx.fillText(line, 4, 24 + i * 10);
+        });
+      }
+    }
+
+    function drawMinimap() {
+      const k = Math.min(uiScale, 1.4);
+      const w = MM_W, h = MM_H;
+      const x0 = canvas.width / k - w - 14, y0 = 14;
+      const sx = w / world.width, sy = h / world.height;
+
+      ctx.save();
+      ctx.scale(k, k);
+      ctx.globalAlpha = 0.85;
+      if (minimapCache) ctx.drawImage(minimapCache, x0, y0, w, h);
+      else { ctx.fillStyle = "#2f4a35"; ctx.fillRect(x0, y0, w, h); }
+      ctx.fillStyle = "#ffd166";
+      for (const c of coins) {      // nur Münzen in der Nähe, sonst ist die Karte voller gelber Punkte
+        if (c.respawn <= 0 && Math.abs(c.x - player.x) < 5000 && Math.abs(c.y - player.y) < 5000) ctx.fillRect(x0 + c.x * sx - 1, y0 + c.y * sy - 1, 2, 2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = sirenPhase() ? "#ff4b4b" : "#4b8bff";
+      for (const c of chasers) {
+        ctx.beginPath();
+        ctx.arc(x0 + c.x * sx, y0 + c.y * sy, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = cars[selectedCar].color;
+      ctx.beginPath();
+      ctx.arc(x0 + player.x * sx, y0 + player.y * sy, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x0, y0, w, h);
+      ctx.restore();
+    }
+
+    // Spielfläche passend ins Fenster einpassen (ganze Seite sichtbar) und Vollbild.
+    // Echtes Vollbild per Fullscreen-API; wo es fehlt (z. B. iPhone-Safari) gibt es ein Ersatz-Vollbild,
+    // das die ganze sichtbare Fläche nutzt.
+    const screenEl = document.querySelector(".screen");
+    const headerEl = document.querySelector("header");
+    let fakeFullscreen = false;
+    function fitScreen() {
+      const fs = !!document.fullscreenElement || !!document.webkitFullscreenElement || fakeFullscreen;
+      document.body.classList.toggle("is-fullscreen", fs);
+      const vv = window.visualViewport;
+      const vw = vv ? vv.width : innerWidth, vh = vv ? vv.height : innerHeight;
+      const headerH = headerEl && headerEl.offsetParent !== null ? headerEl.offsetHeight + 8 : 0;
+      // Randlos: Vollbild oder Handy im Querformat -> Spielfeld füllt den ganzen Bildschirm von Rand zu Rand
+      const edge = vw > vh && (fs || vh <= 520);
+      document.body.classList.toggle("edge", edge);
+      let w, h = null;
+      if (edge) {
+        w = Math.floor(vw); h = Math.floor(vh);
+        // Auflösung ans Seitenverhältnis anpassen (mehr Karte seitlich statt Balken oder Verzerrung)
+        const cw = Math.round(clamp(canvas.height * vw / vh, 960, 1500));
+        if (canvas.width !== cw) canvas.width = cw;
+      } else {
+        if (canvas.width !== 960) canvas.width = 960;
+        const pad = fs ? 0 : 12;
+        const availW = vw - pad;
+        const availH = vh - pad - (fs ? 0 : headerH) - (fs ? 0 : hintHeight());
+        w = Math.floor(Math.max(240, Math.min(availW, availH * (canvas.width / canvas.height), 1400)));
+      }
+      screenEl.style.width = w + "px";
+      screenEl.style.height = h ? h + "px" : "";
+      uiScale = clamp(0.75 * canvas.width / w, 1, 2.2);       // kleine Bildschirme: Anzeigen im Spiel größer zeichnen
+    }
+    function hintHeight() {
+      const hint = document.querySelector(".rotate-hint");
+      return hint && hint.offsetParent !== null ? hint.offsetHeight + 6 : 0;
+    }
+    function toggleFullscreen() {
+      const active = document.fullscreenElement || document.webkitFullscreenElement;
+      if (active) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        return;
+      }
+      if (fakeFullscreen) { fakeFullscreen = false; fitScreen(); return; }
+      const de = document.documentElement;
+      const request = de.requestFullscreen || de.webkitRequestFullscreen;
+      const fallback = () => { fakeFullscreen = true; window.scrollTo(0, 1); fitScreen(); };
+      if (!request) { fallback(); return; }
+      try {
+        const result = request.call(de);
+        if (result && result.then) {
+          result.then(() => {
+            // Handy: nach Möglichkeit Querformat erzwingen
+            if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(() => {});
+          }).catch(fallback);
+        }
+      } catch { fallback(); }
+    }
+    for (const id of ["#fsButton", "#fsButton2"]) document.querySelector(id).addEventListener("click", toggleFullscreen);
+    addEventListener("resize", fitScreen);
+    addEventListener("orientationchange", () => setTimeout(fitScreen, 200));
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", fitScreen);
+    document.addEventListener("fullscreenchange", fitScreen);
+    document.addEventListener("webkitfullscreenchange", fitScreen);
+    fitScreen();
+
+    // ---------- Einstellungsseite ----------
+    const settingsPage = document.querySelector("#settingsPage");
+    document.documentElement.style.setProperty("--ts", settings.touchScale);
+    let settingsOpen = false;
+    const STEER_PRESETS = {
+      direct: { steerRise: 0.12, steerReverse: 0.25, steerReturn: 0.2, steerCurve: 1.0 },
+      normal: { steerRise: 0.06, steerReverse: 0.14, steerReturn: 0.12, steerCurve: 1.25 },
+      soft:   { steerRise: 0.03, steerReverse: 0.08, steerReturn: 0.07, steerCurve: 1.6 }
+    };
+
+    function applyTouchMode() {
+      const off = settings.touchMode === 2 || (settings.touchMode === 0 && keyboardMode);
+      touchControls.classList.toggle("hidden", off);
+      keyboardHelp.classList.toggle("visible", settings.touchMode === 2 || keyboardMode);
+    }
+
+    function refreshSettingsUI() {
+      applyTouchMode();
+      document.documentElement.style.setProperty("--ts", settings.touchScale);
+      settingsPage.querySelectorAll("[data-key]").forEach(input => {
+        const v = settings[input.dataset.key];
+        if (input.type === "checkbox") input.checked = !!v; else input.value = v;
+      });
+      settingsPage.querySelectorAll("output[data-for]").forEach(o => {
+        const v = settings[o.dataset.for];
+        o.textContent = Number.isInteger(v) ? v : v.toFixed(o.dataset.for === "steerCurve" ? 2 : 3);
+      });
+    }
+
+    function toggleSettings() {
+      settingsOpen = !settingsOpen;
+      settingsPage.hidden = !settingsOpen;
+      keys.clear();
+      for (const k of Object.keys(touchInput)) touchInput[k] = false;
+      if (settingsOpen) refreshSettingsUI();
+    }
+
+    settingsPage.querySelectorAll("[data-key]").forEach(input => {
+      input.addEventListener("input", () => {
+        settings[input.dataset.key] = input.type === "checkbox" ? input.checked : Number(input.value);
+        if (input.dataset.key === "touchMode") keyboardMode = false;
+        if (input.dataset.key in baseDevice) baseDevice[input.dataset.key] = settings[input.dataset.key];
+        saveSettings();
+        refreshSettingsUI();
+      });
+    });
+    settingsPage.querySelectorAll("[data-preset]").forEach(btn => {
+      btn.addEventListener("click", () => { Object.assign(settings, STEER_PRESETS[btn.dataset.preset]); saveSettings(); refreshSettingsUI(); });
+    });
+    document.querySelector("#settingsReset").addEventListener("click", () => { Object.assign(settings, DEFAULT_SETTINGS); saveSettings(); refreshSettingsUI(); });
+    document.querySelector("#settingsClose").addEventListener("click", toggleSettings);
+    document.querySelector("#settingsButton").addEventListener("click", toggleSettings);
+    document.querySelector("#settingsButton2").addEventListener("click", toggleSettings);
+
+    applyTouchMode();
+
+    function frame(time) {
+      const dt = Math.min((time - lastTime) / 16.67 || 1, 2);
+      lastTime = time;
+      update(dt);
+      render();
+      requestAnimationFrame(frame);
+    }
+
+    // Instant First Paint: render sofort (leere Welt)
+    function renderEmpty() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = currentLevel === "moon" ? "#0a0a1a" : "#49694d";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    renderEmpty();
+
+    requestAnimationFrame(frame);
+    idle(initializeMapLazy);

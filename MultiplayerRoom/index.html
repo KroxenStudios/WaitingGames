@@ -3,11 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <meta name="theme-color" content="#090d18">
+  <meta name="theme-color" content="#2b2f34">
   <title>MultiplayerRoom</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Start-Overlay "KroxenStudios" (wie in den anderen WaitingGames) */
+    .splash { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 22px; background: #2b2f34; pointer-events: none; animation: splash-out 0.6s ease 2.2s forwards; }
+    .splash-name { color: #e10600; font-size: clamp(32px, 9vw, 84px); font-weight: 900; letter-spacing: 0.08em; animation: splash-in 0.9s ease both; }
+    .splash-bar { width: clamp(140px, 30vw, 320px); height: 3px; background: #e1060033; overflow: hidden; }
+    .splash-bar i { display: block; width: 100%; height: 100%; background: #e10600; transform-origin: left; animation: splash-load 2s ease-in-out both; }
+    @keyframes splash-in { from { opacity: 0; letter-spacing: 0.3em; } to { opacity: 1; letter-spacing: 0.08em; } }
+    @keyframes splash-load { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    @keyframes splash-out { to { opacity: 0; visibility: hidden; } }
+  </style>
 </head>
 <body>
+  <div class="splash" id="splash" aria-hidden="true">
+    <div class="splash-name">KroxenStudios</div>
+    <div class="splash-bar"><i></i></div>
+  </div>
+
   <main id="game">
     <div id="hud">
       <strong>MultiplayerRoom</strong>
@@ -16,14 +31,19 @@
       <a href="charakter.html">Charakter anpassen</a>
     </div>
 
-    <div id="chatMessages" aria-live="polite"></div>
+    <div id="hint" aria-live="polite"></div>
+
+    <div id="zoom">
+      <button id="zoomIn" type="button" aria-label="Hineinzoomen">+</button>
+      <button id="zoomOut" type="button" aria-label="Herauszoomen">&minus;</button>
+    </div>
 
     <form id="chatForm" autocomplete="off">
       <input
         id="chatInput"
         type="text"
-        maxlength="50"
-        placeholder="Nachricht (max. 50 Zeichen)"
+        maxlength="100"
+        placeholder="Nachricht (max. 100 Zeichen)"
         aria-label="Chatnachricht"
       >
       <button type="submit">Senden</button>
@@ -33,13 +53,7 @@
       <div id="stick"></div>
     </div>
 
-    <details id="admin">
-      <summary>Admin</summary>
-      <input id="adminToken" type="password" placeholder="Admin-Token">
-      <input id="kickId" type="text" placeholder="Spieler-ID">
-      <button id="kickButton" type="button">Spieler kicken</button>
-      <small>Klicke im Spiel auf eine Spielerfigur, um ihre ID auszuwählen.</small>
-    </details>
+    <button id="jumpButton" type="button" aria-label="Springen">Sprung</button>
   </main>
 
   <script type="module" src="game.js"></script>

@@ -130,42 +130,6 @@ button {
   color: #fff;
 }
 
-/* Flüchtiger Chat unten links */
-#chatMessages {
-  position: absolute;
-  z-index: 2;
-  left: 16px;
-  bottom: 94px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  max-width: min(460px, calc(100vw - 170px));
-  pointer-events: none;
-}
-
-.chat-line {
-  max-width: 100%;
-  padding: 8px 13px;
-  overflow-wrap: anywhere;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
-  border-radius: 6px 14px 14px 14px;
-  background: var(--panel);
-  box-shadow: 0 6px 18px #0004;
-  color: var(--text);
-  font-size: 14px;
-  backdrop-filter: blur(10px);
-  animation: chat-in 0.18s ease-out;
-}
-
-@keyframes chat-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
-
 /* Chat-Eingabe */
 #chatForm {
   position: absolute;
@@ -177,8 +141,7 @@ button {
   gap: 8px;
 }
 
-#chatInput,
-#admin input {
+#chatInput {
   min-width: 0;
   padding: 11px 14px;
   border: 1px solid var(--line);
@@ -189,27 +152,20 @@ button {
   backdrop-filter: blur(10px);
 }
 
-#admin input {
-  border-radius: 10px;
-}
-
 #chatInput {
   flex: 1;
 }
 
-#chatInput::placeholder,
-#admin input::placeholder {
+#chatInput::placeholder {
   color: #8da0b8;
 }
 
-#chatInput:focus,
-#admin input:focus {
+#chatInput:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-#chatForm button,
-#admin button {
+#chatForm button {
   padding: 10px 18px;
   border: 0;
   border-radius: 999px;
@@ -219,18 +175,18 @@ button {
   transition: filter 0.15s, transform 0.1s;
 }
 
-#admin button {
-  border-radius: 10px;
-}
-
-#chatForm button:hover,
-#admin button:hover {
+#chatForm button:hover {
   filter: brightness(1.1);
 }
 
-#chatForm button:active,
-#admin button:active {
+#chatForm button:active {
   transform: scale(0.97);
+}
+
+/* Steuerelemente für Touch/Handheld: nur sichtbar, wenn berührt wird */
+body:not(.touch) #joystick,
+body:not(.touch) #jumpButton {
+  display: none;
 }
 
 /* Virtueller Steuerknopf für Touch und Handheld */
@@ -262,38 +218,6 @@ button {
   background: radial-gradient(circle at 35% 30%, #b8ffe4, var(--accent));
   box-shadow: 0 4px 14px #0006;
   pointer-events: none;
-}
-
-/* Admin-Bedienelemente */
-#admin {
-  position: absolute;
-  z-index: 4;
-  top: 76px;
-  right: 16px;
-  width: min(260px, calc(100vw - 32px));
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--panel);
-  box-shadow: 0 10px 34px #0004;
-  backdrop-filter: blur(14px);
-}
-
-#admin summary {
-  color: var(--text);
-  cursor: pointer;
-  font-size: 14px;
-}
-
-#admin[open] {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-#admin small {
-  color: var(--muted);
-  line-height: 1.4;
 }
 
 /* Schmalere Handhelds und Telefone */
@@ -349,14 +273,97 @@ button {
     left: 28px;
   }
 
-  #chatMessages {
-    left: 10px;
-    bottom: 184px;
-    max-width: calc(100vw - 20px);
+}
+
+/* Sprungknopf rechts */
+#jumpButton {
+  position: absolute;
+  z-index: 3;
+  right: 22px;
+  bottom: 92px;
+  width: 92px;
+  height: 92px;
+  border: 2px solid #ffffff66;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #b8ffe4, var(--accent));
+  box-shadow: 0 8px 24px #0005;
+  color: #08231a;
+  font-weight: 700;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#jumpButton:active {
+  transform: scale(0.94);
+  filter: brightness(1.1);
+}
+
+/* Zoom-Tasten */
+#zoom {
+  position: absolute;
+  z-index: 3;
+  top: 78px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#zoom button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  font-size: 22px;
+  line-height: 1;
+}
+
+#zoom button:active {
+  background: var(--accent-soft);
+}
+
+/* Bedienhinweis */
+#hint {
+  position: absolute;
+  z-index: 2;
+  top: 78px;
+  left: 50%;
+  max-width: calc(100vw - 140px);
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+}
+
+#hint[hidden] {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  #zoom {
+    top: 66px;
+    right: 10px;
   }
 
-  #admin {
-    top: 62px;
-    right: 10px;
+  #hint {
+    top: 66px;
+    font-size: 12px;
+    max-width: calc(100vw - 80px);
+  }
+
+  #jumpButton {
+    right: 16px;
+    bottom: 76px;
+    width: 84px;
+    height: 84px;
   }
 }

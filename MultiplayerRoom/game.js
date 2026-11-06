@@ -20,7 +20,7 @@ try {
 }
 
 const playerName =
-  (characterSettings.name || prompt("Wie möchtest du heißen?") || "Gast")
+  (characterSettings.name || "Gast")
     .trim()
     .slice(0, 20) || "Gast";
 
@@ -95,13 +95,13 @@ function makeSkyTexture() {
 
 const scene = new THREE.Scene();
 scene.background = makeSkyTexture();
-scene.fog = new THREE.Fog("#cdebf5", 26, 62);
+scene.fog = new THREE.Fog("#cdebf5", 30, 80);
 
 const camera = new THREE.PerspectiveCamera(
   68,
   window.innerWidth / window.innerHeight,
   0.1,
-  100
+  140
 );
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -121,10 +121,10 @@ const mainLight = new THREE.DirectionalLight(0xfff0d2, 2.7);
 mainLight.position.set(-9, 15, 7);
 mainLight.castShadow = true;
 mainLight.shadow.mapSize.set(2048, 2048);
-mainLight.shadow.camera.left = -20;
-mainLight.shadow.camera.right = 20;
-mainLight.shadow.camera.top = 20;
-mainLight.shadow.camera.bottom = -20;
+mainLight.shadow.camera.left = -15;
+mainLight.shadow.camera.right = 15;
+mainLight.shadow.camera.top = 15;
+mainLight.shadow.camera.bottom = -15;
 mainLight.shadow.camera.near = 1;
 mainLight.shadow.camera.far = 50;
 mainLight.shadow.camera.updateProjectionMatrix();
@@ -183,9 +183,21 @@ function makeGrassTexture() {
   return texture;
 }
 
-// Weite Wiese außerhalb des Raums, damit der Rand nicht im Nichts endet.
+
+// ---------------------------------------------------------------------------
+// Welt: 40 x 40, natürlicher Stil, mit kleinem Jump-n-Run.
+// ---------------------------------------------------------------------------
+const HALF = 20;          // halbe Kartengröße
+const LIMIT = HALF - 1.2; // so weit darf man laufen
+
+// Kollisionskörper: Boxen und Kreise mit Oberkante "top".
+// Man kann auf ihnen stehen; ist die Kante höher als ein kleiner Schritt,
+// blockieren sie seitlich.
+const colliders = [];
+
+// Weite Wiese außerhalb der Karte
 const farGround = new THREE.Mesh(
-  new THREE.PlaneGeometry(240, 240),
+  new THREE.PlaneGeometry(400, 400),
   new THREE.MeshStandardMaterial({ color: "#5aa04f", roughness: 1 })
 );
 farGround.rotation.x = -Math.PI / 2;
@@ -193,17 +205,38 @@ farGround.position.y = -0.08;
 farGround.receiveShadow = true;
 scene.add(farGround);
 
+const floorTexture = makeGrassTexture();
+floorTexture.repeat.set(8, 8);
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(30, 30),
-  new THREE.MeshStandardMaterial({
-    map: makeGrassTexture(),
-    roughness: 1
-  })
+  new THREE.PlaneGeometry(HALF * 2, HALF * 2),
+  new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 1 })
 );
 floor.rotation.x = -Math.PI / 2;
 floor.position.y = -0.03;
 floor.receiveShadow = true;
 scene.add(floor);
+
+scene.add(mainLight.target);
+
+// Ferne Hügel als Kulisse (vom Nebel weichgezeichnet)
+for (let i = 0; i < 16; i++) {
+  const angle = (i / 16) * Math.PI * 2 + decorRandom() * 0.3;
+  const dist = 46 + decorRandom() * 14;
+  const hill = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 16, 10),
+    new THREE.MeshStandardMaterial({
+      color: pick(["#4f9a55", "#468c4d", "#5aa65c"]),
+      roughness: 1
+    })
+  );
+  hill.scale.set(
+    9 + decorRandom() * 9,
+    3 + decorRandom() * 4,
+    9 + decorRandom() * 9
+  );
+  hill.position.set(Math.cos(angle) * dist, -0.5, Math.sin(angle) * dist);
+  scene.add(hill);
+}
 
 // Steinplatz in der Mitte mit leuchtendem Startpunkt
 function addDisc(radius, color, y, extra = {}) {
@@ -215,6 +248,7 @@ function addDisc(radius, color, y, extra = {}) {
   disc.position.y = y;
   disc.receiveShadow = true;
   scene.add(disc);
+  return disc;
 }
 
 addDisc(3.7, "#b9ad94", 0.01);
@@ -226,28 +260,39 @@ addDisc(0.9, "#62e6b2", 0.04, {
   roughness: 0.5
 });
 
-// Begrenzung: niedrige Hecken statt hoher Mauern, damit die Sicht frei bleibt.
+// Begrenzung: niedrige Hecken
 const hedgeMaterial = new THREE.MeshStandardMaterial({
   color: "#3a7a47",
   roughness: 1
 });
 
 function addWall(x, z, width, depth) {
-  addMesh(
-    new THREE.BoxGeometry(width, 1.1, depth),
-    hedgeMaterial,
-    x,
-    0.55,
-    z
-  );
+  addMesh(new THREE.BoxGeometry(width, 1.1, depth), hedgeMaterial, x, 0.55, z);
 }
 
-addWall(0, -15, 31, 0.9);
-addWall(0, 15, 31, 0.9);
-addWall(-15, 0, 0.9, 31);
-addWall(15, 0, 0.9, 31);
+addWall(0, -HALF, HALF * 2 + 1, 0.9);
+addWall(0, HALF, HALF * 2 + 1, 0.9);
+addWall(-HALF, 0, 0.9, HALF * 2 + 1);
+addWall(HALF, 0, 0.9, HALF * 2 + 1);
 
-// Bäume am Rand
+// Materialien
+const rockMaterial = new THREE.MeshStandardMaterial({
+  color: "#9aa3ab",
+  roughness: 0.95,
+  flatShading: true
+});
+const mossMaterial = new THREE.MeshStandardMaterial({
+  color: "#5f9e4f",
+  roughness: 1
+});
+const woodMaterial = new THREE.MeshStandardMaterial({
+  color: "#8a6240",
+  roughness: 0.95
+});
+const woodRingMaterial = new THREE.MeshStandardMaterial({
+  color: "#d9b88a",
+  roughness: 0.9
+});
 const trunkMaterial = new THREE.MeshStandardMaterial({
   color: "#7a5636",
   roughness: 1
@@ -255,13 +300,58 @@ const trunkMaterial = new THREE.MeshStandardMaterial({
 const leafMaterials = ["#2f8f4e", "#3aa35a", "#2a7d46"].map(
   color => new THREE.MeshStandardMaterial({ color, roughness: 0.9 })
 );
+
+const lampPoleMaterialShared = new THREE.MeshStandardMaterial({
+  color: "#3a4352",
+  roughness: 0.6,
+  metalness: 0.4
+});
+
+// Bereiche, in denen keine Zufallsdeko steht
+const zones = [
+  { x: 0, z: 0, r: 6.2 },        // Platz
+  { x: 9, z: 9, r: 6 },          // Teich
+  { x: 10, z: -10.5, r: 10.5 },  // Felsenaufstieg
+  { x: -10, z: 10, r: 7.5 }      // Baumhaus
+];
 const placed = [];
+
+function inZone(x, z, extra = 0) {
+  return zones.some(zone => Math.hypot(zone.x - x, zone.z - z) < zone.r + extra);
+}
 
 function isFree(x, z, spacing) {
   return placed.every(p => Math.hypot(p.x - x, p.z - z) > spacing);
 }
 
-function addTree(x, z, scale) {
+// Felssäule mit Moosdach: begehbar
+function addColumn(x, z, radius, top, side = rockMaterial, cap = mossMaterial) {
+  const mesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius * 0.9, radius, top, 8),
+    [side, cap, side]
+  );
+  mesh.position.set(x, top / 2, z);
+  mesh.rotation.y = decorRandom() * 3;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  colliders.push({ type: "circle", x, z, r: radius, top });
+}
+
+// Plattform (Box) mit Moos- oder Holzdach
+function addPlatform(x, z, hw, hd, top, side = rockMaterial, cap = mossMaterial) {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(hw * 2, top, hd * 2),
+    [side, side, cap, side, side, side]
+  );
+  mesh.position.set(x, top / 2, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  colliders.push({ type: "box", x, z, hw, hd, top });
+}
+
+function addTree(x, z, scale, solid = true) {
   addMesh(
     new THREE.CylinderGeometry(0.13 * scale, 0.19 * scale, 1.3 * scale, 7),
     trunkMaterial,
@@ -271,44 +361,73 @@ function addTree(x, z, scale) {
   );
 
   const leaves = pick(leafMaterials);
-  addMesh(
-    new THREE.ConeGeometry(1 * scale, 1.7 * scale, 9),
-    leaves,
-    x,
-    1.9 * scale,
-    z
-  );
-  addMesh(
-    new THREE.ConeGeometry(0.75 * scale, 1.4 * scale, 9),
-    leaves,
-    x,
-    2.7 * scale,
-    z
-  );
+  addMesh(new THREE.ConeGeometry(1 * scale, 1.7 * scale, 9), leaves, x, 1.9 * scale, z);
+  addMesh(new THREE.ConeGeometry(0.75 * scale, 1.4 * scale, 9), leaves, x, 2.7 * scale, z);
+
+  if (solid) {
+    colliders.push({ type: "circle", x, z, r: 0.28 * scale + 0.1, top: 99 });
+  }
 }
 
-for (let tries = 0; tries < 200 && placed.length < 16; tries++) {
-  const x = (decorRandom() * 2 - 1) * 13.2;
-  const z = (decorRandom() * 2 - 1) * 13.2;
+// --- Jump-n-Run 1: Felsenaufstieg im Nordosten, Ziel mit Flagge ----------
+addColumn(5.5, -5.2, 1.0, 0.6);
+addColumn(8.5, -6.6, 0.95, 1.2);
+addColumn(11.5, -5.8, 0.9, 1.8);
+addColumn(14.5, -7.6, 1.0, 2.4);
+addColumn(15.4, -11.2, 1.0, 3.0);
+addColumn(12.6, -13.6, 1.0, 3.6);
+addPlatform(7.6, -15.6, 3.4, 2.6, 4.2);
 
-  if (Math.hypot(x, z) < 8 || !isFree(x, z, 3)) continue;
+// Flagge und Baum auf dem Plateau
+addMesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 8), lampPoleMaterialShared, 9.2, 4.2 + 1.2, -15.8);
+const flagCloth = addMesh(
+  new THREE.PlaneGeometry(1.1, 0.7),
+  new THREE.MeshStandardMaterial({
+    color: "#e5484d",
+    side: THREE.DoubleSide,
+    roughness: 0.8
+  }),
+  9.75,
+  4.2 + 2.0,
+  -15.8,
+  { cast: false }
+);
+addTree(5.2, -17.2, 1.2);
+
+// --- Jump-n-Run 2: Baumstumpf-Treppe zum Baumhaus im Südwesten -----------
+addColumn(-6.4, 6.4, 0.7, 0.6, woodMaterial, woodRingMaterial);
+addColumn(-8.6, 8.4, 0.7, 1.2, woodMaterial, woodRingMaterial);
+addColumn(-10.8, 10.2, 0.7, 1.8, woodMaterial, woodRingMaterial);
+addPlatform(-13.8, 13.2, 2.4, 2.4, 2.4, woodMaterial, woodRingMaterial);
+addTree(-16.6, 16.2, 1.7);
+
+// Kleine Holzbank-Stufe auf dem Platz: leichter Einstieg ins Springen
+addPlatform(3.9, 3.9, 0.9, 0.5, 0.45, woodMaterial, woodRingMaterial);
+
+// --- Teich im Südosten mit Trittsteinen -----------------------------------
+const pond = addDisc(4, "#3f93bb", 0.015, { roughness: 0.25, metalness: 0.1 });
+pond.position.x = 9;
+pond.position.z = 9;
+for (const [x, z] of [[7.2, 7.2], [9.2, 8.8], [10.8, 10.6], [12.4, 12.2]]) {
+  addColumn(x, z, 0.62, 0.3);
+}
+
+// Bäume, Steine, Büsche
+for (let tries = 0; tries < 400 && placed.length < 28; tries++) {
+  const x = (decorRandom() * 2 - 1) * (HALF - 1.8);
+  const z = (decorRandom() * 2 - 1) * (HALF - 1.8);
+
+  if (inZone(x, z, 1) || !isFree(x, z, 3.2)) continue;
 
   placed.push({ x, z });
   addTree(x, z, 0.8 + decorRandom() * 0.6);
 }
 
-// Steine
-const rockMaterial = new THREE.MeshStandardMaterial({
-  color: "#9aa3ab",
-  roughness: 0.95,
-  flatShading: true
-});
+for (let i = 0; i < 14; i++) {
+  const x = (decorRandom() * 2 - 1) * (HALF - 1.5);
+  const z = (decorRandom() * 2 - 1) * (HALF - 1.5);
 
-for (let i = 0; i < 9; i++) {
-  const x = (decorRandom() * 2 - 1) * 13;
-  const z = (decorRandom() * 2 - 1) * 13;
-
-  if (Math.hypot(x, z) < 5 || !isFree(x, z, 1.5)) continue;
+  if (inZone(x, z) || !isFree(x, z, 1.6)) continue;
 
   placed.push({ x, z });
   const size = 0.25 + decorRandom() * 0.35;
@@ -323,12 +442,20 @@ for (let i = 0; i < 9; i++) {
   rock.rotation.set(decorRandom() * 3, decorRandom() * 3, 0);
 }
 
+const bushMaterial = new THREE.MeshStandardMaterial({ color: "#3f9a50", roughness: 1 });
+for (let i = 0; i < 18; i++) {
+  const x = (decorRandom() * 2 - 1) * (HALF - 1.5);
+  const z = (decorRandom() * 2 - 1) * (HALF - 1.5);
+
+  if (inZone(x, z) || !isFree(x, z, 1.4)) continue;
+
+  placed.push({ x, z });
+  const size = 0.4 + decorRandom() * 0.35;
+  const bush = addMesh(new THREE.SphereGeometry(size, 10, 8), bushMaterial, x, size * 0.6, z);
+  bush.scale.y = 0.75;
+}
+
 // Laternen rund um den Platz
-const lampPoleMaterial = new THREE.MeshStandardMaterial({
-  color: "#3a4352",
-  roughness: 0.6,
-  metalness: 0.4
-});
 const lampGlowMaterial = new THREE.MeshStandardMaterial({
   color: "#fff1b8",
   emissive: new THREE.Color("#ffd980"),
@@ -336,7 +463,7 @@ const lampGlowMaterial = new THREE.MeshStandardMaterial({
 });
 
 for (const [x, z] of [[-5.5, -5.5], [5.5, -5.5], [-5.5, 5.5], [5.5, 5.5]]) {
-  addMesh(new THREE.CylinderGeometry(0.06, 0.08, 2.4, 8), lampPoleMaterial, x, 1.2, z);
+  addMesh(new THREE.CylinderGeometry(0.06, 0.08, 2.4, 8), lampPoleMaterialShared, x, 1.2, z);
   addMesh(new THREE.SphereGeometry(0.2, 14, 10), lampGlowMaterial, x, 2.5, z, {
     cast: false,
     receive: false
@@ -344,7 +471,7 @@ for (const [x, z] of [[-5.5, -5.5], [5.5, -5.5], [-5.5, 5.5], [5.5, 5.5]]) {
 }
 
 // Blumen als Instanzen: ein einziger Zeichenaufruf für alle.
-const flowerCount = 140;
+const flowerCount = 260;
 const flowers = new THREE.InstancedMesh(
   new THREE.SphereGeometry(0.07, 8, 6),
   new THREE.MeshStandardMaterial({ roughness: 0.7 }),
@@ -354,11 +481,11 @@ const flowerMatrix = new THREE.Matrix4();
 const flowerColors = ["#ff7aa8", "#ffd45e", "#ffffff", "#b79bff", "#ff9f5a"];
 let flowerIndex = 0;
 
-while (flowerIndex < flowerCount) {
-  const x = (decorRandom() * 2 - 1) * 14;
-  const z = (decorRandom() * 2 - 1) * 14;
+for (let tries = 0; flowerIndex < flowerCount && tries < 5000; tries++) {
+  const x = (decorRandom() * 2 - 1) * (HALF - 0.8);
+  const z = (decorRandom() * 2 - 1) * (HALF - 0.8);
 
-  if (Math.hypot(x, z) < 4.2) continue;
+  if (inZone(x, z, -1.5)) continue;
 
   flowerMatrix.setPosition(x, 0.07, z);
   flowers.setMatrixAt(flowerIndex, flowerMatrix);
@@ -366,9 +493,11 @@ while (flowerIndex < flowerCount) {
   flowerIndex++;
 }
 
+flowers.count = flowerIndex;
 flowers.instanceMatrix.needsUpdate = true;
 flowers.instanceColor.needsUpdate = true;
 scene.add(flowers);
+
 
 // Spielfigur
 function makePlayer(color, name = "") {
@@ -519,6 +648,7 @@ function makeNameLabel(name) {
 const myPlayer = makePlayer(playerColor, playerName);
 myPlayer.position.set(0, 0, 0);
 scene.add(myPlayer);
+
 // Multiplayer-Verbindung. Die 3D-Welt läuft auch ohne diese Verbindung.
 socket.addEventListener("open", () => {
   statusEl.textContent = "Verbunden";
@@ -526,6 +656,18 @@ socket.addEventListener("open", () => {
   socket.send(
     JSON.stringify({ type: "join", name: playerName, color: playerColor })
   );
+});
+
+// Heartbeat, damit der Server tote Verbindungen erkennt.
+setInterval(() => {
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "ping" }));
+  }
+}, 5000);
+
+// Beim Verlassen/Wechseln der Seite sauber abmelden.
+addEventListener("pagehide", () => {
+  try { socket.close(1000, "pagehide"); } catch {}
 });
 
 socket.addEventListener("close", () => {
@@ -579,8 +721,85 @@ goatScript.dataset.goatcounter =
 
 document.head.appendChild(goatScript);
 
-// Tastatursteuerung
+
+// ---------------------------------------------------------------------------
+// Steuerung
+// ---------------------------------------------------------------------------
+const jumpButton = document.querySelector("#jumpButton");
+const zoomInButton = document.querySelector("#zoomIn");
+const zoomOutButton = document.querySelector("#zoomOut");
+const hintEl = document.querySelector("#hint");
+const canvas = renderer.domElement;
+
+const WALK_SPEED = 4.2;
+const SPRINT_SPEED = 7.2;
+const PLAYER_RADIUS = 0.3;
+const STEP_HEIGHT = 0.35;
+const BASE_FOV = 68;
+const MIN_FOV = 38;
+const MAX_FOV = 100;
+
+let fov = BASE_FOV;
+let touchMode = matchMedia("(pointer: coarse)").matches;
+let jumpQueued = false;
+
+function setTouchMode(on) {
+  touchMode = on;
+  document.body.classList.toggle("touch", on);
+  updateHint();
+}
+
+function updateHint() {
+  if (!hintEl) return;
+
+  if (touchMode) {
+    hintEl.textContent =
+      "Links laufen (ganz außen = rennen) · rechts wischen = umsehen · Springen-Knopf · Zwei Finger = Zoom";
+    hintEl.hidden = false;
+    return;
+  }
+
+  if (document.pointerLockElement === canvas) {
+    hintEl.textContent =
+      "WASD laufen · Maus = Richtung · Strg = rennen · Leertaste = springen · Enter = chatten · Mausrad = Zoom";
+    hintEl.hidden = false;
+    clearTimeout(updateHint.timer);
+    updateHint.timer = setTimeout(() => (hintEl.hidden = true), 7000);
+  } else {
+    clearTimeout(updateHint.timer);
+    hintEl.textContent = "Klicken, um zu steuern (Esc gibt die Maus frei)";
+    hintEl.hidden = false;
+  }
+}
+
+setTouchMode(touchMode);
+
+function lockMouse() {
+  if (touchMode || document.pointerLockElement === canvas) return;
+
+  try {
+    const result = canvas.requestPointerLock();
+    if (result && result.catch) result.catch(() => {});
+  } catch {}
+}
+
+document.addEventListener("pointerlockchange", updateHint);
+
+function jump() {
+  jumpQueued = true;
+}
+
+function typing() {
+  return document.activeElement === chatInput;
+}
+
+// Tastatur
 addEventListener("keydown", event => {
+  if (typing()) {
+    if (event.key === "Escape") chatInput.blur();
+    return;
+  }
+
   const key = event.key.toLowerCase();
 
   if (
@@ -589,10 +808,14 @@ addEventListener("keydown", event => {
     event.preventDefault();
   }
 
-  // Nur beim erstmaligen Drücken springen.
-  if (key === " " && !keys.has(key)) {
-    jump();
+  if (key === "enter") {
+    event.preventDefault();
+    if (document.pointerLockElement) document.exitPointerLock();
+    chatInput.focus();
+    return;
   }
+
+  if (key === " " && !keys.has(key)) jump();
 
   keys.add(key);
 });
@@ -601,120 +824,117 @@ addEventListener("keyup", event => {
   keys.delete(event.key.toLowerCase());
 });
 
-function jump() {
-  if (!isGrounded) return;
+addEventListener("blur", () => keys.clear());
 
-  verticalVelocity = jumpStrength;
-  isGrounded = false;
+chatInput.addEventListener("focus", () => keys.clear());
+
+// Maus: Klick sperrt den Zeiger, danach steuert die Maus immer die Richtung.
+canvas.addEventListener("pointerdown", event => {
+  if (event.pointerType === "mouse") {
+    setTouchMode(false);
+    lockMouse();
+  }
+});
+
+document.addEventListener("mousemove", event => {
+  if (document.pointerLockElement !== canvas) return;
+  rotateCamera(event.movementX, event.movementY);
+});
+
+// Mausrad: Zoom über das Sichtfeld
+canvas.addEventListener(
+  "wheel",
+  event => {
+    event.preventDefault();
+    setFov(fov + Math.sign(event.deltaY) * 4);
+  },
+  { passive: false }
+);
+
+function setFov(value) {
+  fov = THREE.MathUtils.clamp(value, MIN_FOV, MAX_FOV);
+  camera.fov = fov;
+  camera.updateProjectionMatrix();
 }
-// Maus: ziehen, um die Blickrichtung zu ändern.
-renderer.domElement.addEventListener("pointerdown", event => {
-  if (event.pointerType !== "mouse") return;
 
-  lookPointer = event.pointerId;
-  lastLookX = event.clientX;
-  lastLookY = event.clientY;
-  renderer.domElement.setPointerCapture(event.pointerId);
+zoomInButton?.addEventListener("click", () => setFov(fov - 8));
+zoomOutButton?.addEventListener("click", () => setFov(fov + 8));
+
+// Touch auf der Spielfläche: ein Finger = umsehen, zwei Finger = zoomen.
+// Joystick und Sprungknopf sind eigene Elemente und laufen unabhängig,
+// dadurch geht Laufen und Umsehen gleichzeitig.
+const touchPoints = new Map();
+let pinchDistance = 0;
+
+function pinchNow() {
+  const [a, b] = [...touchPoints.values()];
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+canvas.addEventListener("pointerdown", event => {
+  if (event.pointerType === "mouse") return;
+
+  setTouchMode(true);
+  canvas.setPointerCapture(event.pointerId);
+  touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+  if (touchPoints.size === 2) pinchDistance = pinchNow();
 });
 
-renderer.domElement.addEventListener("pointermove", event => {
-  if (event.pointerId !== lookPointer) return;
+canvas.addEventListener("pointermove", event => {
+  const point = touchPoints.get(event.pointerId);
+  if (!point) return;
 
-  rotateCamera(
-    event.clientX - lastLookX,
-    event.clientY - lastLookY
-  );
+  const dx = event.clientX - point.x;
+  const dy = event.clientY - point.y;
+  point.x = event.clientX;
+  point.y = event.clientY;
 
-  lastLookX = event.clientX;
-  lastLookY = event.clientY;
+  if (touchPoints.size >= 2) {
+    const now = pinchNow();
+    if (pinchDistance > 0) setFov(fov * (pinchDistance / now));
+    pinchDistance = now;
+  } else {
+    rotateCamera(dx * 1.4, dy * 1.4);
+  }
 });
 
-renderer.domElement.addEventListener("pointerup", event => {
-  if (event.pointerId === lookPointer) lookPointer = null;
-});
+function endTouch(event) {
+  touchPoints.delete(event.pointerId);
+  pinchDistance = 0;
+}
 
-renderer.domElement.addEventListener("pointercancel", event => {
-  if (event.pointerId === lookPointer) lookPointer = null;
-});
-
-// Touch: Wischen ändert die Blickrichtung.
-// Tippen ohne Wischen löst einen Sprung aus.
-let touchStartX = 0;
-let touchStartY = 0;
-let touchMoved = false;
-
-renderer.domElement.addEventListener(
-  "touchstart",
-  event => {
-    if (event.touches.length !== 1) return;
-
-    const touch = event.touches[0];
-    lastLookX = touch.clientX;
-    lastLookY = touch.clientY;
-    touchStartX = touch.clientX;
-    touchStartY = touch.clientY;
-    touchMoved = false;
-  },
-  { passive: true }
-);
-
-renderer.domElement.addEventListener(
-  "touchmove",
-  event => {
-    if (event.touches.length !== 1) return;
-
-    const touch = event.touches[0];
-    const deltaX = touch.clientX - lastLookX;
-    const deltaY = touch.clientY - lastLookY;
-
-    if (
-      Math.hypot(
-        touch.clientX - touchStartX,
-        touch.clientY - touchStartY
-      ) > 10
-    ) {
-      touchMoved = true;
-    }
-
-    rotateCamera(deltaX, deltaY);
-
-    lastLookX = touch.clientX;
-    lastLookY = touch.clientY;
-  },
-  { passive: true }
-);
-
-renderer.domElement.addEventListener(
-  "touchend",
-  event => {
-    if (event.touches.length === 0 && !touchMoved) {
-      jump();
-    }
-  },
-  { passive: true }
-);
+canvas.addEventListener("pointerup", endTouch);
+canvas.addEventListener("pointercancel", endTouch);
 
 function rotateCamera(deltaX, deltaY) {
-  cameraDirection.yaw -= deltaX * 0.002;
+  cameraDirection.yaw -= deltaX * 0.0022;
 
   cameraDirection.pitch = THREE.MathUtils.clamp(
-    cameraDirection.pitch + deltaY * 0.002,
-    -0.12,
-    0.55
+    cameraDirection.pitch + deltaY * 0.0022,
+    -0.3,
+    0.9
   );
 }
-// Joystick für Handhelds und Touchscreens
+
+// Sprungknopf rechts
+jumpButton?.addEventListener("pointerdown", event => {
+  event.preventDefault();
+  setTouchMode(true);
+  jump();
+});
+
+// Joystick links
 joystick.addEventListener("pointerdown", event => {
   event.preventDefault();
+  setTouchMode(true);
   joystickPointer = event.pointerId;
   joystick.setPointerCapture(event.pointerId);
   moveJoystick(event);
 });
 
 joystick.addEventListener("pointermove", event => {
-  if (event.pointerId === joystickPointer) {
-    moveJoystick(event);
-  }
+  if (event.pointerId === joystickPointer) moveJoystick(event);
 });
 
 joystick.addEventListener("pointerup", releaseJoystick);
@@ -722,20 +942,16 @@ joystick.addEventListener("pointercancel", releaseJoystick);
 
 function moveJoystick(event) {
   const rect = joystick.getBoundingClientRect();
-  const centerX = rect.left + rect.width / 2;
-  const centerY = rect.top + rect.height / 2;
-
-  const dx = event.clientX - centerX;
-  const dy = event.clientY - centerY;
-  const maxDistance = 38;
+  const maxDistance = rect.width * 0.32;
+  const dx = event.clientX - (rect.left + rect.width / 2);
+  const dy = event.clientY - (rect.top + rect.height / 2);
   const length = Math.hypot(dx, dy) || 1;
   const scale = Math.min(1, maxDistance / length);
 
   joystickX = THREE.MathUtils.clamp(dx / maxDistance, -1, 1);
   joystickY = THREE.MathUtils.clamp(dy / maxDistance, -1, 1);
 
-  stick.style.transform =
-    `translate(${dx * scale}px, ${dy * scale}px)`;
+  stick.style.transform = `translate(${dx * scale}px, ${dy * scale}px)`;
 }
 
 function releaseJoystick(event) {
@@ -747,48 +963,149 @@ function releaseJoystick(event) {
   stick.style.transform = "";
 }
 
-// Chat
+// ---------------------------------------------------------------------------
+// Chat und Sprechblasen
+// ---------------------------------------------------------------------------
 chatForm.addEventListener("submit", event => {
   event.preventDefault();
 
-  const text = chatInput.value.trim().slice(0, 50);
+  const text = chatInput.value.trim().slice(0, 100);
 
-  if (
-    !text ||
-    socket.readyState !== WebSocket.OPEN
-  ) {
-    return;
+  if (text && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "chat", text }));
   }
-
-  socket.send(
-    JSON.stringify({
-      type: "chat",
-      text
-    })
-  );
 
   chatInput.value = "";
+  chatInput.blur();
+  lockMouse();
 });
 
-function renderChat() {
-  const now = Date.now();
+function makeBubble(text) {
+  const width = 560;
+  const font = "bold 34px system-ui, sans-serif";
+  const measure = document.createElement("canvas").getContext("2d");
+  measure.font = font;
 
-  chatItems = chatItems.filter(
-    item => item.expires > now
+  // Zeilenumbruch, auch für sehr lange Wörter
+  const lines = [];
+  let line = "";
+
+  for (const word of text.split(/\s+/)) {
+    let rest = word;
+
+    while (measure.measureText(rest).width > width - 70) {
+      let cut = rest.length - 1;
+      while (cut > 1 && measure.measureText(rest.slice(0, cut)).width > width - 70) cut--;
+      if (line) {
+        lines.push(line);
+        line = "";
+      }
+      lines.push(rest.slice(0, cut));
+      rest = rest.slice(cut);
+    }
+
+    const test = line ? `${line} ${rest}` : rest;
+
+    if (measure.measureText(test).width > width - 70 && line) {
+      lines.push(line);
+      line = rest;
+    } else {
+      line = test;
+    }
+  }
+
+  if (line) lines.push(line);
+
+  const lineHeight = 44;
+  const bodyHeight = lines.length * lineHeight + 34;
+  const height = bodyHeight + 30;
+
+  const canvasEl = document.createElement("canvas");
+  canvasEl.width = width;
+  canvasEl.height = height;
+  const ctx = canvasEl.getContext("2d");
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+  ctx.strokeStyle = "rgba(20, 30, 50, 0.55)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(8, 6, width - 16, bodyHeight, 30);
+  else ctx.rect(8, 6, width - 16, bodyHeight);
+  ctx.fill();
+  ctx.stroke();
+
+  // Zipfel der Sprechblase
+  ctx.beginPath();
+  ctx.moveTo(width / 2 - 20, bodyHeight + 3);
+  ctx.lineTo(width / 2, height - 4);
+  ctx.lineTo(width / 2 + 20, bodyHeight + 3);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#101827";
+  ctx.font = font;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  lines.forEach((l, i) => {
+    ctx.fillText(l, width / 2, 6 + 17 + lineHeight / 2 + i * lineHeight);
+  });
+
+  const texture = new THREE.CanvasTexture(canvasEl);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false })
   );
+  sprite.center.set(0.5, 0);
+  sprite.scale.set(2.3, (2.3 * height) / width, 1);
+  sprite.renderOrder = 10;
+  return sprite;
+}
 
-  chatMessages.replaceChildren();
+function setBubble(mesh, item) {
+  const current = mesh.userData.bubbleId || null;
+  const wanted = item ? item.id : null;
+  if (current === wanted) return;
 
-  for (const item of chatItems) {
-    const line = document.createElement("div");
+  if (mesh.userData.bubble) {
+    mesh.remove(mesh.userData.bubble);
+    mesh.userData.bubble.material.map.dispose();
+    mesh.userData.bubble.material.dispose();
+    mesh.userData.bubble = null;
+  }
 
-    line.className = "chat-line";
-    line.textContent =
-      `${item.name}: ${item.text}`;
+  mesh.userData.bubbleId = wanted;
 
-    chatMessages.appendChild(line);
+  if (item) {
+    const bubble = makeBubble(String(item.text));
+    bubble.position.set(0, 2.3, 0);
+    mesh.add(bubble);
+    mesh.userData.bubble = bubble;
   }
 }
+
+// Jede Figur zeigt ihre jüngste, noch nicht abgelaufene Nachricht.
+function syncBubbles() {
+  const now = Date.now();
+  const latest = new Map();
+
+  chatItems = chatItems.filter(item => item.expires > now);
+
+  for (const item of chatItems) {
+    if (item.playerId) latest.set(String(item.playerId), item);
+  }
+
+  setBubble(myPlayer, latest.get(myId) || null);
+
+  for (const [id, mesh] of otherPlayerMeshes) {
+    setBubble(mesh, latest.get(id) || null);
+  }
+}
+
+function renderChat() {
+  syncBubbles();
+}
+
 // Andere Spieler anzeigen und aktualisieren.
 function updateOtherPlayers() {
   const activeIds = new Set();
@@ -806,18 +1123,16 @@ function updateOtherPlayers() {
     const color = /^#[0-9a-f]{3,8}$/i.test(data.color || "")
       ? data.color
       : "#7bb7ff";
-    const targetX = Number(data.x) || 0;
-    const targetZ = Number(data.y) || 0;
 
     if (!mesh) {
       mesh = makePlayer(color, name);
       mesh.userData.playerId = id;
       mesh.userData.name = name;
       mesh.userData.walkCycle = 0;
-      mesh.position.set(targetX, 0, targetZ);
+      mesh.position.set(Number(data.x) || 0, Number(data.h) || 0, Number(data.y) || 0);
+      mesh.rotation.y = Number(data.rotation) || 0;
 
       scene.add(mesh);
-
       otherPlayerMeshes.set(id, mesh);
     }
 
@@ -834,82 +1149,114 @@ function updateOtherPlayers() {
 
     mesh.userData.clothes.color.set(color);
 
-    // Zielposition: die Figur gleitet in der Spielschleife dorthin.
-    mesh.userData.target = { x: targetX, z: targetZ };
+    // Zielwerte: die Figur gleitet in der Spielschleife dorthin.
+    mesh.userData.target = {
+      x: Number(data.x) || 0,
+      z: Number(data.y) || 0,
+      h: Number(data.h) || 0,
+      rot: Number(data.rotation) || 0
+    };
   }
 
   for (const [id, mesh] of otherPlayerMeshes) {
     if (!activeIds.has(id)) {
+      setBubble(mesh, null);
       scene.remove(mesh);
       otherPlayerMeshes.delete(id);
     }
   }
+
+  syncBubbles();
 }
 
-// Admin: andere Figur anklicken, um ihre ID auszuwählen.
-renderer.domElement.addEventListener(
-  "click",
-  event => {
-    const rect =
-      renderer.domElement.getBoundingClientRect();
+// ---------------------------------------------------------------------------
+// Kollision
+// ---------------------------------------------------------------------------
 
-    const pointer = new THREE.Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1
-    );
+// Schiebt die Figur seitlich aus allen Körpern, die zu hoch zum Aufsteigen sind.
+function resolveHorizontal(pos, feetY) {
+  for (let pass = 0; pass < 3; pass++) {
+    for (const c of colliders) {
+      if (c.top <= feetY + STEP_HEIGHT) continue;
 
-    const raycaster = new THREE.Raycaster();
+      if (c.type === "circle") {
+        const dx = pos.x - c.x;
+        const dz = pos.z - c.z;
+        const dist = Math.hypot(dx, dz);
+        const min = c.r + PLAYER_RADIUS;
 
-    raycaster.setFromCamera(
-      pointer,
-      camera
-    );
+        if (dist < min) {
+          const nx = dist > 1e-5 ? dx / dist : 1;
+          const nz = dist > 1e-5 ? dz / dist : 0;
+          pos.x = c.x + nx * min;
+          pos.z = c.z + nz * min;
+        }
+      } else {
+        const nearX = THREE.MathUtils.clamp(pos.x, c.x - c.hw, c.x + c.hw);
+        const nearZ = THREE.MathUtils.clamp(pos.z, c.z - c.hd, c.z + c.hd);
+        const dx = pos.x - nearX;
+        const dz = pos.z - nearZ;
+        const dist = Math.hypot(dx, dz);
 
-    const clickableParts = [];
+        if (dist < PLAYER_RADIUS) {
+          if (dist > 1e-5) {
+            pos.x = nearX + (dx / dist) * PLAYER_RADIUS;
+            pos.z = nearZ + (dz / dist) * PLAYER_RADIUS;
+          } else {
+            // Mittelpunkt liegt im Körper: kürzesten Weg nach draußen
+            const left = pos.x - (c.x - c.hw);
+            const right = c.x + c.hw - pos.x;
+            const back = pos.z - (c.z - c.hd);
+            const front = c.z + c.hd - pos.z;
+            const smallest = Math.min(left, right, back, front);
 
-    for (const [id, mesh] of otherPlayerMeshes) {
-      mesh.userData.playerId = id;
-      clickableParts.push(...mesh.children);
-    }
-
-    const hit =
-      raycaster.intersectObjects(
-        clickableParts,
-        false
-      )[0];
-
-    if (hit) {
-      let object = hit.object;
-
-      while (
-        object &&
-        !object.userData.playerId
-      ) {
-        object = object.parent;
-      }
-
-      if (object?.userData.playerId) {
-        document.querySelector(
-          "#kickId"
-        ).value =
-          object.userData.playerId;
+            if (smallest === left) pos.x = c.x - c.hw - PLAYER_RADIUS;
+            else if (smallest === right) pos.x = c.x + c.hw + PLAYER_RADIUS;
+            else if (smallest === back) pos.z = c.z - c.hd - PLAYER_RADIUS;
+            else pos.z = c.z + c.hd + PLAYER_RADIUS;
+          }
+        }
       }
     }
   }
-);
-document.querySelector("#kickButton").addEventListener("click", () => {
-  const id = document.querySelector("#kickId").value.trim();
-  const token = document.querySelector("#adminToken").value;
+}
 
-  if (!id || !token || socket.readyState !== WebSocket.OPEN) return;
+// Höhe des Bodens unter der Figur: höchste Oberkante, die man erreichen kann.
+function groundHeight(x, z, feetY) {
+  let ground = 0;
+  const slack = 0.12;
 
-  socket.send(JSON.stringify({
-    type: "kick",
-    id,
-    token
-  }));
-});
+  for (const c of colliders) {
+    if (c.top > feetY + STEP_HEIGHT || c.top <= ground) continue;
+
+    let over;
+    if (c.type === "circle") {
+      over = Math.hypot(x - c.x, z - c.z) < c.r + slack;
+    } else {
+      over = Math.abs(x - c.x) < c.hw + slack && Math.abs(z - c.z) < c.hd + slack;
+    }
+
+    if (over) ground = c.top;
+  }
+
+  return ground;
+}
+
+// ---------------------------------------------------------------------------
 // Spielschleife
+// ---------------------------------------------------------------------------
+let sprintBlend = 0;
+let lastSentH = 0;
+let lastSentRot = 0;
+
+function swingLimbs(figure, swing, delta, rate) {
+  const parts = figure.userData;
+  parts.leftLeg.rotation.x = THREE.MathUtils.damp(parts.leftLeg.rotation.x, swing, rate, delta);
+  parts.rightLeg.rotation.x = THREE.MathUtils.damp(parts.rightLeg.rotation.x, -swing, rate, delta);
+  parts.leftArm.rotation.x = THREE.MathUtils.damp(parts.leftArm.rotation.x, -swing * 0.6, rate, delta);
+  parts.rightArm.rotation.x = THREE.MathUtils.damp(parts.rightArm.rotation.x, swing * 0.6, rate, delta);
+}
+
 function animate(time) {
   requestAnimationFrame(animate);
 
@@ -919,6 +1266,7 @@ function animate(time) {
 
   previousFrameTime = time;
 
+  // Eingabe
   const keyForward =
     (keys.has("arrowup") || keys.has("w") ? 1 : 0) -
     (keys.has("arrowdown") || keys.has("s") ? 1 : 0);
@@ -932,202 +1280,122 @@ function animate(time) {
   const inputLength = Math.hypot(forward, side);
   const isMoving = inputLength > 0.08;
 
+  const stickSprint = Math.hypot(joystickX, joystickY) > 0.93;
+  const wantsSprint = keys.has("control") || keys.has("shift") || stickSprint;
+  sprintBlend = THREE.MathUtils.damp(sprintBlend, wantsSprint ? 1 : 0, 9, delta);
+
+  const pos = myPlayer.position;
+
   if (isMoving) {
-    const normalizedForward =
-      forward / Math.max(inputLength, 1);
+    const strength = Math.min(inputLength, 1);
+    const nForward = forward / Math.max(inputLength, 1e-5);
+    const nSide = side / Math.max(inputLength, 1e-5);
 
-    const normalizedSide =
-      side / Math.max(inputLength, 1);
+    const yaw = cameraDirection.yaw;
+    const moveX = -Math.sin(yaw) * nForward + Math.cos(yaw) * nSide;
+    const moveZ = -Math.cos(yaw) * nForward - Math.sin(yaw) * nSide;
 
-    // Bewegung relativ zur Blickrichtung der Kamera
-    const forwardX =
-      -Math.sin(cameraDirection.yaw);
+    const speed =
+      THREE.MathUtils.lerp(WALK_SPEED, SPRINT_SPEED, sprintBlend) *
+      (joystickPointer !== null && !keySide && !keyForward
+        ? Math.max(0.45, strength)
+        : 1);
 
-    const forwardZ =
-      -Math.cos(cameraDirection.yaw);
+    pos.x += moveX * speed * delta;
+    pos.z += moveZ * speed * delta;
 
-    const rightX =
-      Math.cos(cameraDirection.yaw);
-
-    const rightZ =
-      -Math.sin(cameraDirection.yaw);
-
-    const moveX =
-      forwardX * normalizedForward +
-      rightX * normalizedSide;
-
-    const moveZ =
-      forwardZ * normalizedForward +
-      rightZ * normalizedSide;
-
-    const speed = 4.2;
-
-    myPlayer.position.x +=
-      moveX * speed * delta;
-
-    myPlayer.position.z +=
-      moveZ * speed * delta;
-
-    myPlayer.position.x =
-      THREE.MathUtils.clamp(
-        myPlayer.position.x,
-        -14,
-        14
-      );
-
-    myPlayer.position.z =
-      THREE.MathUtils.clamp(
-        myPlayer.position.z,
-        -14,
-        14
-      );
-
-    // Beinanimation: Beine schwingen abwechselnd
-    // nach vorne und hinten.
-    walkCycle += delta * walkSpeed;
-
-    const legSwing =
-      Math.sin(walkCycle) *
-      legSwingAmount;
-    myPlayer.userData.leftLeg.rotation.x =
-      legSwing;
-
-    myPlayer.userData.rightLeg.rotation.x =
-      -legSwing;
-
-    // Arme schwingen entgegengesetzt
-    // zu den Beinen.
-    myPlayer.userData.leftArm.rotation.x =
-      -legSwing * 0.6;
-
-    myPlayer.userData.rightArm.rotation.x =
-      legSwing * 0.6;
-  } else {
-
-    // Beine und Arme im Stillstand
-    // sanft in die Ruheposition
-    // zurückführen.
-
-    myPlayer.userData.leftLeg.rotation.x =
-      THREE.MathUtils.damp(
-        myPlayer.userData.leftLeg.rotation.x,
-        0,
-        10,
-        delta
-      );
-
-    myPlayer.userData.rightLeg.rotation.x =
-      THREE.MathUtils.damp(
-        myPlayer.userData.rightLeg.rotation.x,
-        0,
-        10,
-        delta
-      );
-
-    myPlayer.userData.leftArm.rotation.x =
-      THREE.MathUtils.damp(
-        myPlayer.userData.leftArm.rotation.x,
-        0,
-        10,
-        delta
-      );
-
-    myPlayer.userData.rightArm.rotation.x =
-      THREE.MathUtils.damp(
-        myPlayer.userData.rightArm.rotation.x,
-        0,
-        10,
-        delta
-      );
+    walkCycle += delta * walkSpeed * (1 + sprintBlend * 0.6);
   }
 
-  // Die Spielfigur dreht sich immer
-  // mit der Kamera.
-
-  myPlayer.rotation.y =
-    cameraDirection.yaw;
+  pos.x = THREE.MathUtils.clamp(pos.x, -LIMIT, LIMIT);
+  pos.z = THREE.MathUtils.clamp(pos.z, -LIMIT, LIMIT);
+  resolveHorizontal(pos, pos.y);
 
   // Sprung und Schwerkraft
+  if (jumpQueued) {
+    jumpQueued = false;
+    if (isGrounded) {
+      verticalVelocity = jumpStrength;
+      isGrounded = false;
+    }
+  }
+
+  const ground = groundHeight(pos.x, pos.z, pos.y);
+
+  if (isGrounded) {
+    if (pos.y > ground + 0.02) {
+      isGrounded = false; // über die Kante gelaufen
+    } else {
+      pos.y = ground;
+    }
+  }
 
   if (!isGrounded) {
-    verticalVelocity -=
-      gravity * delta;
+    verticalVelocity -= gravity * delta;
+    pos.y += verticalVelocity * delta;
 
-    myPlayer.position.y +=
-      verticalVelocity * delta;
-
-    if (myPlayer.position.y <= 0) {
-      myPlayer.position.y = 0;
+    if (verticalVelocity <= 0 && pos.y <= ground) {
+      pos.y = ground;
       verticalVelocity = 0;
       isGrounded = true;
     }
   }
-  // Kamera folgt der Figur.
-  const cameraDistance = 5;
 
-  const horizontalDistance =
-    Math.cos(cameraDirection.pitch) *
-    cameraDistance;
+  // Beinanimation
+  const legAmount = legSwingAmount * (1 + sprintBlend * 0.35);
+  let swing = 0;
+  if (!isGrounded) swing = 0.35;
+  else if (isMoving) swing = Math.sin(walkCycle) * legAmount;
+  swingLimbs(myPlayer, swing, delta, isMoving || !isGrounded ? 30 : 10);
+
+  // Die Spielfigur dreht sich immer mit der Kamera.
+  myPlayer.rotation.y = cameraDirection.yaw;
+
+  // Kamera folgt der Figur; Zoom über das Sichtfeld.
+  const cameraDistance = 5;
+  const horizontalDistance = Math.cos(cameraDirection.pitch) * cameraDistance;
 
   camera.position.set(
-    myPlayer.position.x +
-      Math.sin(cameraDirection.yaw) *
-      horizontalDistance,
-
-    myPlayer.position.y +
-      1.7 +
-      Math.sin(cameraDirection.pitch) *
-      cameraDistance,
-
-    myPlayer.position.z +
-      Math.cos(cameraDirection.yaw) *
-      horizontalDistance
+    pos.x + Math.sin(cameraDirection.yaw) * horizontalDistance,
+    Math.max(
+      0.35,
+      pos.y + 1.7 + Math.sin(cameraDirection.pitch) * cameraDistance
+    ),
+    pos.z + Math.cos(cameraDirection.yaw) * horizontalDistance
   );
+  camera.lookAt(pos.x, pos.y + 0.9, pos.z);
 
-  camera.lookAt(
-    myPlayer.position.x,
-    myPlayer.position.y + 0.9,
-    myPlayer.position.z
-  );
+  // Sonne und Schatten folgen der Figur.
+  mainLight.target.position.set(pos.x, 0, pos.z);
+  mainLight.position.set(pos.x - 9, 15, pos.z + 7);
 
-  // Bewegung höchstens viermal pro Sekunde
-  // an den Worker senden.
-
-  const moved =
+  // Position an den Worker senden (höchstens ~8x pro Sekunde).
+  const changed =
     lastSentX === null ||
-
-    Math.abs(
-      myPlayer.position.x - lastSentX
-    ) > 0.02 ||
-
-    Math.abs(
-      myPlayer.position.z - lastSentZ
-    ) > 0.02;
+    Math.abs(pos.x - lastSentX) > 0.02 ||
+    Math.abs(pos.z - lastSentZ) > 0.02 ||
+    Math.abs(pos.y - lastSentH) > 0.03 ||
+    Math.abs(cameraDirection.yaw - lastSentRot) > 0.05;
 
   if (
-    moved &&
-    time - lastMoveSent >= 250 &&
+    changed &&
+    time - lastMoveSent >= 60 &&
     socket.readyState === WebSocket.OPEN
   ) {
-
     lastMoveSent = time;
+    lastSentX = pos.x;
+    lastSentZ = pos.z;
+    lastSentH = pos.y;
+    lastSentRot = cameraDirection.yaw;
 
-    lastSentX =
-      myPlayer.position.x;
-
-    lastSentZ =
-      myPlayer.position.z;
-
-    // Der aktuelle Worker nutzt x und y;
-    // y enthält hier die 3D-z-Position.
-
+    // Der Worker kennt x und y; y enthält die 3D-z-Position, h die Höhe.
     socket.send(
       JSON.stringify({
         type: "move",
-
-        x: myPlayer.position.x,
-
-        y: myPlayer.position.z
+        x: pos.x,
+        y: pos.z,
+        h: pos.y,
+        rotation: cameraDirection.yaw
       })
     );
   }
@@ -1139,62 +1407,38 @@ function animate(time) {
 
     const dx = target.x - mesh.position.x;
     const dz = target.z - mesh.position.z;
-    const follow = 1 - Math.exp(-12 * delta);
+    const dh = target.h - mesh.position.y;
+    const follow = 1 - Math.exp(-22 * delta);
 
     mesh.position.x += dx * follow;
     mesh.position.z += dz * follow;
+    mesh.position.y += dh * follow;
+
+    let diff = target.rot - mesh.rotation.y;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    mesh.rotation.y += diff * (1 - Math.exp(-12 * delta));
 
     const moving = Math.hypot(dx, dz) > 0.05;
+    if (moving) mesh.userData.walkCycle += delta * walkSpeed;
 
-    if (moving) {
-      const targetYaw = Math.atan2(-dx, -dz);
-      let diff = targetYaw - mesh.rotation.y;
-      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      mesh.rotation.y += diff * (1 - Math.exp(-10 * delta));
-      mesh.userData.walkCycle += delta * walkSpeed;
-    }
-
-    const swing = moving
+    const otherSwing = moving
       ? Math.sin(mesh.userData.walkCycle) * legSwingAmount
       : 0;
-    const parts = mesh.userData;
 
-    parts.leftLeg.rotation.x =
-      THREE.MathUtils.damp(parts.leftLeg.rotation.x, swing, 12, delta);
-    parts.rightLeg.rotation.x =
-      THREE.MathUtils.damp(parts.rightLeg.rotation.x, -swing, 12, delta);
-    parts.leftArm.rotation.x =
-      THREE.MathUtils.damp(parts.leftArm.rotation.x, -swing * 0.6, 12, delta);
-    parts.rightArm.rotation.x =
-      THREE.MathUtils.damp(parts.rightArm.rotation.x, swing * 0.6, 12, delta);
+    swingLimbs(mesh, otherSwing, delta, 12);
   }
 
-  renderer.render(
-    scene,
-    camera
-  );
+  // Sprechblasen laufen nach ihrer Zeit ab, auch ohne neuen Serverstand.
+  syncBubbles();
+
+  renderer.render(scene, camera);
 }
 
-requestAnimationFrame(
-  animate
-);
+requestAnimationFrame(animate);
 
-// Bei Fenstergrößenänderung Kamera
-// und Renderer anpassen.
-
-addEventListener(
-  "resize",
-  () => {
-
-    camera.aspect =
-      window.innerWidth /
-      window.innerHeight;
-
-    camera.updateProjectionMatrix();
-
-    renderer.setSize(
-      window.innerWidth,
-      window.innerHeight
-    );
-  }
-);
+// Bei Fenstergrößenänderung Kamera und Renderer anpassen.
+addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});

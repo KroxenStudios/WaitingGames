@@ -1035,3 +1035,56 @@ h1, h2, .start-card h1 {
 .global-best[hidden] {
   display: none;
 }
+
+/* Online-Modus */
+.start-online {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 0 0 12px;
+  color: #cfd8e0;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.start-online input {
+  width: 18px;
+  height: 18px;
+  accent-color: #65e6a5;
+}
+
+.online-badge {
+  position: absolute;
+  top: 84px;
+  right: 14px;
+  z-index: 3;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #0c1522cc;
+  color: #cfd8e0;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.online-badge::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #f2c14e;
+}
+
+.online-badge[data-state="online"]::before {
+  background: #65e6a5;
+}
+
+.online-badge[data-state="error"]::before {
+  background: #ff6b6b;
+}
+
+.online-badge[hidden] {
+  display: none;
+}

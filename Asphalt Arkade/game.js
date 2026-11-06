@@ -99,6 +99,8 @@
       fingerSteer: false,   // Lenken per Finger auf dem Spielfeld
       touchMode: 0,         // Touch-Steuerung: 0 = automatisch, 1 = immer an, 2 = aus
       wheelLimit: 0.55,     // maximaler Lenkeinschlag mit dem Touch-Lenkrad (1 = voll)
+      online: true,          // Online-Modus: andere Fahrer sehen und mit ihnen zusammenstoßen
+      showHitbox: false,     // Hitboxen der Fahrzeuge anzeigen
       sound: true,           // Ton an/aus
       volume: 0.5,           // Gesamtlautstärke
       sv: 2                  // Version der Einstellungen (1.1.0: realistische Beschleunigung)
@@ -1655,8 +1657,9 @@
     }
 
     function trySpawnNpc(minDist, maxDist) {
+      const an = trafficAnchors[Math.floor(Math.random() * trafficAnchors.length)] || player;
       const ang = Math.random() * Math.PI * 2, r = minDist + Math.random() * (maxDist - minDist);
-      const n = nearestNode(player.x + Math.cos(ang) * r, player.y + Math.sin(ang) * r);
+      const n = nearestNode(an.x + Math.cos(ang) * r, an.y + Math.sin(ang) * r);
       if (!n) return false;
       const e = n.out[Math.floor(Math.random() * n.out.length)];
       if (!e || e.len < 80) return false;
@@ -1667,7 +1670,7 @@
       const lane0 = e.type === "hwy" ? (Math.random() < 0.5 ? 0 : 1) : 0;
       const off0 = laneOffset(e, lane0);
       const x = e.from.x + e.dx * s - e.dy * off0, y = e.from.y + e.dy * s + e.dx * off0;
-      if (Math.hypot(x - player.x, y - player.y) < minDist) return false;
+      if (nearestAnchorDist(x, y) < minDist) return false;
 
       const roll = Math.random();
       const kind = e.type === "alley" ? (roll < 0.9 ? "car" : "van")
@@ -1680,7 +1683,7 @@
       const c = {
         kind, length, lane, color: kind === "bus" ? "#e0b020" : kind === "van" ? "#f0f0f0" : kind === "truck" ? ["#c0392b", "#2d7dd2", "#e8e8e8"][Math.floor(Math.random() * 3)] : colors[Math.floor(Math.random() * colors.length)],
         mult: (kind === "car" ? 0.85 + Math.random() * 0.2 : 0.72 + Math.random() * 0.12),
-        s, speed: e.limit * 0.6, x, y, angle: Math.atan2(e.dy, e.dx), jx: 0, jy: 0, edge: null,
+        nid: nextNpcId++, s, speed: e.limit * 0.6, x, y, angle: Math.atan2(e.dy, e.dx), jx: 0, jy: 0, edge: null,
         path: null, pi: 0, dest: null, nextEdge: null, turn: 0, cleared: false, signOK: false, wait: 0, idle: 0, braking: false
       };
       if (!newDestination(c, e.to, e.from)) return false;
@@ -1695,13 +1698,13 @@
       for (const o of npcs) {
         if (o !== self && o.speed > 0.4 && Math.hypot(o.x - n.x, o.y - n.y) < 80) return false;
       }
-      return Math.hypot(player.x - n.x, player.y - n.y) > 90;
+      return nearestAnchorDist(n.x, n.y) > 90;
     }
 
     function stepNpc(c, dt) {
       const sec = dt / 60;
       const e = c.edge;
-      const dp = Math.hypot(c.x - player.x, c.y - player.y);
+      const dp = nearestAnchorDist(c.x, c.y);
       if (dp > 4200) return false;
 
       if (c.pushed) {
@@ -1754,11 +1757,13 @@
         const g = a - (o.length + c.length) / 2 - 6;
         if (g < gap) { gap = g; leadSpeed = o.pushed ? 0 : Math.max(0, o.speed * Math.cos(o.angle - c.angle)); }
       }
-      const rx = player.x - c.x, ry = player.y - c.y;
-      const ahead = rx * e.dx + ry * e.dy, lat = Math.abs(-rx * e.dy + ry * e.dx);
-      if (ahead > 0 && ahead < 110 && lat < 24) {
-        const g = ahead - 34;
-        if (g < gap) { gap = g; leadSpeed = Math.max(0, player.vx * e.dx + player.vy * e.dy); }
+      for (const an of trafficAnchors) {          // Spieler (auch die anderen Online-Fahrer) vor dem Auto beachten
+        const rx = an.x - c.x, ry = an.y - c.y;
+        const ahead = rx * e.dx + ry * e.dy, lat = Math.abs(-rx * e.dy + ry * e.dx);
+        if (ahead > 0 && ahead < 110 && lat < 24) {
+          const g = ahead - 34;
+          if (g < gap) { gap = g; leadSpeed = Math.max(0, an.vx * e.dx + an.vy * e.dy); }
+        }
       }
       if (gap < Infinity) vt = Math.min(vt, gap < 4 ? leadSpeed * 0.5 : leadSpeed * 0.9 + Math.sqrt(2 * 0.04 * (gap - 4)));
 
@@ -1854,7 +1859,7 @@
           npcs.splice(i, 1);
         }
       }
-      const target = settings.traffic;
+      const target = Math.min(450, settings.traffic * Math.min(trafficAnchors.length, 3));
       for (let tries = 0; npcs.length < target && tries < 2; tries++) trySpawnNpc(650, 3000);
     }
 
@@ -2298,6 +2303,58 @@
 
     let hitInfo = null;      // Kontakt mit einem NPC-Auto (Normale, Kontaktpunkt) oder null
 
+    // ===================== Online-Modus: Hitboxen der Fahrzeuge =====================
+    // Jedes Auto hat dieselbe Hitbox: ein gedrehtes Rechteck (30 x 16).
+    const CAR_HL = 15, CAR_HW = 8;
+    const HIT_MARGIN = 2;    // kleiner Rand: beide Spieler bemerken den Kontakt sicher, auch bei Netzwerkverzögerung
+    let remoteCars = [];     // andere Fahrer, die gerade kollidieren und gezeichnet werden
+    let remoteChasers = [];  // Verfolger anderer Fahrer (feste Hindernisse für mich)
+    let remoteObstacles = [];// Fahrer + Verfolger: alles, womit ich zusammenstoßen kann
+    let netNpcList = [];     // Verkehr des Hosts (nur wenn ich nicht Host bin)
+    let trafficHost = true;  // simuliere ich den Verkehr? (immer, solange ich allein/offline bin)
+    let trafficAnchors = [player];   // alle Fahrer, um die herum Verkehr entsteht
+    let nextNpcId = 1;
+    const npcHitOut = new Map();     // Verkehrsauto-ID -> Stoß, der an den Host gemeldet werden muss
+    function nearestAnchorDist(x, y) {
+      let best = Infinity;
+      for (const an of trafficAnchors) {
+        const d = Math.hypot(x - an.x, y - an.y);
+        if (d < best) best = d;
+      }
+      return best;
+    }
+    const hitOut = new Map();        // Fahrer-ID -> Impuls, der noch an ihn gesendet werden muss
+    const lastOwnHit = new Map();    // Fahrer-ID -> Zeit, zu der ich einen Stoß mit ihm berechnet habe
+    const lastGotHit = new Map();    // Fahrer-ID -> Zeit, zu der er mir einen Stoß gemeldet hat
+    const incomingHit = { x: 0, y: 0 };
+    let lastHitFlush = 0;
+
+    // Überlappung zweier gedrehter Rechtecke (SAT). Die Normale zeigt von B nach A.
+    function obbHit(ax, ay, aa, ahl, ahw, bx, by, ba, bhl, bhw) {
+      const axes = [
+        [Math.cos(aa), Math.sin(aa)], [-Math.sin(aa), Math.cos(aa)],
+        [Math.cos(ba), Math.sin(ba)], [-Math.sin(ba), Math.cos(ba)]
+      ];
+      const dx = bx - ax, dy = by - ay;
+      let best = Infinity, bnx = 0, bny = 0;
+
+      for (const [nx, ny] of axes) {
+        const ra = ahl * Math.abs(nx * Math.cos(aa) + ny * Math.sin(aa)) +
+                   ahw * Math.abs(-nx * Math.sin(aa) + ny * Math.cos(aa));
+        const rb = bhl * Math.abs(nx * Math.cos(ba) + ny * Math.sin(ba)) +
+                   bhw * Math.abs(-nx * Math.sin(ba) + ny * Math.cos(ba));
+        const d = dx * nx + dy * ny;
+        const overlap = ra + rb - Math.abs(d);
+        if (overlap <= 0) return null;            // trennende Achse gefunden
+        if (overlap < best) {
+          best = overlap;
+          const sign = d > 0 ? -1 : 1;           // Normale von B nach A
+          bnx = nx * sign; bny = ny * sign;
+        }
+      }
+      return { nx: bnx, ny: bny, depth: best };
+    }
+
     function hasCollision() {
       hitInfo = null;
       const radius = 12;
@@ -2305,7 +2362,7 @@
 
       // NPC-Autos: genaue Hitbox = gedrehtes Rechteck in Fahrzeuggröße; das Spielerauto zählt als drei kleine Kreise
       const pc = Math.cos(player.angle), ps = Math.sin(player.angle);
-      for (const npc of npcs) {
+      for (const npc of (trafficHost ? npcs : netNpcList)) {
         if (Math.hypot(player.x - npc.x, player.y - npc.y) > npc.length / 2 + 24) continue;
         const nc = Math.cos(npc.angle), ns = Math.sin(npc.angle);
         const hl = npc.length / 2, hw = (npc.kind === "bus" ? 20 : npc.kind === "truck" ? 19 : npc.kind === "van" ? 17 : 16) / 2;
@@ -2328,6 +2385,18 @@
         }
       }
 
+      // Andere Fahrer (Online-Modus): Rechteck gegen Rechteck
+      if (remoteObstacles.length && !player.crashed && selectedCar !== 7) {
+        for (const r of remoteObstacles) {
+          if (Math.abs(player.x - r.x) > 40 || Math.abs(player.y - r.y) > 40) continue;
+          const h = obbHit(player.x, player.y, player.angle, CAR_HL + HIT_MARGIN, CAR_HW + HIT_MARGIN, r.x, r.y, r.a, CAR_HL + HIT_MARGIN, CAR_HW + HIT_MARGIN);
+          if (h) {
+            hitInfo = { remote: r, nx: h.nx, ny: h.ny, depth: h.depth, cx: (player.x + r.x) / 2, cy: (player.y + r.y) / 2 };
+            return true;
+          }
+        }
+      }
+
       return player.x < 15 || player.y < 15 ||
         player.x > world.width - 15 || player.y > world.height - 15;
     }
@@ -2339,6 +2408,19 @@
     function pushNpc(h) {
       const npc = h.npc, mn = NPC_MASS[npc.kind] || 1;
       const pnx = -h.nx, pny = -h.ny;                      // Richtung Spieler -> NPC
+      if (npc.net) {
+        // Auto des Verkehrs-Hosts: nur mein Anteil wirkt hier, der Rest geht als Stoß an den Host
+        const vnNet = (player.vx - npc.vx) * pnx + (player.vy - npc.vy) * pny;
+        if (vnNet < 0.08) return 0;
+        const JN = (1 + RESTITUTION) * vnNet / (1 + 1 / mn);
+        player.vx -= pnx * JN; player.vy -= pny * JN;
+        const dvx = pnx * JN / mn, dvy = pny * JN / mn;
+        const dva = clamp(((h.cx - npc.x) * dvy - (h.cy - npc.y) * dvx) / (mn * 2500), -0.12, 0.12);
+        const o = npcHitOut.get(npc.id) || { dvx: 0, dvy: 0, dva: 0 };
+        o.dvx += dvx; o.dvy += dvy; o.dva += dva;
+        npcHitOut.set(npc.id, o);
+        return vnNet;
+      }
       const nvx = npc.pushed ? npc.vx : (npc.edge ? npc.edge.dx * npc.speed : 0);
       const nvy = npc.pushed ? npc.vy : (npc.edge ? npc.edge.dy * npc.speed : 0);
       const vn = (player.vx - nvx) * pnx + (player.vy - nvy) * pny;     // Annäherungsgeschwindigkeit
@@ -2587,7 +2669,7 @@
         return;
       }
 
-      updateTraffic(dt);
+      if (trafficHost) updateTraffic(dt);        // im Online-Modus simuliert nur der Verkehrs-Host
       updateChase(dt);
       if (run.bustTimer > 0) return;
 
@@ -2747,6 +2829,37 @@
           }
           player.x = oldX;
           player.y = oldY;
+          lastTrailPosition = null;
+        } else if (hitInfo && hitInfo.remote) {
+          // anderer Fahrer: jeder Spieler berechnet seinen eigenen Anteil des Stoßes (gleiche Masse)
+          const r = hitInfo.remote;
+          const closing = -((player.vx - r.vx) * hitInfo.nx + (player.vy - r.vy) * hitInfo.ny);
+          const nowMs = performance.now();
+          // Hat der andere Fahrer diesen Stoß schon gemeldet, nicht doppelt anwenden
+          if (closing > 0.01 && nowMs - (lastGotHit.get(r.id) || 0) > 250) {
+            const J = (1 + RESTITUTION) * closing / 2;
+            player.vx += hitInfo.nx * J;
+            player.vy += hitInfo.ny * J;
+            if (!r.chaser) {
+              lastOwnHit.set(r.id, nowMs);
+              // Gegenanteil geht an den anderen Fahrer (wird gebündelt gesendet)
+              const out = hitOut.get(r.id) || { jx: 0, jy: 0 };
+              out.jx -= hitInfo.nx * J;
+              out.jy -= hitInfo.ny * J;
+              hitOut.set(r.id, out);
+            }
+            if (closing * 13 > 35) {
+              sfx.hit(Math.min(1, closing * 13 / 120));
+              loseCombo();
+              run.shake = Math.max(run.shake, 0.3);
+              burst(hitInfo.cx, hitInfo.cy, 8, ["#ffd166", "#ffffff"], 5, true);
+            }
+          }
+          // Auseinanderschieben, damit sich die Autos nicht ineinander verhaken
+          const push = hitInfo.depth * 0.5 + 0.1;
+          player.x += hitInfo.nx * push;
+          player.y += hitInfo.ny * push;
+          if (solidHit(player.x, player.y, 12)) { player.x = oldX; player.y = oldY; }
           lastTrailPosition = null;
         } else if (kmhAtImpact >= 15 && selectedCar === 7) {
           // Keine Explosion mehr: das Auto bleibt einfach stehen (nur die Rakete startet weiterhin zum Mond)
@@ -3313,7 +3426,7 @@
       }
     }
 
-    function drawCar(x, y, angle, color, isPlayer = false) {
+    function drawCar(x, y, angle, color, isPlayer = false, modelIndex = -1) {
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(angle);
@@ -3323,7 +3436,7 @@
       ctx.fillRect(-15, -6, 30, 14);
       ctx.translate(1, 1);
 
-      const carIndex = isPlayer ? selectedCar : -1;
+      const carIndex = isPlayer ? selectedCar : modelIndex;
 
       // RAKETE (Index 7) - spezielles Raketendesign
       if (carIndex === 7) {
@@ -3860,8 +3973,10 @@
       drawWorld();
       drawParticles(false);
 
-      for (const npc of npcs) drawNpc(npc);
+      for (const npc of (trafficHost ? npcs : netNpcList)) drawNpc(npc);
       for (const c of chasers) drawPolice(c);
+      for (const c of remoteChasers) drawPolice(c);
+      for (const r of remoteCars) drawRemoteCar(r);
 
       if (!player.crashed) {
         drawCar(player.x, player.y, player.angle, cars[selectedCar].color, true);
@@ -3870,6 +3985,7 @@
       }
       drawOverlay();
       drawParticles(true);
+      if (settings.showHitbox) drawHitboxes();
 
       ctx.restore();
       drawRunHud();
@@ -3886,6 +4002,36 @@
           ctx.fillText(line, 4, 24 + i * 10);
         });
       }
+    }
+
+    // Andere Fahrer: Auto in der Farbe seines Modells, dazu ein dezenter Ring zur Unterscheidung vom Verkehr
+    function drawRemoteCar(r) {
+      if (!visible(r.x - 50, r.y - 50, 100, 100)) return;
+      const color = (cars[r.car] || cars[0]).color;
+      drawCar(r.x, r.y, r.a, color, false, r.car);
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, 24, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawHitbox(x, y, angle, color) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(-CAR_HL, -CAR_HW, CAR_HL * 2, CAR_HW * 2);
+      ctx.restore();
+    }
+
+    function drawHitboxes() {
+      if (!player.crashed) drawHitbox(player.x, player.y, player.angle, "#00ff66");
+      for (const r of remoteObstacles) drawHitbox(r.x, r.y, r.a, "#ff3b3b");
     }
 
     function drawMinimap() {
@@ -3909,6 +4055,15 @@
         ctx.beginPath();
         ctx.arc(x0 + c.x * sx, y0 + c.y * sy, 3, 0, Math.PI * 2);
         ctx.fill();
+      }
+      for (const r of remoteCars) {
+        ctx.fillStyle = (cars[r.car] || cars[0]).color;
+        ctx.beginPath();
+        ctx.arc(x0 + r.x * sx, y0 + r.y * sy, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
       }
       ctx.fillStyle = cars[selectedCar].color;
       ctx.beginPath();
@@ -4003,6 +4158,8 @@
 
     function refreshSettingsUI() {
       applyTouchMode();
+      const so = document.querySelector("#startOnline");
+      if (so) so.checked = !!settings.online;
       document.documentElement.style.setProperty("--ts", settings.touchScale);
       settingsPage.querySelectorAll("[data-key]").forEach(input => {
         const v = settings[input.dataset.key];
@@ -4041,9 +4198,172 @@
 
     applyTouchMode();
 
+    // ===================== Online-Modus: Anbindung =====================
+    const online = window.AsphaltOnline;
+    const onlineBadge = document.querySelector("#onlineBadge");
+    const startOnline = document.querySelector("#startOnline");
+
+    // Stoß eines anderen Fahrers: wird im nächsten Bild auf mein Auto angewendet
+    if (online) {
+      online.onHit = (from, jx, jy) => {
+        const nowMs = performance.now();
+        if (nowMs - (lastOwnHit.get(from) || 0) < 250) return;   // diesen Kontakt habe ich selbst schon berechnet
+        lastGotHit.set(from, nowMs);
+        incomingHit.x += jx;
+        incomingHit.y += jy;
+      };
+    }
+
+    // Stoß gegen ein Verkehrsauto, das ich als Host simuliere (gemeldet von einem anderen Fahrer)
+    if (online) {
+      online.onNpcHit = (id, dvx, dvy, dva) => {
+        if (!trafficHost) return;
+        const npc = npcs.find(o => o.nid === id);
+        if (!npc) return;
+        if (!npc.pushed) {
+          const nvx = npc.edge ? npc.edge.dx * npc.speed : 0;
+          const nvy = npc.edge ? npc.edge.dy * npc.speed : 0;
+          if (npc.edge) { const i = npc.edge.cars.indexOf(npc); if (i >= 0) npc.edge.cars.splice(i, 1); }
+          npc.pushed = true; npc.vx = nvx; npc.vy = nvy; npc.va = 0; npc.restT = 0;
+          npc.turn = 0; npc.braking = false;
+        }
+        npc.vx += dvx; npc.vy += dvy;
+        npc.va = clamp(npc.va + dva, -0.12, 0.12);
+      };
+    }
+
+    function clearLocalTraffic() {
+      for (const c of npcs) {
+        if (c.edge) { const k = c.edge.cars.indexOf(c); if (k >= 0) c.edge.cars.splice(k, 1); }
+      }
+      npcs.length = 0;
+    }
+
+    const KIND_NAMES = ["car", "van", "truck", "bus"];
+    const KIND_IDX = { car: 0, van: 1, truck: 2, bus: 3 };
+    let lastTrafficBuild = 0;
+
+    function onlineFrame(now) {
+      const on = !!(online && started && settings.online);
+      if (online) online.enable(on);
+
+      if (!on) {
+        remoteCars = []; remoteChasers = []; remoteObstacles = []; netNpcList = [];
+        trafficAnchors = [player];
+        trafficHost = true;
+        hitOut.clear(); npcHitOut.clear();
+        incomingHit.x = incomingHit.y = 0;
+        if (onlineBadge) onlineBadge.hidden = true;
+        return;
+      }
+
+      online.update(now);
+
+      const level = currentLevel === "moon" ? 1 : 0;
+
+      // Wer simuliert den Verkehr? Der Host des Raums; auf dem Mond (eigene Karte) jeder selbst.
+      const wasHost = trafficHost;
+      trafficHost = level === 1 || online.isHost;
+      if (wasHost && !trafficHost) clearLocalTraffic();
+
+      // Andere Fahrer, deren Verfolger und die Anker für den Verkehr
+      remoteCars = []; remoteChasers = [];
+      const anchors = [player];
+      for (const r of online.remotes.values()) {
+        if (r.lvl !== level) continue;
+        anchors.push(r);
+        if (!r.k) remoteCars.push(r);
+        for (const c of r.chasers) remoteChasers.push(c);
+      }
+      trafficAnchors = anchors;
+      remoteObstacles = remoteChasers.length ? remoteCars.concat(remoteChasers) : remoteCars;
+
+      // Verkehr: der Host sendet ihn, alle anderen zeigen ihn nur an
+      netNpcList = [];
+      if (!trafficHost) {
+        for (const n of online.netNpcs.values()) {
+          if (!n.length) {
+            n.kind = KIND_NAMES[n.kindIdx] || "car";
+            n.length = VEHICLE_LENGTH[n.kind];
+            n.turn = 0; n.edge = null; n.s = 0; n.pushed = false;
+          }
+          netNpcList.push(n);
+        }
+        if (npcs.length) clearLocalTraffic();
+      } else if (anchors.length > 1 && online.status === "online" && now - lastTrafficBuild >= 100) {
+        lastTrafficBuild = now;
+        const rows = [];
+        for (const c of npcs) {
+          let near = false;
+          for (let i = 1; i < anchors.length; i++) {
+            if (Math.abs(c.x - anchors[i].x) < 2800 && Math.abs(c.y - anchors[i].y) < 2800) { near = true; break; }
+          }
+          if (!near) continue;
+          const vx = c.pushed ? c.vx : Math.cos(c.angle) * c.speed;
+          const vy = c.pushed ? c.vy : Math.sin(c.angle) * c.speed;
+          rows.push([
+            c.nid, Math.round(c.x * 10) / 10, Math.round(c.y * 10) / 10, Math.round(c.angle * 100) / 100,
+            KIND_IDX[c.kind] ?? 0, c.color, Math.round(vx * 100) / 100, Math.round(vy * 100) / 100, c.braking ? 1 : 0
+          ]);
+        }
+        online.sendTraffic(rows);
+      }
+
+      // Empfangene Stöße anwenden
+      if (incomingHit.x || incomingHit.y) {
+        if (!player.crashed && selectedCar !== 7 && !settingsOpen && !workshopOpen) {
+          player.vx += incomingHit.x;
+          player.vy += incomingHit.y;
+          const kmh = Math.hypot(incomingHit.x, incomingHit.y) * 13;
+          if (kmh > 18) {
+            sfx.hit(Math.min(1, kmh / 60));
+            loseCombo();
+            run.shake = Math.max(run.shake, 0.3);
+          }
+        }
+        incomingHit.x = incomingHit.y = 0;
+      }
+
+      // Gesammelte Stöße höchstens alle 50 ms senden
+      if ((hitOut.size || npcHitOut.size) && now - lastHitFlush >= 50) {
+        lastHitFlush = now;
+        for (const [id, o] of hitOut) online.sendHit(id, o.jx, o.jy);
+        hitOut.clear();
+        for (const [id, o] of npcHitOut) online.sendNpcHit(id, o.dvx, o.dvy, o.dva);
+        npcHitOut.clear();
+      }
+
+      // Eigenen Zustand senden (pausiert, solange Einstellungen oder Werkstatt offen sind)
+      if (!settingsOpen && !workshopOpen) {
+        online.send({
+          x: player.x, y: player.y, a: player.angle, vx: player.vx, vy: player.vy,
+          c: selectedCar, l: level, k: player.crashed ? 1 : 0,
+          q: settings.chasers ? chasers.slice(0, 8).map(c => [Math.round(c.x), Math.round(c.y), Math.round(c.angle * 100) / 100]) : []
+        });
+      }
+
+      if (onlineBadge) {
+        onlineBadge.hidden = false;
+        onlineBadge.dataset.state = online.status;
+        onlineBadge.textContent = online.status === "online"
+          ? L(`Online · ${online.count} Fahrer`, `Online · ${online.count} driver${online.count === 1 ? "" : "s"}`)
+          : online.status === "connecting" ? L("Verbinde …", "Connecting …") : L("Offline – verbinde neu …", "Offline – reconnecting …");
+      }
+    }
+
+    if (startOnline) {
+      startOnline.checked = !!settings.online;
+      startOnline.addEventListener("change", () => {
+        settings.online = startOnline.checked;
+        saveSettings();
+        refreshSettingsUI();
+      });
+    }
+
     function frame(time) {
       const dt = Math.min((time - lastTime) / 16.67 || 1, 2);
       lastTime = time;
+      onlineFrame(performance.now());
       update(dt);
       render();
       requestAnimationFrame(frame);

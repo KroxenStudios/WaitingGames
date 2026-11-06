@@ -30,8 +30,8 @@
       Kontakt: <a href="mailto:kroxenstudios@proton.me">kroxenstudios@proton.me</a></p>
 
     <h2>2. Spiel und Spielstand</h2>
-    <p>Das Spiel läuft komplett in deinem Browser. Eingaben, Guthaben und Spielfortschritt werden
-      nicht an einen Server übertragen. Geld, gekaufte Autos, Tuning, entdeckte Orte, Bestwert und
+    <p>Das Spiel läuft in deinem Browser. Eingaben, Guthaben und Spielfortschritt werden
+      nicht an einen Server übertragen (zum Online-Modus siehe Abschnitt 4a). Geld, gekaufte Autos, Tuning, entdeckte Orte, Bestwert und
       Einstellungen speichert dein Browser lokal (Local Storage), damit du später weiterspielen kannst.
       Diese Daten verlassen dein Gerät nicht und lassen sich in den Einstellungen („Spielstand“) löschen
       oder über die Browserdaten entfernen.</p>
@@ -55,6 +55,16 @@
       wird dieser Punktestand (nur die Zahl, kein Name) dorthin gesendet. Dabei übermittelt dein Browser
       technisch bedingt seine IP-Adresse an Cloudflare.</p>
 
+    <h2>4a. Online-Modus</h2>
+    <p>Wenn „Online fahren“ aktiv ist (Start- oder Einstellungsseite, jederzeit abschaltbar), verbindet sich das
+      Spiel per WebSocket mit einem Cloudflare-Worker (asphalt-arkade-online.kroxenstudios.workers.dev). Gesendet werden
+      nur Position, Fahrtrichtung, Tempo und Fahrzeugmodell deines Autos sowie die Positionen deiner Verfolger,
+      etwa 20-mal pro Sekunde, damit andere Fahrer dich sehen und mit dir zusammenstoßen können. Der Verkehr wird
+      von einem der verbundenen Spieler simuliert; dessen Verkehrsautos (Position, Fahrtrichtung, Tempo, Farbe) werden
+      über den Server an die anderen Fahrer in der Nähe weitergegeben. Es gibt keinen Chat und keine Namen, und nichts wird
+      gespeichert; die Daten leben nur im Arbeitsspeicher des Servers, solange du verbunden bist. Dabei übermittelt
+      dein Browser technisch bedingt seine IP-Adresse an Cloudflare.</p>
+
     <h2>5. Hosting</h2>
     <p>Beim Aufruf der Seite verarbeitet der Hosting-Anbieter technisch notwendige Zugriffsdaten
       (z. B. IP-Adresse, Zeitpunkt) in Server-Logs, um die Seite auszuliefern.</p>
@@ -76,8 +86,8 @@
       Contact: <a href="mailto:kroxenstudios@proton.me">kroxenstudios@proton.me</a></p>
 
     <h2>2. Game and save data</h2>
-    <p>The game runs entirely in your browser. Inputs, balance and game progress are not transmitted
-      to a server. Money, purchased cars, tuning, discovered places, best score and settings are stored
+    <p>The game runs in your browser. Inputs, balance and game progress are not transmitted
+      to a server (for online mode see section 4a). Money, purchased cars, tuning, discovered places, best score and settings are stored
       locally by your browser (local storage) so you can continue later. This data never leaves your
       device and can be deleted in the settings ("Save data") or by clearing your browser data.</p>
 
@@ -99,6 +109,16 @@
       (waitinggames-record.kroxenstudios.workers.dev). If you set a new personal best, that score (the
       number only, no name) is sent there. As is technically unavoidable, your browser transmits its IP
       address to Cloudflare.</p>
+
+    <h2>4a. Online mode</h2>
+    <p>While "Drive online" is enabled (start or settings page, can be turned off at any time), the game
+      connects via WebSocket to a Cloudflare Worker (asphalt-arkade-online.kroxenstudios.workers.dev). Only your
+      car's position, heading, speed and car model plus the positions of your chasers are sent, about 20 times per
+      second, so other drivers can see you and collide with you. Traffic is simulated by one of the connected
+      players; that player's traffic cars (position, heading, speed, colour) are relayed through the server to
+      nearby drivers. There is no chat and there are no names, and nothing is stored; the data only
+      lives in the server's memory while you are connected. As is technically unavoidable, your browser
+      transmits its IP address to Cloudflare.</p>
 
     <h2>5. Hosting</h2>
     <p>When the site is accessed, the hosting provider processes technically necessary access data

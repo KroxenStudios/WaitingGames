@@ -29,6 +29,7 @@
         <li><b>Verfolgungsjagd:</b> Du wirst verfolgt – je länger du überlebst, desto mehr Punkte</li>
       </ul>
       <p class="global-best" hidden></p>
+      <label class="start-online"><input type="checkbox" id="startOnline" checked> <span>Online fahren: andere Fahrer sehen und zusammen fahren</span></label>
       <button class="start-button" id="startButton">SPIEL STARTEN</button>
       <div class="start-controls">
         <span><kbd>W</kbd>/<kbd>↑</kbd> Gas</span>
@@ -80,6 +81,11 @@
         <small>1 = realistisch (0–100 km/h-Zeit des Autos).</small></label>
       <label>Verkehrsdichte <output data-for="traffic"></output>
         <input type="range" data-key="traffic" min="0" max="200" step="10"></label>
+
+      <h3>Online</h3>
+      <label class="check"><input type="checkbox" data-key="online"> Online fahren (andere Fahrer sehen, Zusammenstöße)</label>
+      <small class="settings-note">Es werden nur Position und Fahrzeugmodell sowie Verkehr und Verfolger gesendet. Kein Chat, keine Namen.</small>
+      <label class="check"><input type="checkbox" data-key="showHitbox"> Hitboxen der Fahrzeuge anzeigen</label>
 
       <h3>Verfolger</h3>
       <label class="check"><input type="checkbox" data-key="chasers"> Verfolger aktiv</label>
@@ -194,6 +200,8 @@
         <kbd>T</kbd> Werkstatt
       </div>
 
+      <div class="online-badge" id="onlineBadge" hidden></div>
+
       <div class="crash-overlay" id="crashOverlay" aria-live="polite">
         <div class="fireball">🔥</div>
         <strong>BUMM</strong>
@@ -223,6 +231,7 @@
 
   <script src="../i18n.js"></script>
   <script src="translations.js"></script>
+  <script src="online.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

@@ -3,6 +3,7 @@
     const EN_TEXT = {
   "Online fahren: andere Fahrer sehen und zusammen fahren": "Drive online: see other drivers and drive together",
   "Online": "Online",
+  "Online-Modus an/aus": "Online mode on/off",
   "Online fahren (andere Fahrer sehen, Zusammenstöße)": "Drive online (see other drivers, collisions)",
   "Es werden nur Position und Fahrzeugmodell sowie Verkehr und Verfolger gesendet. Kein Chat, keine Namen.": "Only position and car model, plus traffic and chasers, are sent. No chat, no names.",
   "Hitboxen der Fahrzeuge anzeigen": "Show vehicle hitboxes",

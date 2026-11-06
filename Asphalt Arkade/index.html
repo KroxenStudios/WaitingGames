@@ -200,7 +200,10 @@
         <kbd>T</kbd> Werkstatt
       </div>
 
-      <div class="online-badge" id="onlineBadge" hidden></div>
+      <div class="online-badge" id="onlineBadge" role="button" title="Online-Modus an/aus" data-state="off" hidden>
+        <i class="ob-dot"></i>
+        <span class="ob-text"><b id="onlineState">Offline</b><small id="onlineInfo"></small></span>
+      </div>
 
       <div class="crash-overlay" id="crashOverlay" aria-live="polite">
         <div class="fireball">🔥</div>

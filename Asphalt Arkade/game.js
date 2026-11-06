@@ -4243,6 +4243,51 @@
     const KIND_IDX = { car: 0, van: 1, truck: 2, bus: 3 };
     let lastTrafficBuild = 0;
 
+    // Statusfenster: zeigt, ob man online ist (Klick schaltet den Online-Modus an/aus)
+    const onlineStateEl = document.querySelector("#onlineState");
+    const onlineInfoEl = document.querySelector("#onlineInfo");
+    let badgeKey = "";
+
+    function updateOnlineBadge(on) {
+      if (!onlineBadge) return;
+      if (!started) { onlineBadge.hidden = true; return; }
+      onlineBadge.hidden = false;
+
+      const state = !on ? "off" : online.status;
+      let title, info;
+
+      if (state === "online") {
+        const n = online.count;
+        title = L("Online", "Online");
+        info = n <= 1 ? L("allein auf der Strecke", "alone on the road")
+          : L(`${n} Fahrer`, `${n} drivers`);
+      } else if (state === "connecting") {
+        title = L("Verbinde", "Connecting");
+        info = L("zum Server …", "to server …");
+      } else if (state === "error") {
+        title = L("Offline", "Offline");
+        info = L("verbinde neu …", "reconnecting …");
+      } else {
+        title = L("Offline", "Offline");
+        info = L("Klicken zum Einschalten", "Click to turn on");
+      }
+
+      const key = state + "|" + title + "|" + info;
+      if (key === badgeKey) return;
+      badgeKey = key;
+      onlineBadge.dataset.state = state;
+      onlineStateEl.textContent = title;
+      onlineInfoEl.textContent = info;
+    }
+
+    if (onlineBadge) {
+      onlineBadge.addEventListener("click", () => {
+        settings.online = !settings.online;
+        saveSettings();
+        refreshSettingsUI();
+      });
+    }
+
     function onlineFrame(now) {
       const on = !!(online && started && settings.online);
       if (online) online.enable(on);
@@ -4253,7 +4298,7 @@
         trafficHost = true;
         hitOut.clear(); npcHitOut.clear();
         incomingHit.x = incomingHit.y = 0;
-        if (onlineBadge) onlineBadge.hidden = true;
+        updateOnlineBadge(false);
         return;
       }
 
@@ -4342,13 +4387,7 @@
         });
       }
 
-      if (onlineBadge) {
-        onlineBadge.hidden = false;
-        onlineBadge.dataset.state = online.status;
-        onlineBadge.textContent = online.status === "online"
-          ? L(`Online · ${online.count} Fahrer`, `Online · ${online.count} driver${online.count === 1 ? "" : "s"}`)
-          : online.status === "connecting" ? L("Verbinde …", "Connecting …") : L("Offline – verbinde neu …", "Offline – reconnecting …");
-      }
+      updateOnlineBadge(true);
     }
 
     if (startOnline) {

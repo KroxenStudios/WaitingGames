@@ -121,6 +121,10 @@ export const TEILE = {
   servo:    { name: "Stellmotor", art: "anbau", faces: ["ny", "py"], masse: 15, gruppe: "Mechanik", gelenk: "servo" },
   fluegel:  { name: "Tragfläche", art: "bau", faces: ALLE, masse: 6, gruppe: "Flug" },
   steuerflaeche: { name: "Steuerfläche", art: "bau", faces: ALLE, masse: 5, gruppe: "Flug" },
+  scheinwerfer: { name: "Scheinwerfer", art: "anbau", faces: ["ny"], masse: 4, gruppe: "Effekte" },
+  leiter:   { name: "Leiter", art: "bau", faces: ALLE, masse: 5, gruppe: "Mechanik" },
+  propeller: { name: "Propellermotor", art: "anbau", faces: ["ny"], masse: 30, gruppe: "Antrieb" },
+  tank:     { name: "Treibstofftank", art: "bau", faces: ALLE, masse: 25, gruppe: "Antrieb" },
   kamera:   { name: "Kamera", art: "anbau", faces: ["ny"], masse: 4, gruppe: "Mechanik" },
   fallschirm: { name: "Fallschirm", art: "anbau", faces: ["ny"], masse: 10, gruppe: "Mechanik" },
   bruch:    { name: "Sollbruchstelle", art: "anbau", faces: ["ny", "py"], masse: 8, gruppe: "Mechanik", gelenk: "bruch" }
@@ -147,6 +151,9 @@ export function standardEinstellungen(typ, bauplan) {
     case "duese": return { taste: "shift", schub: 4 };
     case "rakete": return { taste: "r", schub: 14, dauer: 3 };
     case "fallschirm": return { taste: "p", flaeche: 12, farbe: "#ff6a1a" };
+    case "scheinwerfer": return { taste: "l", farbe: "#fff6d0" };
+    case "propeller": return { plus: "g", minus: "h", schub: 4, tempo: 80 };
+    case "tank": return { kapazitaet: 60 };
     case "fluegel": return { flaeche: 4 };
     case "steuerflaeche": return { flaeche: 1.5, winkel: 25, kanal: "nick", plus: KANAL_TASTEN.nick[0], minus: KANAL_TASTEN.nick[1], gegenlauf: false };
     case "kamera": {
@@ -224,6 +231,7 @@ function bereinigeEinstellungen(typ, k) {
   set("kanal", ["nick", "roll", "gier"].includes(k.kanal) ? k.kanal : undefined);
   set("gegenlauf", typeof k.gegenlauf === "boolean" ? k.gegenlauf : undefined);
   set("fov", zahl(k.fov, 30, 120));
+  set("kapazitaet", zahl(k.kapazitaet, 10, 500));
   set("tempo", zahl(k.tempo, 10, 360));
   set("modus", ["winkel", "dauer"].includes(k.modus) ? k.modus : undefined);
   return out;
@@ -389,4 +397,278 @@ export function starterKart() {
   add("rad_fest", 1, 0, 1, rechts, "#2b2f36");
   add("auspuff", 0, 0, 3, hinten, "#8b8f98");
   return { v: 1, parts };
+}
+
+// ---------------------------------------------------------------------------
+// Vorlagen: fertige Fahrzeuge zum Laden
+// ---------------------------------------------------------------------------
+// Ausrichtung, bei der lokales +Y nach yDir und lokales +Z nach zDir zeigt
+// (z. B. für senkrecht stehende Ruder: Plattennormale zur Seite, Flügeltiefe nach hinten)
+export function orientAchsen(yDir, zDir) {
+  for (let i = 0; i < ORIENT.length; i++) {
+    const y = matVec(ORIENT[i], [0, 1, 0]), z = matVec(ORIENT[i], [0, 0, 1]);
+    if (y.every((v, k) => v === yDir[k]) && z.every((v, k) => v === zDir[k])) return i;
+  }
+  return 0;
+}
+
+const C = { rot: "#e5484d", orange: "#f5a524", gelb: "#ffd43b", gruen: "#46b96b", blau: "#2f9ee0", weiss: "#f2f2f2", grau: "#8b8f98", dunkel: "#2b2f36" };
+
+function baue(fn) {
+  const parts = [];
+  const add = (t, x, y, z, o = 0, c = C.grau, k = {}) =>
+    parts.push({ t, x, y, z, o, c, k: { ...standardEinstellungen(t, { parts }), ...k } });
+  fn(add, {
+    links: orientFromUp([-1, 0, 0]), rechts: orientFromUp([1, 0, 0]),
+    hinten: orientFromUp([0, 0, 1]), vorne: orientFromUp([0, 0, -1]),
+    oben: orientFromUp([0, 1, 0]), unten: orientFromUp([0, -1, 0])
+  });
+  return bereinige({ v: 1, parts });
+}
+
+export const VORLAGEN = [
+  { id: "kart", name: "Kart", bauen: () => bereinige(starterKart()) },
+
+  { id: "dragster", name: "Dragster", bauen: () => baue((add, o) => {
+    for (let z = -5; z <= 3; z++) add("block", 0, 0, z, 0, z % 3 === 0 ? C.weiss : C.orange);
+    add("sitz", 0, 1, 0, 0, C.dunkel);
+    add("rakete", 0, 0, 4, o.hinten, C.grau, { dauer: 4, schub: 16 });
+    add("fallschirm", 0, 1, 3, o.oben, C.grau, { flaeche: 14 });
+    add("kamera", 0, 0, -6, o.vorne, C.rot);
+    add("rad_lenk", -1, 0, -4, o.links, C.dunkel, { winkel: 25 });
+    add("rad_lenk", 1, 0, -4, o.rechts, C.dunkel, { winkel: 25 });
+    add("rad_fest", -1, 0, 2, o.links, C.dunkel);
+    add("rad_fest", 1, 0, 2, o.rechts, C.dunkel);
+  }) },
+
+  { id: "wagen", name: "Einkaufswagen", bauen: () => baue((add, o) => {
+    // wie ein echter Einkaufswagen: vorne zwei Schwenkrollen, hinten zwei feste Räder (geben Spur)
+    for (let x = 0; x <= 1; x++) for (let z = 0; z <= 2; z++) add("block", x, 1, z, 0, C.grau);
+    for (let x = 0; x <= 1; x++) add("block", x, 0, 2, 0, C.grau);
+    add("sitz", 0, 2, 1, 0, C.dunkel);
+    add("block", 1, 2, 1, 0, C.grau);
+    add("rad_bock", 0, 0, 0, o.unten, C.dunkel);
+    add("rad_bock", 1, 0, 0, o.unten, C.dunkel);
+    add("rad_fest", -1, 0, 2, o.links, C.dunkel, { antrieb: false });
+    add("rad_fest", 2, 0, 2, o.rechts, C.dunkel, { antrieb: false });
+    add("duese", 0, 1, 3, o.hinten, C.grau, { schub: 1.5 });
+    add("duese", 1, 1, 3, o.hinten, C.grau, { schub: 1.5 });
+    add("duese", -1, 1, 1, o.links, C.grau, { schub: 1.2, taste: "d" });   // schiebt nach rechts
+    add("duese", 2, 1, 1, o.rechts, C.grau, { schub: 1.2, taste: "a" });   // schiebt nach links
+    add("nebel", 1, 2, 2, o.oben, C.weiss);
+  }) },
+  { id: "gelaende", name: "Geländewagen", bauen: () => baue((add, o) => {
+    for (let z = -3; z <= 3; z++) for (let x = -1; x <= 0; x++) add("block", x, 0, z, 0, C.gruen);
+    add("sitz", -1, 1, 0, 0, C.dunkel);
+    add("sitz", 0, 1, 0, 0, C.dunkel);
+    add("keil", -1, 1, -2, 0, C.gruen);
+    add("keil", 0, 1, -2, 0, C.gruen);
+    add("block", -1, 1, 2, 0, C.dunkel);
+    add("block", 0, 1, 2, 0, C.dunkel);
+    add("kamera", 0, 0, -4, o.vorne, C.dunkel);
+    add("auspuff", -1, 0, 4, o.hinten, C.grau);
+    add("rad_lenk", -2, 0, -3, o.links, C.dunkel, { groesse: "L", winkel: 30 });
+    add("rad_lenk", 1, 0, -3, o.rechts, C.dunkel, { groesse: "L", winkel: 30 });
+    add("rad_fest", -2, 0, 2, o.links, C.dunkel, { groesse: "L" });
+    add("rad_fest", 1, 0, 2, o.rechts, C.dunkel, { groesse: "L" });
+  }) },
+
+  { id: "flugzeug", name: "Flugzeug", bauen: () => baue((add, o) => {
+    for (let z = -3; z <= 2; z++) add("block", 0, 0, z, 0, C.weiss);
+    add("sitz", 0, 1, -1, 0, C.dunkel);
+    add("kamera", 0, 0, -4, o.vorne, C.rot);
+    // Tragflächen hinter dem Schwerpunkt (stabil), außen Querruder
+    for (const x of [-2, -1, 1, 2]) for (const z of [0, 1]) add("fluegel", x, 0, z, 0, C.rot);
+    for (const z of [0, 1]) {
+      // links gegenläufig: ein Tastendruck kippt die Hinterkanten gegensinnig
+      add("steuerflaeche", -3, 0, z, 0, C.gelb, { kanal: "roll", plus: "arrowright", minus: "arrowleft", gegenlauf: true, flaeche: 0.6, winkel: 12 });
+      add("steuerflaeche", 3, 0, z, 0, C.gelb, { kanal: "roll", plus: "arrowright", minus: "arrowleft", flaeche: 0.6, winkel: 12 });
+    }
+    // Leitwerk: feste Stabilisatoren, Höhenruder, Seitenruder senkrecht darüber
+    add("fluegel", -1, 0, 3, 0, C.rot, { flaeche: 3 });
+    add("fluegel", 1, 0, 3, 0, C.rot, { flaeche: 3 });
+    add("steuerflaeche", 0, 0, 3, 0, C.gelb, { kanal: "nick", flaeche: 1.2, winkel: 20 });
+    add("steuerflaeche", 0, 0, 4, 0, C.gelb, { kanal: "nick", flaeche: 1.2, winkel: 20 });
+    const senkrecht = orientAchsen([1, 0, 0], [0, 0, 1]);
+    add("steuerflaeche", 0, 1, 4, senkrecht, C.rot, { kanal: "gier", plus: "e", minus: "q", flaeche: 1.5, winkel: 20 });
+    add("steuerflaeche", 0, 2, 4, senkrecht, C.rot, { kanal: "gier", plus: "e", minus: "q", flaeche: 1.5, winkel: 20 });
+    add("rakete", 0, 0, 5, o.hinten, C.grau, { dauer: 6, schub: 9 });
+    add("rad_lenk", -1, 0, -3, o.links, C.dunkel);
+    add("rad_lenk", 1, 0, -3, o.rechts, C.dunkel);
+    add("rad_fest", -1, 0, 2, o.links, C.dunkel);
+    add("rad_fest", 1, 0, 2, o.rechts, C.dunkel);
+  }) },
+  { id: "kran", name: "Kranwagen", bauen: () => baue((add, o) => {
+    for (let z = -3; z <= 2; z++) for (let x = -1; x <= 0; x++) add("block", x, 0, z, 0, C.gelb);
+    add("sitz", -1, 1, 0, 0, C.dunkel);
+    add("servo", 0, 1, 1, 0, C.grau, { winkel: 120 });
+    for (let z = 1; z >= -2; z--) add("block", 0, 2, z, 0, C.orange);
+    add("keil", 0, 2, -3, 0, C.dunkel);
+    add("rad_lenk", -2, 0, -2, o.links, C.dunkel);
+    add("rad_lenk", 1, 0, -2, o.rechts, C.dunkel);
+    add("rad_fest", -2, 0, 1, o.links, C.dunkel);
+    add("rad_fest", 1, 0, 1, o.rechts, C.dunkel);
+  }) },
+
+  { id: "zug", name: "Zugmaschine mit Anhänger", bauen: () => baue((add, o) => {
+    for (let z = -3; z <= 2; z++) add("block", 0, 0, z, 0, C.blau);
+    add("sitz", 0, 1, 0, 0, C.dunkel);
+    add("rad_lenk", -1, 0, -2, o.links, C.dunkel);
+    add("rad_lenk", 1, 0, -2, o.rechts, C.dunkel);
+    add("rad_fest", -1, 0, 1, o.links, C.dunkel);
+    add("rad_fest", 1, 0, 1, o.rechts, C.dunkel);
+    add("bruch", 0, 0, 3, o.hinten, C.gelb, { taste: "1" });
+    for (let z = 4; z <= 6; z++) add("block", 0, 0, z, 0, C.grau);
+    add("rad_fest", -1, 0, 5, o.links, C.dunkel, { antrieb: false });
+    add("rad_fest", 1, 0, 5, o.rechts, C.dunkel, { antrieb: false });
+    add("kamera", 0, 0, 7, o.hinten, C.rot);
+  }) },
+  { id: "bus", name: "Reisebus", bauen: () => baue((add, o) => {
+    add("sitz", 0, 0, -6, 0, C.dunkel);                                   // Fahrer zuerst: legt "vorne" fest
+    for (let z = -8; z <= 8; z++) {
+      for (let x = -1; x <= 1; x++) {
+        if (x === 0 && z === -6) continue;
+        const kante = z === -8 || z === 8;
+        const sitzPlatz = x !== 0 && z >= -5 && z <= 5 && (z + 5) % 2 === 0;
+        if (sitzPlatz) add("sitz", x, 0, z, 0, C.blau);
+        else add(kante ? "block" : "halb", x, 0, z, 0, kante ? C.gelb : C.grau);
+      }
+    }
+    for (const x of [-1, 1]) for (const z of [-7, -4, -1, 2, 5, 7]) for (const y of [1, 2]) add("block", x, y, z, 0, C.gelb);   // Säulen
+    for (const z of [-8, 8]) for (let x = -1; x <= 1; x++) for (const y of [1, 2]) add("block", x, y, z, 0, C.gelb);        // Front- und Heckwand
+    for (let z = -8; z <= 8; z++) for (let x = -1; x <= 1; x++) add("halb", x, 3, z, 0, C.weiss);                           // Dach
+    add("scheinwerfer", -1, 0, -9, o.vorne, C.weiss);
+    add("scheinwerfer", 1, 0, -9, o.vorne, C.weiss);
+    add("kamera", 0, 2, -9, o.vorne, C.dunkel);
+    for (let y = 0; y <= 3; y++) add("leiter", 0, y, 9, 0, C.grau);                                                         // Leiter aufs Dach
+    add("auspuff", 1, 0, 9, o.hinten, C.grau);
+    add("rad_lenk", -2, 0, -6, o.links, C.dunkel, { groesse: "L", winkel: 28 });
+    add("rad_lenk", 2, 0, -6, o.rechts, C.dunkel, { groesse: "L", winkel: 28 });
+    for (const z of [4, 6]) {
+      add("rad_fest", -2, 0, z, o.links, C.dunkel, { groesse: "L" });
+      add("rad_fest", 2, 0, z, o.rechts, C.dunkel, { groesse: "L" });
+    }
+  }) },
+
+  { id: "rakete_gross", name: "Raumrakete", bauen: () => baue((add, o) => {
+    const unten = orientFromUp([0, -1, 0]);
+    add("sitz", 0, 7, 0, 0, C.dunkel);
+    add("sitz", 1, 7, 0, 0, C.dunkel);
+    for (let y = 1; y <= 8; y++) for (const x of [0, 1]) for (const z of [0, 1]) {
+      if (y === 7 && z === 0) continue;
+      add("block", x, y, z, 0, y % 3 === 0 ? C.rot : C.weiss);
+    }
+    // Spitze: vier Eckschrägen, die in der Mitte zusammenlaufen
+    add("ecke", 0, 9, 0, orientFromYawTilt(0, 0), C.rot);
+    add("ecke", 1, 9, 0, orientFromYawTilt(3, 0), C.rot);
+    add("ecke", 1, 9, 1, orientFromYawTilt(2, 0), C.rot);
+    add("ecke", 0, 9, 1, orientFromYawTilt(1, 0), C.rot);
+    for (const x of [0, 1]) for (const z of [0, 1]) add("rakete", x, 0, z, unten, C.grau, { dauer: 8, schub: 22 });
+    // Leitflossen
+    const flosseX = orientAchsen([1, 0, 0], [0, 1, 0]), flosseZ = orientAchsen([0, 0, 1], [0, 1, 0]);
+    for (const y of [1, 2]) {
+      for (const z of [0, 1]) { add("fluegel", -1, y, z, flosseX, C.rot, { flaeche: 2 }); add("fluegel", 2, y, z, flosseX, C.rot, { flaeche: 2 }); }
+      for (const x of [0, 1]) { add("fluegel", x, y, -1, flosseZ, C.rot, { flaeche: 2 }); add("fluegel", x, y, 2, flosseZ, C.rot, { flaeche: 2 }); }
+    }
+    add("fallschirm", -1, 6, 0, orientFromUp([-1, 0, 0]), C.grau, { flaeche: 30 });
+    add("kamera", 0, 8, -1, orientFromUp([0, 0, -1]), C.dunkel);
+  }) },
+
+  { id: "prop", name: "Propellerflugzeug", bauen: () => baue((add, o) => {
+    add("sitz", 0, 1, -2, 0, C.dunkel);
+    add("sitz", 0, 1, 0, 0, C.dunkel);
+    for (let z = -5; z <= 3; z++) add("block", 0, 0, z, 0, C.weiss);
+    add("tank", 0, 1, -4, 0, C.rot, { kapazitaet: 120 });
+    add("scheinwerfer", 0, 0, -6, o.vorne, C.gelb);
+    // Tragflächen etwas hinter dem Schwerpunkt, außen Querruder
+    for (const x of [-5, -4, -3, -2, -1, 1, 2, 3, 4, 5]) for (const z of [0, 1]) add("fluegel", x, 0, z, 0, C.rot, { flaeche: 3 });
+    for (const z of [0, 1]) {
+      add("steuerflaeche", -6, 0, z, 0, C.gelb, { kanal: "roll", plus: "arrowright", minus: "arrowleft", gegenlauf: true, flaeche: 1, winkel: 12 });
+      add("steuerflaeche", 6, 0, z, 0, C.gelb, { kanal: "roll", plus: "arrowright", minus: "arrowleft", flaeche: 1, winkel: 12 });
+    }
+    add("propeller", -3, 0, 2, o.hinten, C.grau, { schub: 5 });     // Druckpropeller hinter dem Flügel
+    add("propeller", 3, 0, 2, o.hinten, C.grau, { schub: 5 });
+    // Leitwerk
+    add("fluegel", -1, 0, 4, 0, C.rot, { flaeche: 3 });
+    add("fluegel", 1, 0, 4, 0, C.rot, { flaeche: 3 });
+    add("steuerflaeche", 0, 0, 4, 0, C.gelb, { kanal: "nick", flaeche: 4.5, winkel: 25 });
+    add("steuerflaeche", 0, 0, 5, 0, C.gelb, { kanal: "nick", flaeche: 4.5, winkel: 25 });
+    const senkrecht = orientAchsen([1, 0, 0], [0, 0, 1]);
+    add("steuerflaeche", 0, 1, 5, senkrecht, C.rot, { kanal: "gier", plus: "e", minus: "q", flaeche: 1.5, winkel: 20 });
+    add("steuerflaeche", 0, 2, 5, senkrecht, C.rot, { kanal: "gier", plus: "e", minus: "q", flaeche: 1.5, winkel: 20 });
+    add("rad_lenk", -1, 0, -4, o.links, C.dunkel);
+    add("rad_lenk", 1, 0, -4, o.rechts, C.dunkel);
+    add("rad_fest", -1, 0, 2, o.links, C.dunkel);
+    add("rad_fest", 1, 0, 2, o.rechts, C.dunkel);
+  }) },
+
+  { id: "feuerwehr", name: "Feuerwehrauto", bauen: () => baue((add, o) => {
+    add("sitz", -1, 1, -4, 0, C.dunkel);
+    add("sitz", 1, 1, -4, 0, C.dunkel);
+    for (let z = -6; z <= 6; z++) for (let x = -1; x <= 1; x++) add("halb", x, 0, z, 0, C.rot);
+    for (let x = -1; x <= 1; x++) for (const z of [-6, -5]) add("block", x, 1, z, 0, C.rot);          // Motorhaube
+    for (let x = -1; x <= 1; x++) { add("block", x, 1, -3, 0, C.rot); add("block", x, 2, -3, 0, C.weiss); }   // Rückwand der Kabine
+    for (let z = -1; z <= 6; z++) for (let x = -1; x <= 1; x++) {                                       // Aufbau
+      if (!(x === 0 && z === 2)) add("block", x, 1, z, 0, C.rot);                                       // an dieser Stelle sitzt der Wassertank
+      add("block", x, 2, z, 0, C.weiss);
+    }
+    add("tank", 0, 1, 2, 0, C.blau, { kapazitaet: 300 });
+    add("scheinwerfer", -1, 1, -7, o.vorne, C.weiss);
+    add("scheinwerfer", 1, 1, -7, o.vorne, C.weiss);
+    add("scheinwerfer", -1, 3, 0, o.oben, C.blau, { taste: "j", farbe: "#4aa3ff" });
+    add("scheinwerfer", 1, 3, 0, o.oben, C.blau, { taste: "j", farbe: "#4aa3ff" });
+    add("nebel", 0, 3, 3, o.oben, C.weiss, { farbe: "#ffffff" });
+    add("kamera", 0, 1, -7, o.vorne, C.dunkel);
+    for (let y = 0; y <= 3; y++) add("leiter", 0, y, 7, 0, C.grau);
+    add("auspuff", 1, 0, 7, o.hinten, C.grau);
+    add("rad_lenk", -2, 0, -5, o.links, C.dunkel, { groesse: "L" });
+    add("rad_lenk", 2, 0, -5, o.rechts, C.dunkel, { groesse: "L" });
+    for (const z of [3, 5]) {
+      add("rad_fest", -2, 0, z, o.links, C.dunkel, { groesse: "L" });
+      add("rad_fest", 2, 0, z, o.rechts, C.dunkel, { groesse: "L" });
+    }
+  }) },
+
+  { id: "buggy", name: "Propeller-Buggy", bauen: () => baue((add, o) => {
+    add("sitz", 0, 1, -2, 0, C.dunkel);
+    for (let z = -3; z <= 2; z++) for (let x = 0; x <= 1; x++) add("block", x, 0, z, 0, C.orange);
+    add("tank", 1, 1, -2, 0, C.rot, { kapazitaet: 80 });
+    add("block", 0, 1, 2, 0, C.grau);
+    add("block", 0, 2, 2, 0, C.grau);                                  // Mast für den Propeller
+    add("propeller", 0, 2, 3, o.hinten, C.grau, { schub: 2.5, tempo: 35 });
+    add("scheinwerfer", 0, 0, -4, o.vorne, C.gelb);
+    add("rad_lenk", -1, 0, -3, o.links, C.dunkel, { antrieb: false, winkel: 12 });
+    add("rad_lenk", 2, 0, -3, o.rechts, C.dunkel, { antrieb: false, winkel: 12 });
+    add("rad_fest", -1, 0, 2, o.links, C.dunkel, { antrieb: false });
+    add("rad_fest", 2, 0, 2, o.rechts, C.dunkel, { antrieb: false });
+  }) },
+
+  { id: "zug_lang", name: "Zug mit zwei Wagen", bauen: () => baue((add, o) => {
+    add("sitz", 0, 1, -1, 0, C.dunkel);
+    for (let z = -4; z <= 0; z++) add("block", 0, 0, z, 0, C.rot);
+    add("auspuff", 0, 1, -4, o.oben, C.dunkel);
+    add("scheinwerfer", 0, 0, -5, o.vorne, C.gelb);
+    add("rad_lenk", -1, 0, -3, o.links, C.dunkel, { winkel: 12 });
+    add("rad_lenk", 1, 0, -3, o.rechts, C.dunkel, { winkel: 12 });
+    add("rad_fest", -1, 0, -1, o.links, C.dunkel);
+    add("rad_fest", 1, 0, -1, o.rechts, C.dunkel);
+    for (const [start, farbe, taste] of [[1, C.blau, "1"], [7, C.gruen, "2"]]) {
+      add("bruch", 0, 0, start, o.hinten, C.gelb, { taste });                  // Kupplung (Sollbruchstelle)
+      for (let z = start + 1; z <= start + 5; z++) {
+        add("block", 0, 0, z, 0, farbe);
+        if (z !== start + 3) add("block", 0, 1, z, 0, farbe);
+      }
+      add("sitz", 0, 1, start + 3, 0, C.dunkel);
+      for (const z of [start + 2, start + 4]) {
+        add("rad_fest", -1, 0, z, o.links, C.dunkel, { antrieb: false });
+        add("rad_fest", 1, 0, z, o.rechts, C.dunkel, { antrieb: false });
+      }
+    }
+    add("kamera", 0, 0, 13, o.hinten, C.rot);
+  }) }
+];
+
+export function vorlage(id) {
+  const v = VORLAGEN.find(x => x.id === id);
+  return v ? v.bauen() : null;
 }

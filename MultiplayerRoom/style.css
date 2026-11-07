@@ -408,3 +408,33 @@ body.touch #chatToggle {
 }
 body.touch #chatForm { display: none; }
 body.touch.chat-offen #chatForm { display: flex; top: 46px; left: 52px; bottom: auto; width: calc(100vw - 60px); }
+
+/* Vorlagen-Auswahl: sieht aus wie ein Knopf, die Liste öffnet das unsichtbare select darüber */
+.presetBtn {
+  position: relative; flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center;
+  padding: 6px 9px; border: 1px solid var(--line); border-radius: 9px; background: #ffffff10;
+  color: var(--text); font-size: 12.5px; cursor: pointer;
+}
+.presetBtn:hover { background: #ffffff22; }
+.panel > .presetBtn { display: flex; width: 100%; margin: 0 0 6px; }
+.presetBtn select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+body.touch .presetBtn { flex: 0 0 auto; min-width: 34px; height: 32px; padding: 0 6px; font-size: 16px; order: 9; margin: 0; }
+
+/* Teile-Leiste im Handheld-Modus: kompakter, Rand blendet aus = "hier geht es weiter" */
+body.touch #palette button { min-width: 0; padding: 0 8px; font-size: 11.5px; }
+body.touch #palette {
+  scroll-snap-type: x proximity;
+  padding-right: 28px;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent);
+}
+body.touch #palette button { scroll-snap-align: start; }
+
+/* Handy: nichts markieren, kein Kopieren-/Übersetzen-Overlay bei langem Drücken */
+html, body, .panel, #hud, #touchTasten, #joystick, #meldung, #hint, #camOverlay, #game {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+button, label, .panel, #touchTasten, #joystick { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+input, textarea, select { -webkit-user-select: text; user-select: text; }

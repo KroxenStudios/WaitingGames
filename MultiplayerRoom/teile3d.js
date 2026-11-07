@@ -163,6 +163,58 @@ export function teilModell(p) {
       out.klappe = klappe;
       break;
     }
+    case "scheinwerfer": {
+      g.add(box(0.3, 0.05, 0.3, mat(DUNKEL), 0, -0.225));
+      g.add(box(0.28, 0.16, 0.28, mat("#2b2f36"), 0, -0.12));
+      g.add(zyl(0.13, 0.17, 0.12, mat("#c9ced6", CHROM), 0, 0.02, 0, 22));
+      const linse = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.115, 0.115, 0.012, 22),
+        new THREE.MeshStandardMaterial({ color: "#fffbe8", emissive: p.k?.farbe || "#fff6d0", emissiveIntensity: 0, roughness: 0.2 })
+      );
+      linse.position.set(0, 0.085, 0);
+      linse.userData.keinSchatten = true;
+      g.add(linse);
+      out.linse = linse;
+      out.emit = [0, 0.2, 0];
+      break;
+    }
+    case "leiter": {
+      const metall = mat("#b8bcc4", { metalness: 0.5, roughness: 0.4 });
+      for (const sx of [-1, 1]) g.add(box(0.04, ZELLE - 0.004, 0.05, metall, sx * 0.15, 0, 0));
+      for (let i = 0; i < 5; i++) g.add(box(0.3, 0.03, 0.03, farbe, 0, -0.2 + i * 0.1, 0));
+      break;
+    }
+    case "propeller": {
+      g.add(box(0.3, 0.04, 0.3, mat(DUNKEL), 0, -0.23));
+      g.add(zyl(0.16, 0.16, 0.26, mat("#5d6168", { metalness: 0.6, roughness: 0.4 }), 0, -0.08, 0, 24));
+      g.add(zyl(0.165, 0.165, 0.05, farbe, 0, -0.14, 0, 24));
+      g.add(zyl(0.04, 0.09, 0.1, mat("#c9ced6", CHROM), 0, 0.1, 0, 16));
+      const rotor = new THREE.Group();
+      rotor.position.y = 0.16;
+      for (const s of [1, -1]) {
+        const blatt = box(0.62, 0.012, 0.09, mat("#2b2f36"), s * 0.34, 0, 0);
+        blatt.rotation.x = 0.35 * s;
+        rotor.add(blatt);
+      }
+      g.add(rotor);
+      const scheibe = new THREE.Mesh(
+        new THREE.CircleGeometry(0.66, 36),
+        new THREE.MeshBasicMaterial({ color: "#dfe6ee", transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false })
+      );
+      scheibe.rotation.x = -Math.PI / 2;
+      scheibe.position.y = 0.16;
+      scheibe.visible = false;
+      scheibe.userData.keinSchatten = true;
+      g.add(scheibe);
+      out.rotor = { rotor, scheibe, winkel: 0 };
+      break;
+    }
+    case "tank": {
+      g.add(zyl(0.225, 0.225, ZELLE - 0.06, farbe, 0, 0, 0, 24));
+      for (const sy of [-1, 1]) g.add(zyl(0.23, 0.23, 0.04, mat(DUNKEL), 0, sy * 0.2, 0, 24));
+      g.add(zyl(0.06, 0.06, 0.03, mat("#c9ced6", CHROM), 0, 0.215, 0, 12));
+      break;
+    }
     case "kamera": {
       g.add(box(0.3, 0.05, 0.3, mat(DUNKEL), 0, -0.225));
       g.add(box(0.26, 0.2, 0.34, mat("#2b2f36"), 0, -0.1));
@@ -229,7 +281,7 @@ export function teilModell(p) {
   if (!TEILE[p.t].rad) g.quaternion.copy(orientQuat(p.o));
   g.traverse(o => {
     if (o.isMesh) {
-      o.castShadow = true;
+      o.castShadow = !o.userData.keinSchatten;
       o.receiveShadow = true;
     }
   });
@@ -256,6 +308,9 @@ export function fahrzeugGrafik(plan, opts = {}) {
   const teilObj = new Map();
   const sitze = [];
   const klappen = new Map();
+  const lampen = new Map();
+  const rotoren = new Map();
+  const leitern = [];
 
   const kopfZiel = new Map();
   for (const gl of ana.gelenke) kopfZiel.set(gl.teil, gl.bodyB);
@@ -279,12 +334,15 @@ export function fahrzeugGrafik(plan, opts = {}) {
       groups[ziel].add(m.kopf);
     }
     if (m.klappe) klappen.set(i, m.klappe);
+    if (m.linse) lampen.set(i, m.linse);
+    if (m.rotor) rotoren.set(i, m.rotor);
+    if (p.t === "leiter") leitern.push(m.obj);
     if (m.rad) raeder.set(i, { ...m.rad, obj: m.obj, basisY: m.obj.position.y });
     if (m.emit) emit.set(i, { body: bi, obj: m.obj, punkt: new THREE.Vector3(...m.emit) });
     if (p.t === "sitz") sitze.push({ index: i, body: bi, obj: m.obj });
   });
 
-  return { ana, groups, raeder, emit, sitz: sitze[0] || null, sitze, klappen, teilObj };
+  return { ana, groups, raeder, emit, sitz: sitze[0] || null, sitze, klappen, lampen, rotoren, leitern, teilObj };
 }
 
 // Räder animieren: zustand = [{teil, feder, lenk, dreh}]

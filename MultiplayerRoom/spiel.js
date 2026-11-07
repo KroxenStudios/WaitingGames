@@ -8,6 +8,7 @@ import {
   fahrzeugGrafik, setzeRaeder, geistModell, schirmModell, spielfigur, setzeSitzen, textSprite, entsorge, mat
 } from "./teile3d.js";
 import { Partikel } from "./partikel.js";
+import { ladeWeltDaten, baueGelaende, hoeheBei } from "./gelaende.js";
 
 const $ = s => document.querySelector(s);
 
@@ -92,7 +93,25 @@ const TEXTE = {
   "Offline – du kannst trotzdem bauen und fahren": "Offline – you can still build and drive",
   "frei": "free", "Aussteigen (X)": "Get out (X)", "Einsteigen (X)": "Get in (X)", "schwerelos": "weightless",
   "Losfahren": "Drive", "Zum Parkplatz": "To parking lot", "zurück": "back", "KAMERA": "CAMERA", "Gast": "Guest",
-  "Startbahn · 1,4 km": "Runway · 1.4 km"
+  "Startbahn · 1,4 km": "Runway · 1.4 km",
+  "Kart": "Kart", "Dragster": "Dragster", "Einkaufswagen": "Shopping cart", "Geländewagen": "Off-roader",
+  "Flugzeug": "Plane", "Kranwagen": "Crane truck", "Zugmaschine mit Anhänger": "Truck with trailer",
+  "Vorlage laden …": "Load a preset …", "Vorlage": "Preset",
+  "Reisebus": "Coach", "Raumrakete": "Space rocket", "Propellerflugzeug": "Propeller plane", "Feuerwehrauto": "Fire truck",
+  "Propeller-Buggy": "Propeller buggy", "Zug mit zwei Wagen": "Train with two cars",
+  "Scheinwerfer": "Headlight", "Leiter": "Ladder", "Propellermotor": "Propeller engine", "Treibstofftank": "Fuel tank",
+  "Lichtfarbe": "Light colour", "Gashebel +": "Throttle +", "Gashebel −": "Throttle −",
+  "Max. Fluggeschwindigkeit": "Max. airspeed", "Kapazität": "Capacity", "Verbrauch": "Fuel use",
+  "Treibstoffverbrauch an/aus": "Fuel use on/off", "Treibstoffverbrauch an": "Fuel use on",
+  "Treibstoffverbrauch aus (unbegrenzt)": "Fuel use off (unlimited)", "Tank leer": "Tank empty", "Kein Tank verbunden": "No tank connected", "Treibstoff": "Fuel", "Tank": "Tank",
+  "Leuchtet nach vorn (in Richtung der Linse). Die Taste schaltet ihn an und aus.":
+    "Shines forward (in the direction of the lens). The key switches it on and off.",
+  "Zu Fuß hochklettern: W/S an der Leiter, Leertaste springt ab. Mehrere Leitern übereinander ergeben eine lange Leiter (R/T dreht sie).":
+    "Climb on foot: W/S at the ladder, Space jumps off. Several ladders stacked make a long ladder (R/T rotates it).",
+  "Schiebt wie ein Propeller: Die Gashebel-Tasten stellen die Leistung ein und sie bleibt eingestellt. Der Schub sinkt mit dem Tempo und in dünner Luft; im Weltraum gibt es keinen.":
+    "Pushes like a propeller: the throttle keys set the power and it stays set. Thrust falls with speed and in thin air; there is none in space.",
+  "Treibstoff für Triebwerke, Propeller und den Fahrmotor (Raketen haben eigenen). Mit Tank geht ohne Treibstoff nichts, ohne Tank ist der Verbrauch aus. K schaltet den Verbrauch aus und an.":
+    "Fuel for jet engines, propellers and the drive motor (rockets have their own). With a tank nothing runs without fuel, without a tank fuel use is off. K switches fuel use off and on.",
 };
 function tr(s) {
   if (!EN || typeof s !== "string") return s;
@@ -440,6 +459,10 @@ function baueWelt() {
   raster.position.set(0, 0.002, (WELT_S + WELT_N) / 2);
   scene.add(raster);
 
+  // Große Karte aus welt.json (Gelände, Straßen, Dörfer, Wald); ohne die Datei bleibt die flache Arena mit Wiese und Wänden
+  if (WELTDATEN) {
+    baueGelaende({ d: WELTDATEN, RAPIER, world, scene, box: statischeBox });
+  } else {
   const wt = wiesenTextur();
   wt.repeat.set(15, 15);
   const wiese = new THREE.Mesh(
@@ -484,6 +507,7 @@ function baueWelt() {
   statischeBox(new THREE.Vector3(0, 0.6, WELT_S), [lx / 2 + 0.5, 0.6, 0.5], null, wand);
   statischeBox(new THREE.Vector3(-WELT_X, 0.6, mz), [0.5, 0.6, lz / 2], null, wand);
   statischeBox(new THREE.Vector3(WELT_X, 0.6, mz), [0.5, 0.6, lz / 2], null, wand);
+  }
 
   // Startbahn östlich der Hindernisse (nur Optik), 1,4 km lang
   const flach = (breite, laenge, farbe, x, y, z, lage = -3) => {
@@ -508,6 +532,7 @@ function baueWelt() {
   bahnSchild.position.set(BAHN_X, 7, 80);
   scene.add(bahnSchild);
 
+  if (!WELTDATEN) {
   // Ferne Hügel als Kulisse
   let seed = 99;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -518,6 +543,7 @@ function baueWelt() {
     hill.scale.set(160 + rnd() * 160, 40 + rnd() * 60, 160 + rnd() * 160);
     hill.position.set(Math.cos(ang) * dist, -10, Math.sin(ang) * dist + (WELT_S + WELT_N) / 2);
     scene.add(hill);
+  }
   }
 
   // Parkplätze
@@ -620,6 +646,9 @@ function baueWelt() {
   }
 }
 
+// Die große Karte kommt fertig erzeugt aus welt.json (nicht zur Laufzeit generiert)
+const WELTDATEN = await ladeWeltDaten("welt.json");
+const bodenHoehe = (x, z) => (WELTDATEN ? hoeheBei(WELTDATEN, x, z) : 0);
 const lotSchilder = [];
 const pylonen = [];
 baueWelt();
@@ -754,9 +783,22 @@ for (const [name, typen] of Object.entries(gruppen)) {
   palette.append(box);
 }
 
+// Mausrad scrollt die (im Handheld-Modus waagerechte) Leiste seitlich
+palette.addEventListener("wheel", e => {
+  if (document.body.classList.contains("touch") && palette.scrollWidth > palette.clientWidth) {
+    palette.scrollLeft += e.deltaY + e.deltaX;
+    e.preventDefault();
+  }
+}, { passive: false });
+
 function waehleTyp(typ) {
   auswahlTyp = typ;
-  for (const b of palette.querySelectorAll("button")) b.classList.toggle("an", b.dataset.typ === typ);
+  for (const b of palette.querySelectorAll("button")) {
+    b.classList.toggle("an", b.dataset.typ === typ);
+    if (b.dataset.typ === typ && document.body.classList.contains("touch")) {
+      b.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    }
+  }
   setzeWerkzeug("setzen");
   geistSchluessel = "";
 }
@@ -814,12 +856,37 @@ $("#btnDrehen").onclick = drehen;
 $("#btnKippen").onclick = kippen;
 $("#btnKoerper").onclick = schalteKoerper;
 $("#btnUndo").onclick = rueckgaengig;
-$("#btnStarter").onclick = () => {
-  merkeVerlauf();
-  plan = BAU.bereinige(BAU.starterKart());
-  schliesseInspector();
-  planGeaendert();
-};
+// Vorlagen: fertige Fahrzeuge laden (Rückgängig bringt das alte Fahrzeug zurück)
+{
+  const wahl = $("#presetWahl");
+  const leer = document.createElement("option");
+  leer.value = "";
+  leer.textContent = tr("Vorlage laden …");
+  wahl.append(leer);
+  for (const v of BAU.VORLAGEN) {
+    const o = document.createElement("option");
+    o.value = v.id;
+    o.textContent = tr(v.name);
+    wahl.append(o);
+  }
+  wahl.onchange = () => {
+    const v = BAU.VORLAGEN.find(x => x.id === wahl.value);
+    wahl.value = "";
+    if (!v) return;
+    merkeVerlauf();
+    plan = v.bauen();
+    schliesseInspector();
+    planGeaendert();
+    // Große Vorlagen: Kamera so weit wegfahren, dass das ganze Fahrzeug im Bild ist
+    const ausdehnung = ["x", "y", "z"].map(a => {
+      const w = plan.parts.map(p => p[a]);
+      return (Math.max(...w) - Math.min(...w) + 1) * BAU.ZELLE;
+    });
+    bauKamera.dist = THREE.MathUtils.clamp(Math.max(...ausdehnung) * 1.5 + 3, 9, 40);
+    bauKamera.ziel.y = 0.4 + ausdehnung[1] * 0.4;
+    meldung(`${tr("Vorlage")}: ${tr(v.name)}`);
+  };
+}
 $("#btnLeeren").onclick = () => {
   if (!plan.parts.length) return;
   merkeVerlauf();
@@ -1010,6 +1077,19 @@ function zeigeInspector() {
       taste("Ausschlag −", "minus");
       break;
     }
+    case "scheinwerfer":
+      taste("An/Aus", "taste");
+      farbe("Lichtfarbe", "farbe");
+      break;
+    case "propeller":
+      taste("Gashebel +", "plus");
+      taste("Gashebel −", "minus");
+      regler("Schub", "schub", 0.5, 10, 0.5, " kN");
+      regler("Max. Fluggeschwindigkeit", "tempo", 20, 200, 5, " m/s");
+      break;
+    case "tank":
+      regler("Kapazität", "kapazitaet", 10, 300, 10, "");
+      break;
     case "kamera":
       taste("Ansicht umschalten", "taste");
       regler("Blickfeld", "fov", 30, 120, 5, "°");
@@ -1044,6 +1124,10 @@ function zeigeInspector() {
     duese: "Schiebt den Körper, an dem es sitzt, auch wenn es nicht verbunden ist.",
     fluegel: "Erzeugt Auftrieb und Luftwiderstand, je nach Anstellwinkel zur Anströmung (Strömungsabriss ab ca. 17°). Schräg einbauen (T kippt) oder das Fahrzeug nach oben nicken, damit er trägt. Die Fläche ist die wirksame Auftriebsfläche.",
     steuerflaeche: "Ruder: kippt ihre Hinterkante mit den Tasten. Kanal Nicken = Höhenruder (hinten), Rollen = Querruder (links und rechts gegenläufig!), Gieren = Seitenruder (senkrecht stellen mit T). Hinterkante ist die gelbe Seite.",
+    scheinwerfer: "Leuchtet nach vorn (in Richtung der Linse). Die Taste schaltet ihn an und aus.",
+    leiter: "Zu Fuß hochklettern: W/S an der Leiter, Leertaste springt ab. Mehrere Leitern übereinander ergeben eine lange Leiter (R/T dreht sie).",
+    propeller: "Schiebt wie ein Propeller: Die Gashebel-Tasten stellen die Leistung ein und sie bleibt eingestellt. Der Schub sinkt mit dem Tempo und in dünner Luft; im Weltraum gibt es keinen.",
+    tank: "Treibstoff für Triebwerke, Propeller und den Fahrmotor (Raketen haben eigenen). Mit Tank geht ohne Treibstoff nichts, ohne Tank ist der Verbrauch aus. K schaltet den Verbrauch aus und an.",
     kamera: "Schalte mit der Taste auf den Blick durch die Kamera um (ohne im Fahrzeug zu sein). Sie schaut in Richtung der Linse.",
     fallschirm: "Taste öffnet den Schirm, nochmal drücken packt ihn ein. Er bremst umso stärker, je schneller du bist – auch beim Fallen.",
     rakete: "Sehr starker Schub, aber nur für die Brenndauer. Danach lädt sie wieder auf.",
@@ -1171,6 +1255,7 @@ addEventListener("keydown", e => {
   } else {
     if (t === "backspace") return neuStarten();
     if (t === "x" && !e.repeat) return ausEinsteigen();
+    if (t === "k" && !e.repeat) return schalteVerbrauch();
     if (t === "m" && !e.repeat && meinFahrzeug) {
       meinFahrzeug.motorAn = !meinFahrzeug.motorAn;
       meldung(meinFahrzeug.motorAn ? "Motor an" : "Motor aus");
@@ -1433,7 +1518,7 @@ function bauKlick(w) {
   plan.parts.push(p);
   if (!verbunden(p)) meldung("Nicht verbunden: das Teil liegt lose herum");
   planGeaendert();
-  if (["nebel", "duese", "rakete", "servo", "bruch", "fallschirm", "kamera", "steuerflaeche"].includes(p.t)) {
+  if (["nebel", "duese", "rakete", "servo", "bruch", "fallschirm", "kamera", "steuerflaeche", "scheinwerfer", "propeller", "tank"].includes(p.t)) {
     oeffneInspector(plan.parts.length - 1);
   }
 }
@@ -1614,6 +1699,24 @@ function pflegeSitz() {
 }
 
 // Zu Fuß: Eingabe in Geschwindigkeit der Kapsel umsetzen
+// Leitern: zu Fuß in der Nähe einer (senkrechten) Leiter mit W/S klettern, Leertaste springt ab
+let fussKlettert = false, fussSprungSperre = 0;
+function leiterNah(t) {
+  const gs = [meineGrafik];
+  for (const r of andere.values()) if (r.m === "fahr") gs.push(r.grafik);
+  for (const g of gs) {
+    if (!g) continue;
+    for (const obj of g.leitern) {
+      obj.updateWorldMatrix(true, false);
+      const m = obj.matrixWorld.elements;
+      if (Math.abs(new THREE.Vector3(m[4], m[5], m[6]).normalize().y) < 0.7) continue; // nur senkrecht
+      const c = new THREE.Vector3().setFromMatrixPosition(obj.matrixWorld);
+      if (Math.hypot(c.x - t.x, c.z - t.z) < 0.55 && Math.abs(c.y - t.y) < 0.5) return true;
+    }
+  }
+  return false;
+}
+
 function steuereFuss() {
   if (!fussRb) return;
   const k = new Set([...gedrueckt, ...touchGedrueckt]);
@@ -1631,7 +1734,24 @@ function steuereFuss() {
   const v = fussRb.linvel();
   let vy = v.y;
   if (angetippt.has("space") && !tipp && Math.abs(v.y) < 0.3) vy = 5.5;
-  fussRb.setGravityScale(PH.gravFaktor(fussRb.translation().y), true);
+  const t0 = fussRb.translation();
+  const nahLeiter = !tipp && leiterNah(t0);
+  const hoch = (k.has("w") || k.has("arrowup")) ? 1 : 0;
+  const runter = (k.has("s") || k.has("arrowdown")) ? 1 : 0;
+  if (nahLeiter && (hoch || runter) && performance.now() > fussSprungSperre) fussKlettert = true;
+  if (!nahLeiter || angetippt.has("space")) {
+    if (fussKlettert && angetippt.has("space")) {
+      vy = 5;
+      fussSprungSperre = performance.now() + 500;
+    }
+    fussKlettert = false;
+  }
+  if (fussKlettert) {
+    fussRb.setGravityScale(0, true);
+    fussRb.setLinvel({ x: 0, y: (hoch - runter) * 2.6, z: 0 }, true); // an der Leiter bleiben (Leertaste springt ab)
+    return;
+  }
+  fussRb.setGravityScale(PH.gravFaktor(t0.y), true);
   fussRb.setLinvel({ x: mx * tempo, y: vy, z: mz * tempo }, true);
 }
 
@@ -1698,6 +1818,7 @@ function kameraFuss() {
     Math.max(0.3, ziel.y + Math.sin(p) * d),
     ziel.z + Math.cos(fuss.yaw) * Math.cos(p) * d
   );
+  camera.position.y = Math.max(camera.position.y, bodenHoehe(camera.position.x, camera.position.z) + 0.5);
   camera.lookAt(ziel);
   fahrKamera.pos.copy(camera.position);
 }
@@ -1708,11 +1829,21 @@ function kameraFuss() {
 let kameraNah = false;
 let aktiveKamera = null;   // Teilindex der Kamera, durch die gerade geschaut wird
 
+// Treibstoffverbrauch an/aus (gilt für alle eigenen Fahrzeuge, bleibt gespeichert)
+let verbrauchAn = true;
+try { verbrauchAn = localStorage.getItem("bastelkarre-verbrauch") !== "0"; } catch {}
+function schalteVerbrauch() {
+  verbrauchAn = !verbrauchAn;
+  try { localStorage.setItem("bastelkarre-verbrauch", verbrauchAn ? "1" : "0"); } catch {}
+  if (meinFahrzeug) meinFahrzeug.verbrauch = verbrauchAn;
+  meldung(verbrauchAn ? "Treibstoffverbrauch an" : "Treibstoffverbrauch aus (unbegrenzt)");
+}
+
 function erzeugeEigenes() {
   if (meinFahrzeug) PH.entferneFahrzeug(world, meinFahrzeug);
   entferneGrafik(meineGrafik);
   const lift = BAU.bodenAbstand(plan, BAU.RAD_TIEFE) + 0.03;
-  meinFahrzeug = PH.erzeugeFahrzeug(RAPIER, world, plan, { basis: lotBasis(meinLot, lift).toArray() });
+  meinFahrzeug = PH.erzeugeFahrzeug(RAPIER, world, plan, { basis: lotBasis(meinLot, lift).toArray(), verbrauch: verbrauchAn });
   meineGrafik = fahrzeugGrafik(plan, { ana: meinFahrzeug.ana });
   for (const g of meineGrafik.groups) scene.add(g);
   if (ichSitz && ichSitz.o === "ich") {
@@ -1792,6 +1923,7 @@ function baueTastenListe() {
     aktionen.set(t, alt && !alt.includes(text) ? `${alt}, ${text}` : text);
   };
   const raketen = [];
+  let hatTank = false;
   plan.parts.forEach((p, i) => {
     switch (p.t) {
       case "nebel": add(p.k.taste, "Nebel"); break;
@@ -1799,6 +1931,9 @@ function baueTastenListe() {
       case "rakete": add(p.k.taste, "Rakete"); raketen.push(i); break;
       case "fallschirm": add(p.k.taste, "Fallschirm"); break;
       case "kamera": add(p.k.taste, "Kamera"); break;
+      case "scheinwerfer": add(p.k.taste, "Scheinwerfer"); break;
+      case "propeller": add(p.k.plus, "Gashebel +"); add(p.k.minus, "Gashebel −"); break;
+      case "tank": hatTank = true; break;
       case "steuerflaeche": {
         const n = { nick: "Nicken", roll: "Rollen", gier: "Gieren" }[p.k.kanal] || "Ruder";
         add(p.k.plus, `${n} +`);
@@ -1809,6 +1944,7 @@ function baueTastenListe() {
       case "bruch": add(p.k.taste, "Trennen"); break;
     }
   });
+  if (hatTank) liste.push(["K", "Treibstoffverbrauch an/aus"]);
   const el = $("#tastenListe");
   el.innerHTML = "";
   for (const [k, t] of [...liste, ...[...aktionen].map(([k, t]) => [tastenText(k), t])]) {
@@ -1822,6 +1958,13 @@ function baueTastenListe() {
     const d = document.createElement("div");
     d.style.display = "block";
     d.innerHTML = `<span>${tr("Raketen-Treibstoff")}</span><span class="treibstoff"><i id="treibstoffBalken"></i></span>`;
+    el.append(d);
+  }
+
+  if (hatTank) {
+    const d = document.createElement("div");
+    d.style.display = "block";
+    d.innerHTML = `<span>${tr("Treibstoff")}</span><span class="treibstoff"><i id="tankBalken"></i></span>`;
     el.append(d);
   }
 
@@ -1845,6 +1988,13 @@ function baueTastenListe() {
   xb.textContent = tr("Aus/Ein");
   xb.addEventListener("pointerdown", e => { e.preventDefault(); ausEinsteigen(); });
   touchTasten.append(xb);
+  if (hatTank) {
+    const kb = document.createElement("button");
+    kb.type = "button";
+    kb.textContent = tr("Verbrauch");
+    kb.addEventListener("pointerdown", e => { e.preventDefault(); schalteVerbrauch(); });
+    touchTasten.append(kb);
+  }
   for (const [k, t] of aktionen) knopf(k, t);
 }
 
@@ -1916,6 +2066,55 @@ function emitEffekte(besitzer, planX, grafik, fx, dt) {
 // Offene Fallschirme: hängen am Befestigungspunkt und wehen gegen die Bewegung.
 // Die Richtung kommt aus der Bewegung des Punkts, damit es auch für fremde Fahrzeuge geht.
 const schirme = new Map();
+
+// Scheinwerfer: alle Linsen leuchten, aber höchstens 4 echte Lichtkegel (die nächsten zur Kamera)
+const lichtPool = [];
+function aktualisiereLichter() {
+  const kandidaten = [];
+  const sammle = (planX, grafik, fx) => {
+    if (!grafik) return;
+    for (const [i, linse] of grafik.lampen) {
+      const an = (fx.get(i) ?? 0) > 0;
+      linse.material.emissiveIntensity = an ? 2.2 : 0;
+      const e = grafik.emit.get(i);
+      if (!an || !e) continue;
+      e.obj.updateWorldMatrix(true, false);
+      const pos = e.obj.localToWorld(e.punkt.clone());
+      const dir = new THREE.Vector3(0, 1, 0).transformDirection(e.obj.matrixWorld);
+      kandidaten.push({ pos, dir, farbe: planX.parts[i]?.k.farbe || "#fff6d0", d: pos.distanceToSquared(camera.position) });
+    }
+  };
+  if (meinFahrzeug) sammle(plan, meineGrafik, meinFahrzeug.fx);
+  for (const r of andere.values()) if (r.m === "fahr" && r.plan && r.grafik) sammle(r.plan, r.grafik, r.fx);
+  kandidaten.sort((a, b) => a.d - b.d);
+  // Lichter werden bei Bedarf angelegt und danach nie entfernt (nur Helligkeit 0), sonst baut three.js die Shader neu
+  for (let n = 0; n < Math.min(4, kandidaten.length); n++) {
+    if (!lichtPool[n]) {
+      const licht = new THREE.SpotLight("#fff6d0", 0, 70, 0.5, 0.6, 2);
+      scene.add(licht, licht.target);
+      lichtPool[n] = licht;
+    }
+  }
+  lichtPool.forEach((licht, n) => {
+    const k = kandidaten[n];
+    licht.intensity = k ? 900 : 0;
+    if (!k) return;
+    licht.color.set(k.farbe);
+    licht.position.copy(k.pos);
+    licht.target.position.copy(k.pos).addScaledVector(k.dir, 10);
+  });
+}
+
+// Propeller: drehen mit der Leistung (fx 0..1), bei hoher Drehzahl verschwimmen die Blätter zur Scheibe
+function setzeRotoren(grafik, fx, dt) {
+  for (const [i, r] of grafik.rotoren) {
+    const s = fx.get(i) ?? 0;
+    r.winkel += dt * (s > 0.02 ? 6 + 70 * s : 0);
+    r.rotor.rotation.y = r.winkel;
+    r.scheibe.visible = s > 0.4;
+    r.rotor.visible = s <= 0.75;
+  }
+}
 
 // Ruderklappen: fx-Wert 0..1 (0,5 = neutral) in Ausschlag umrechnen
 function setzeKlappen(grafik, planX, fx) {
@@ -2346,6 +2545,7 @@ function bewegeAndere(jetzt, dt) {
     setzeRaeder(r.grafik, zust);
     r.fx = new Map(bis.fx.map(([i, s]) => [i, s / 10]));
     if (r.plan) setzeKlappen(r.grafik, r.plan, r.fx);
+    setzeRotoren(r.grafik, r.fx, dt);
   }
 }
 
@@ -2428,11 +2628,16 @@ function schleife(zeit) {
     letzterRadZustand = PH.radZustand(meinFahrzeug, dt);
     setzeRaeder(meineGrafik, letzterRadZustand);
     setzeKlappen(meineGrafik, plan, meinFahrzeug.fx);
+    setzeRotoren(meineGrafik, meinFahrzeug.fx, dt);
 
     const sb = PH.sitzKoerper(meinFahrzeug);
     const kmh = Math.abs(PH.tempo(meinFahrzeug)) * 3.6;
     const hoehe = sb ? sb.rb.translation().y : 0;
-    $("#tacho").textContent = `${kmh.toFixed(0)} km/h · ${Math.round(hoehe)} m${PH.gravFaktor(hoehe) < 0.02 ? " · " + tr("schwerelos") : ""}${meinFahrzeug.motorAn ? "" : " · " + tr("Motor aus")}`;
+    const ts = PH.tankStand(meinFahrzeug, Math.max(0, meinFahrzeug.ana.sitzBody));
+    const tankText = ts.aktiv ? ` · ${ts.kap <= 0 ? tr("Kein Tank verbunden") : ts.menge <= 0.01 ? tr("Tank leer") : `${tr("Tank")} ${Math.round((ts.menge / ts.kap) * 100)}%`}` : "";
+    const tb = document.getElementById("tankBalken");
+    if (tb) tb.style.width = `${ts.kap ? (ts.menge / ts.kap) * 100 : 0}%`;
+    $("#tacho").textContent = `${kmh.toFixed(0)} km/h · ${Math.round(hoehe)} m${tankText}${PH.gravFaktor(hoehe) < 0.02 ? " · " + tr("schwerelos") : ""}${meinFahrzeug.motorAn ? "" : " · " + tr("Motor aus")}`;
     if (sb && sb.rb.translation().y < -30) neuStarten();
 
     const balken = document.getElementById("treibstoffBalken");
@@ -2493,6 +2698,7 @@ function schleife(zeit) {
 
   aktualisiereBlasen();
   sendePose();
+  aktualisiereLichter();
   aktualisiereHimmel(zeit);
   renderer.render(scene, camera);
 }
@@ -2526,9 +2732,11 @@ function kameraFahr(dt) {
     Math.max(0.4, fahrKamera.blick.y + Math.sin(p) * dist),
     fahrKamera.blick.z + Math.cos(yaw) * Math.cos(p) * dist
   );
+  soll.y = Math.max(soll.y, bodenHoehe(soll.x, soll.z) + 0.6);
   if (!fahrKamera.pos.lengthSq()) fahrKamera.pos.copy(soll);
   fahrKamera.pos.lerp(soll, Math.min(1, dt * 8));
   camera.position.copy(fahrKamera.pos);
+  camera.position.y = Math.max(camera.position.y, bodenHoehe(camera.position.x, camera.position.z) + 0.5);
   camera.lookAt(fahrKamera.blick);
 }
 
@@ -2541,6 +2749,13 @@ addEventListener("resize", () => {
 for (const p of [rauch, feuer]) p.setzeSkala(innerHeight * renderer.getPixelRatio(), fov);
 
 // Start
+// Handy: kein Text markieren, kein Kopieren-/Übersetzen-Menü bei langem Drücken (Eingabefelder ausgenommen)
+const istEingabe = el => !!(el && el.closest && el.closest("input, textarea, select"));
+addEventListener("contextmenu", e => { if (!istEingabe(e.target)) e.preventDefault(); });
+document.addEventListener("selectstart", e => {
+  const el = e.target.nodeType === 1 ? e.target : e.target.parentElement;
+  if (!istEingabe(el)) e.preventDefault();
+});
 setBtn("#btnModus", "▶", tr("Losfahren"));
 setBtn("#btnAus", "⇄", tr("Einsteigen (X)"));
 $("#langBtn").innerHTML = EN ? "DE | <b>EN</b>" : "<b>DE</b> | EN";
@@ -2571,7 +2786,7 @@ if (/^https?:$/.test(location.protocol) && !["localhost", "127.0.0.1"].includes(
 }
 
 // Für Tests im Browser
-window.bastelkarre = { oeffneInspector, klickSitz, maus, treffer: () => { raycaster.setFromCamera(maus, camera); const out = []; const gs = [meineGrafik, ...[...andere.values()].map(r => r.grafik)].filter(Boolean); for (const g of gs) for (const h of raycaster.intersectObjects(g.groups, true).slice(0, 3)) out.push([h.object.userData.teil, +h.distance.toFixed(1), h.object.type]); return out; }, fussKamera: fuss, sitzPixel: (o, i) => {
+window.bastelkarre = { bodenHoehe, weltDaten: () => WELTDATEN, leiterPos: () => meineGrafik.leitern.map(o => o.getWorldPosition(new THREE.Vector3()).toArray()), setzeFuss: (x, y, z) => fussRb && fussRb.setTranslation({ x, y, z }, true), lichter: () => lichtPool.map(l => +l.intensity.toFixed(0)), oeffneInspector, klickSitz, maus, treffer: () => { raycaster.setFromCamera(maus, camera); const out = []; const gs = [meineGrafik, ...[...andere.values()].map(r => r.grafik)].filter(Boolean); for (const g of gs) for (const h of raycaster.intersectObjects(g.groups, true).slice(0, 3)) out.push([h.object.userData.teil, +h.distance.toFixed(1), h.object.type]); return out; }, fussKamera: fuss, sitzPixel: (o, i) => {
     const s = sitzObjekt({ o, i });
     if (!s) return null;
     const v = s.obj.localToWorld(new THREE.Vector3(0, -0.1, 0.1)).project(camera); // Sitzfläche

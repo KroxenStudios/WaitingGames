@@ -89,6 +89,7 @@ function colliderFuer(R, part, lokal) {
   switch (part.t) {
     case "block":
     case "sitz":
+    case "tank":
       desc = R.ColliderDesc.cuboid(H, H, H);
       break;
     case "halb": {
@@ -102,6 +103,9 @@ function colliderFuer(R, part, lokal) {
       desc = R.ColliderDesc.convexHull(new Float32Array(pts));
       return desc.setTranslation(...lokal).setMass(masse).setFriction(0.7);
     }
+    case "leiter":
+      desc = R.ColliderDesc.cuboid(0.2, H, 0.05);
+      break;
     case "fluegel":
     case "steuerflaeche":
       desc = R.ColliderDesc.cuboid(H, 0.04, H);
@@ -144,7 +148,9 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
     plan: bauplan, ana, kin, vorwaerts, bodies: [], gelenke: [],
     colliderSet: new Set(), motorAn: true, lenkung: 0,
     fx: new Map(), nebelAn: new Map(), raketen: new Map(), schirme: new Map(), ruder: new Map(), servoZiel: new Map(),
-    tasteVorher: new Set(), angetrieben: new Set()
+    tasteVorher: new Set(), angetrieben: new Set(),
+    licht: new Map(), hebel: new Map(), gruppe: [],
+    tank: { menge: new Map(), aktiv: false }, verbrauch: opts.verbrauch !== false
   };
 
   for (let bi = 0; bi < ana.bodies.length; bi++) {
@@ -256,8 +262,77 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
     }
   }
 
+  // Schwere Fahrzeuge bekommen einen stärkeren Motor und stärkere Bremsen (ab ca. 450 kg, höchstens Faktor 3)
+  let gesamtMasse = 0;
+  for (const b of veh.bodies) gesamtMasse += b.rb.mass();
+  veh.motorFaktor = Math.max(1, Math.min(3, Math.sqrt(gesamtMasse / 450)));
+
+  // Treibstoff: jeder Tank startet voll; das System ist nur mit mindestens einem Tank aktiv
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i].t === "tank") veh.tank.menge.set(i, parts[i].k.kapazitaet ?? 60);
+  }
+  veh.tank.aktiv = veh.tank.menge.size > 0;
+  berechneGruppen(veh);
+
   aktualisiereAntrieb(veh);
   return veh;
+}
+
+// Gruppen fest (über intakte Gelenke) verbundener Körper: jede Gruppe hat ihren eigenen Treibstoffvorrat
+function berechneGruppen(veh) {
+  const n = veh.bodies.length;
+  veh.gruppe = new Array(n).fill(-1);
+  let id = 0;
+  for (let s = 0; s < n; s++) {
+    if (veh.gruppe[s] >= 0) continue;
+    veh.gruppe[s] = id;
+    const stack = [s];
+    while (stack.length) {
+      const b = stack.pop();
+      for (const g of veh.gelenke) {
+        if (!g.aktiv) continue;
+        const o = g.bodyA === b ? g.bodyB : g.bodyB === b ? g.bodyA : -1;
+        if (o >= 0 && veh.gruppe[o] < 0) {
+          veh.gruppe[o] = id;
+          stack.push(o);
+        }
+      }
+    }
+    id++;
+  }
+}
+
+// Treibstoff entnehmen: liefert den Anteil (0..1) der gewünschten Menge, der tatsächlich da war.
+// Ohne Tanks oder bei abgeschaltetem Verbrauch ist immer genug da.
+export function entnimm(veh, koerper, menge) {
+  const t = veh.tank;
+  if (!t.aktiv || !veh.verbrauch) return 1;
+  const gid = veh.gruppe[koerper];
+  let summe = 0;
+  const liste = [];
+  for (const [i, m] of t.menge) {
+    if (m > 0 && veh.gruppe[veh.ana.bodyOf[i]] === gid) {
+      liste.push(i);
+      summe += m;
+    }
+  }
+  if (summe <= 0) return 0;
+  if (menge <= 0) return 1;
+  const nimm = Math.min(menge, summe);
+  for (const i of liste) t.menge.set(i, t.menge.get(i) - nimm * (t.menge.get(i) / summe));
+  return nimm / menge;
+}
+
+// Füllstand der Gruppe eines Körpers
+export function tankStand(veh, koerper) {
+  let menge = 0, kap = 0;
+  for (const [i, m] of veh.tank.menge) {
+    if (veh.gruppe[veh.ana.bodyOf[i]] === veh.gruppe[koerper]) {
+      menge += m;
+      kap += veh.plan.parts[i].k.kapazitaet ?? 60;
+    }
+  }
+  return { menge, kap, aktiv: veh.tank.aktiv && veh.verbrauch };
 }
 
 // Welche Körper hängen (über intakte Gelenke) am Sitz? Nur deren Räder treibt der Motor an.
@@ -331,18 +406,21 @@ export function steuere(world, veh, eingabe, dt) {
   }
 
   const v = tempo(veh);
-  const gas = veh.motorAn ? eingabe.gas : 0;
+  let gas = veh.motorAn ? eingabe.gas : 0;
+  // Fahrmotor braucht Treibstoff (nur wenn das Fahrzeug Tanks hat und der Verbrauch an ist)
+  if (gas !== 0) gas *= entnimm(veh, Math.max(0, veh.ana.sitzBody), 0.15 * Math.abs(gas) * dt);
 
   // Antriebskraft: begrenzt durch Kraft und Leistung
-  let kraft = 0, bremsen = eingabe.bremse ? BREMSE : 0;
+  const mf = veh.motorFaktor || 1;
+  let kraft = 0, bremsen = eingabe.bremse ? BREMSE * mf : 0;
   if (gas > 0) {
-    if (v < -0.8) bremsen = Math.max(bremsen, BREMSE * gas);
-    else if (v < HOECHST_TEMPO) kraft = Math.min(MOTOR_KRAFT, MOTOR_LEISTUNG / Math.max(Math.abs(v), 1)) * gas;
+    if (v < -0.8) bremsen = Math.max(bremsen, BREMSE * mf * gas);
+    else if (v < HOECHST_TEMPO) kraft = Math.min(MOTOR_KRAFT * mf, (MOTOR_LEISTUNG * mf) / Math.max(Math.abs(v), 1)) * gas;
   } else if (gas < 0) {
-    if (v > 0.8) bremsen = Math.max(bremsen, BREMSE * -gas);
-    else if (v > -9) kraft = MOTOR_KRAFT * 0.45 * gas;
+    if (v > 0.8) bremsen = Math.max(bremsen, BREMSE * mf * -gas);
+    else if (v > -9) kraft = MOTOR_KRAFT * mf * 0.45 * gas;
   } else if (!eingabe.bremse) {
-    bremsen = 1.2; // Rollwiderstand und Motorbremse
+    bremsen = 1.2 * mf; // Rollwiderstand und Motorbremse
   }
 
   // Lenkung weich nachführen, bei hohem Tempo weniger Einschlag
@@ -382,9 +460,41 @@ export function steuere(world, veh, eingabe, dt) {
       }
       case "duese":
         if (tasten.has(k.taste)) {
-          schub(veh, i, (k.schub ?? 4) * 1000, dt);
-          veh.fx.set(i, 1);
+          const f = entnimm(veh, veh.ana.bodyOf[i], 0.6 * (k.schub ?? 4) * dt);
+          if (f > 0) {
+            schub(veh, i, (k.schub ?? 4) * 1000 * f, dt);
+            veh.fx.set(i, 1);
+          }
         }
+        break;
+      case "propeller": {
+        // Gashebel: bleibt eingestellt. Schub sinkt mit Tempo und Luftdichte (Vakuum = kein Schub).
+        const richtung = (tasten.has(k.plus) ? 1 : 0) - (tasten.has(k.minus) ? 1 : 0);
+        const h = Math.max(0, Math.min(1, (veh.hebel.get(i) ?? 0) + richtung * 0.7 * dt));
+        veh.hebel.set(i, h);
+        if (h > 0.01) {
+          const bi = veh.ana.bodyOf[i];
+          const b = veh.bodies[bi];
+          const f = entnimm(veh, bi, 0.3 * (k.schub ?? 4) * h * dt);
+          if (f > 0) {
+            const rot = b.rb.rotation();
+            const dir = quatRot(rot, scale(teilAchse(p), -1));
+            const punkt = add(arr(b.rb.translation()), quatRot(rot, sub(zellMitte(p), b.ursprung)));
+            const vax = dot(punktGeschw(b.rb, punkt), dir);
+            const luft = dichte(punkt[1]) / LUFT0;
+            const n = (k.schub ?? 4) * 1000 * h * f * luft * Math.max(0, 1 - Math.max(0, vax) / Math.max(10, k.tempo ?? 80));
+            b.rb.applyImpulseAtPoint(vec(scale(dir, n * dt)), vec(punkt), true);
+            veh.fx.set(i, Math.max(0.05, h * f));
+          }
+        }
+        break;
+      }
+      case "scheinwerfer":
+        if (neu.has(k.taste)) veh.licht.set(i, !veh.licht.get(i));
+        if (veh.licht.get(i)) veh.fx.set(i, 1);
+        break;
+      case "tank":
+        veh.fx.set(i, Math.min(1, (veh.tank.menge.get(i) ?? 0) / Math.max(1, k.kapazitaet ?? 60)));
         break;
       case "rakete": {
         const dauer = k.dauer ?? 3;
@@ -520,6 +630,7 @@ function schub(veh, i, newton, dt) {
 export function trenne(world, veh, g) {
   if (!g.aktiv) return;
   g.aktiv = false;
+  berechneGruppen(veh);
   world.removeImpulseJoint(g.j, true);
   // kleiner Stoß auseinander, damit die Trennung sichtbar ist
   const A = veh.bodies[g.bodyA], B = veh.bodies[g.bodyB];

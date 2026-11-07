@@ -32,6 +32,7 @@
       <tr><td>Ansicht</td><td>Ziehen dreht, Rechts-Ziehen oder <kbd>Shift</kbd>+Ziehen schiebt, Mausrad zoomt, <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> schiebt.</td></tr>
       <tr><td>Verbindungen prüfen</td><td><kbd>V</kbd> färbt jeden starren Körper anders ein. Alles in einer Farbe ist fest verbunden.</td></tr>
       <tr><td>Rückgängig</td><td><kbd>Strg</kbd>+<kbd>Z</kbd></td></tr>
+      <tr><td>Vorlagen</td><td>Knopf „Vorlagen“ im Bauen-Panel: fertige Fahrzeuge (Kart, Dragster, Einkaufswagen, Geländewagen, Flugzeug, Kranwagen, Zugmaschine mit Anhänger und die größeren Projekte Reisebus mit 13 Sitzen, Raumrakete, Propellerflugzeug, Feuerwehrauto mit Leiter und Wassertank, Propeller-Buggy und Zug mit zwei abkoppelbaren Wagen). Sie ersetzen dein aktuelles Fahrzeug, mit Rückgängig holst du es zurück.</td></tr>
     </table>
     <p class="muted">Teile verbinden sich, wenn sie mit verbindenden Flächen aneinanderstoßen. Nicht verbundene Teile bewegen sich nicht mit – außer eine Kraft wirkt auf sie (ein loses Triebwerk fliegt allein los). Dein Bauplan wird im Browser gespeichert.</p>
 
@@ -49,6 +50,10 @@
       <tr><td>Tragfläche</td><td>Ebene Platte, die im Luftstrom Auftrieb und Luftwiderstand erzeugt. Auftrieb entsteht erst bei Anstellwinkel (Nase leicht hoch oder Fläche schräg gekippt), ab ca. 17° reißt die Strömung ab. Wirksame Fläche einstellbar.</td></tr>
       <tr><td>Steuerfläche</td><td>Wie die Tragfläche, aber ihre Hinterkante (gelb) lässt sich kippen. Kanal <b>Nicken</b> (Höhenruder, <kbd>↓</kbd> = Nase hoch), <b>Rollen</b> (Querruder, <kbd>←</kbd><kbd>→</kbd>, links und rechts auf „gegenläufig“ stellen) oder <b>Gieren</b> (Seitenruder, senkrecht eingebaut, <kbd>Q</kbd><kbd>E</kbd>). Ausschlag und Tasten einstellbar. Die Pfeiltasten steuern keine Räder mehr, dafür WASD.</td></tr>
       <tr><td>Kamera</td><td>Taste (Vorgabe <kbd>V</kbd>, weitere Kameras <kbd>B</kbd>, <kbd>N</kbd> …) schaltet die Ansicht durch die Kamera um, nochmal drücken kehrt zurück. Die Kamera schaut in Richtung ihrer Linse, bewegt sich mit ihrem Teil mit und funktioniert auch, wenn du ausgestiegen bist oder die Kamera lose herumliegt. Blickfeld einstellbar.</td></tr>
+      <tr><td>Scheinwerfer</td><td>Leuchtet in Richtung der Linse, die Taste (Vorgabe <kbd>L</kbd>) schaltet ihn an und aus. Farbe einstellbar. Die nächsten vier eingeschalteten Scheinwerfer werfen einen echten Lichtkegel.</td></tr>
+      <tr><td>Leiter</td><td>Zu Fuß hochklettern: an der Leiter <kbd>W</kbd>/<kbd>S</kbd>, <kbd>Leertaste</kbd> springt ab. Mehrere übereinander ergeben eine lange Leiter; mit <kbd>R</kbd>/<kbd>T</kbd> drehst du sie.</td></tr>
+      <tr><td>Propellermotor</td><td>Schub wie ein Propeller: <kbd>G</kbd> mehr, <kbd>H</kbd> weniger Gas (die Einstellung bleibt). Der Schub sinkt mit dem Tempo (Höchsttempo einstellbar) und in dünner Luft, im Weltraum gibt es keinen. Schnell drehende Blätter verschwimmen zur Scheibe.</td></tr>
+      <tr><td>Treibstofftank</td><td>Treibstoff für Triebwerke, Propeller und den Fahrmotor (Raketen haben eigenen). Hat ein Fahrzeug Tanks, geht ohne Treibstoff nichts – jedes Teil bekommt nur Treibstoff aus Tanks, die mit ihm fest verbunden sind. Ohne Tank ist der Verbrauch aus. Mit <kbd>K</kbd> schaltest du den Verbrauch aus und an (dann ist der Treibstoff unbegrenzt). Der Füllstand steht oben neben dem Tempo.</td></tr>
       <tr><td>Fallschirm</td><td>Taste (Vorgabe <kbd>P</kbd>) öffnet ihn, nochmal drücken packt ihn ein. Bremst durch Luftwiderstand: je schneller, desto stärker – auch beim Fallen nach Sprüngen. Größe und Farbe einstellbar.</td></tr>
       <tr><td>Stellmotor</td><td>Was an der Drehscheibe oben hängt, dreht sich gegen den Rest (Vorgabe <kbd>Q</kbd>/<kbd>E</kbd>). Modus „Winkel halten“ mit Begrenzung oder „Dauerdrehung“.</td></tr>
       <tr><td>Sollbruchstelle</td><td>Hält beide Seiten fest zusammen, bis du ihre Taste drückst (Vorgabe <kbd>1</kbd>, <kbd>2</kbd>, …). Dann trennen sich die Teile.</td></tr>
@@ -66,6 +71,9 @@
       <tr><td>Chat</td><td><kbd>Enter</kbd></td></tr>
       <tr><td>Handy / Tablet</td><td>Joystick links zum Fahren, Knöpfe rechts für Bremse und alle Teile mit Tasten.</td></tr>
     </table>
+
+    <h2>Die Karte</h2>
+    <p class="muted">Rund um die flache Arena mit den Parkplätzen liegt eine große Landschaft von 6,4 × 6,4 km: Hügel, Täler, Berge, Wälder, Straßen, acht Dörfer und Funktürme. Die Karte wurde einmal erzeugt und ist für alle Spieler gleich. Am Rand umgibt sie ein Gebirgsring. Die Straßen führen von der Arena zu den Dörfern; auf der Startbahn (östlich der Hindernisse) kannst du mit dem Flugzeug starten.</p>
 
     <h2>Höhe und Weltraum</h2>
     <p class="muted">Die Luft wird mit der Höhe dünner: Tragflächen, Ruder und Fallschirm verlieren ihre Wirkung, Raketen und Triebwerke nicht. Zwischen etwa 3000 und 7000 m verschwindet die Schwerkraft, darüber bist du schwerelos im schwarzen Weltall mit Sternen und einer kleinen Erde. Die Höhe steht oben neben dem Tempo. Wer wieder absinkt, wird ab ca. 3000 m von der Schwerkraft zurückgeholt.</p>

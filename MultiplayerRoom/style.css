@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark;
-  --accent: #62e6b2;
-  --accent-soft: #62e6b233;
+  --accent: #ffb547;
+  --accent-soft: #ffb54733;
   --panel: #0c1522cc;
   --panel-solid: #0c1522ee;
   --line: #ffffff22;
@@ -12,32 +12,18 @@
   color: var(--text);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-html,
-body {
+html, body {
   width: 100%;
   height: 100%;
   margin: 0;
   overflow: hidden;
-}
-
-body {
-  min-height: 100vh;
   background: #0c1522;
 }
 
-button,
-input {
-  font: inherit;
-}
-
-button {
-  color: var(--text);
-  cursor: pointer;
-}
+button, input, select { font: inherit; }
+button { color: var(--text); cursor: pointer; }
 
 #game {
   position: fixed;
@@ -46,7 +32,6 @@ button {
   background: #a9dbf5;
 }
 
-/* Die Three.js-Leinwand füllt die ganze Website. */
 #scene {
   position: absolute;
   inset: 0;
@@ -59,15 +44,15 @@ button {
 /* Kopfzeile */
 #hud {
   position: absolute;
-  z-index: 2;
-  top: 16px;
-  left: 16px;
-  right: 16px;
+  z-index: 4;
+  top: 12px;
+  left: 12px;
+  right: 12px;
   display: flex;
   align-items: center;
   gap: 14px;
-  min-height: 46px;
-  padding: 9px 16px;
+  min-height: 44px;
+  padding: 8px 16px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--panel);
@@ -76,294 +61,350 @@ button {
   pointer-events: none;
 }
 
-#hud strong {
-  font-size: 17px;
-  letter-spacing: 0.04em;
-  color: var(--accent);
-}
+#hud strong { font-size: 17px; letter-spacing: 0.04em; color: var(--accent); }
 
-#status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-/* Statuspunkt: gelb beim Verbinden, grün online, rot offline */
+#status { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; }
 #status::before {
   content: "";
-  width: 9px;
-  height: 9px;
+  width: 9px; height: 9px;
   border-radius: 50%;
   background: #f2c14e;
   box-shadow: 0 0 8px #f2c14e99;
 }
+#status[data-state="online"]::before { background: #62e6b2; box-shadow: 0 0 8px #62e6b2; }
+#status[data-state="offline"]::before { background: #ff6b6b; box-shadow: 0 0 8px #ff6b6b99; }
 
-#status[data-state="online"]::before {
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
-}
-
-#status[data-state="offline"]::before {
-  background: #ff6b6b;
-  box-shadow: 0 0 8px #ff6b6b99;
-}
+#tacho { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15px; min-width: 76px; }
 
 #hud a {
-  color: #cdeee2;
+  color: #f3e3c8;
   font-size: 14px;
   text-decoration: none;
   pointer-events: auto;
   padding: 5px 11px;
   border-radius: 999px;
-  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
 }
+#hud a:first-of-type { margin-left: auto; }
+#hud a:hover { background: var(--accent-soft); color: #fff; }
 
-/* Der erste Link schiebt die Links nach rechts. */
-#hud a:first-of-type {
-  margin-left: auto;
+#laden {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 45%;
+  transform: translate(-50%, -50%);
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: var(--panel-solid);
 }
+#laden[hidden] { display: none; }
 
-#hud a:hover {
-  background: var(--accent-soft);
+#hint, #meldung {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none;
+  text-align: center;
+  max-width: calc(100vw - 32px);
+}
+#hint { top: 68px; }
+#hint[hidden] { display: none; }
+#meldung { top: 108px; color: #fff; background: #3a1d0ccc; opacity: 0; transition: opacity 0.25s; }
+#meldung.zeigen { opacity: 1; }
+
+/* Seitenleisten */
+.panel {
+  position: absolute;
+  z-index: 3;
+  top: 68px;
+  width: 268px;
+  max-height: calc(100% - 150px);
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 10px 34px #0004;
+  font-size: 13px;
+}
+.panel[hidden] { display: none; }
+#baupanel { left: 12px; }
+#inspector, #fahrpanel { right: 12px; }
+
+.panel .kopf {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+.panel .kopf b { color: var(--text); }
+.panel h3 { margin: 10px 0 6px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+.panel button {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #ffffff10;
+  font-size: 12.5px;
+}
+.panel button:hover { background: #ffffff22; }
+.panel button.an { background: var(--accent); color: #2a1700; border-color: var(--accent); font-weight: 600; }
+
+#palette .gruppe { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+#palette button { text-align: left; line-height: 1.2; }
+
+.zeile { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.zeile button { flex: 1 1 auto; }
+
+#farben button {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid #0006;
+}
+#farben button.an { outline: 2px solid #fff; outline-offset: 1px; }
+#farben input[type="color"] { width: 26px; height: 24px; padding: 0; border: 0; background: none; }
+
+/* Einstellungen */
+.feld { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; margin: 7px 0; }
+.feld input[type="range"] { grid-column: 1 / -1; width: 100%; }
+.feld select { background: #0c1522; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 3px 6px; }
+.feld .wert { color: var(--accent); font-variant-numeric: tabular-nums; }
+button.taste.warte { background: #ffd43b; color: #000; }
+
+#tastenListe div { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid #ffffff10; }
+#tastenListe kbd {
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: #ffffff1a;
+  border: 1px solid #ffffff30;
+  font: 600 12px system-ui, sans-serif;
+  white-space: nowrap;
+}
+.treibstoff { display: block; height: 5px; border-radius: 2px; background: #ffffff20; overflow: hidden; margin-top: 2px; }
+.treibstoff i { display: block; height: 100%; background: #ff7a1a; }
+
+/* Blick durch eine Kamera */
+#camOverlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 6px #0009, inset 0 0 120px #0008;
+}
+#camOverlay[hidden] { display: none; }
+#camText {
+  position: absolute;
+  left: 22px;
+  top: 74px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: #000a;
   color: #fff;
+  font: 700 14px ui-monospace, Consolas, monospace;
 }
+#camText::before { content: "●"; color: #ff2a2a; margin-right: 8px; animation: rec 1s steps(2) infinite; }
+@keyframes rec { 50% { opacity: 0.15; } }
 
-/* Chat-Eingabe */
+/* Modus-Knopf */
+#btnModus, #btnNeu, #btnAus {
+  position: absolute;
+  z-index: 3;
+  right: 16px;
+  bottom: 20px;
+  padding: 12px 22px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #2a1700;
+  font-weight: 800;
+  font-size: 16px;
+  box-shadow: 0 8px 24px #0006;
+}
+#btnNeu { right: auto; left: 50%; transform: translateX(-50%); background: #ffffffdd; font-size: 14px; padding: 9px 16px; }
+#btnNeu[hidden] { display: none; }
+#btnAus { right: auto; left: 50%; margin-left: 74px; transform: none; background: #ffffffdd; font-size: 14px; padding: 9px 16px; }
+#btnAus[hidden] { display: none; }
+
+/* Chat */
 #chatForm {
   position: absolute;
   z-index: 3;
   left: 16px;
   bottom: 20px;
   display: flex;
-  width: min(460px, calc(100vw - 170px));
+  width: min(420px, calc(100vw - 230px));
   gap: 8px;
 }
-
+body.bau #chatForm { left: 292px; width: min(380px, calc(100vw - 500px)); }
 #chatInput {
+  flex: 1;
   min-width: 0;
-  padding: 11px 14px;
+  padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: 999px;
   outline: none;
   background: var(--panel-solid);
   color: var(--text);
-  backdrop-filter: blur(10px);
 }
-
-#chatInput {
-  flex: 1;
-}
-
-#chatInput::placeholder {
-  color: #8da0b8;
-}
-
-#chatInput:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
+#chatInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 #chatForm button {
-  padding: 10px 18px;
+  padding: 9px 16px;
   border: 0;
   border-radius: 999px;
-  background: var(--accent);
+  background: #62e6b2;
   color: #08231a;
   font-weight: 600;
-  transition: filter 0.15s, transform 0.1s;
 }
 
-#chatForm button:hover {
-  filter: brightness(1.1);
-}
-
-#chatForm button:active {
-  transform: scale(0.97);
-}
-
-/* Steuerelemente für Touch/Handheld: nur sichtbar, wenn berührt wird */
-body:not(.touch) #joystick,
-body:not(.touch) #jumpButton {
-  display: none;
-}
-
-/* Virtueller Steuerknopf für Touch und Handheld */
+/* Touch-Steuerung */
 #joystick {
   position: absolute;
   z-index: 3;
-  left: 20px;
-  bottom: 86px;
-  width: 120px;
-  height: 120px;
+  left: 22px;
+  bottom: 84px;
+  width: 130px;
+  height: 130px;
   border: 2px solid #ffffff55;
   border-radius: 50%;
-  background: radial-gradient(circle, #ffffff22, #0c152299 70%);
-  box-shadow: 0 8px 24px #0004, inset 0 0 22px #ffffff14;
-  backdrop-filter: blur(6px);
+  background: #0c152255;
   touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
 }
-
 #stick {
   position: absolute;
-  top: 33px;
-  left: 33px;
-  width: 50px;
-  height: 50px;
-  border: 2px solid #ffffffcc;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #b8ffe4, var(--accent));
-  box-shadow: 0 4px 14px #0006;
-  pointer-events: none;
+  background: #ffffffaa;
 }
-
-/* Schmalere Handhelds und Telefone */
-@media (max-width: 600px) {
-  #hud {
-    top: 10px;
-    left: 10px;
-    right: 10px;
-    gap: 9px;
-    min-height: 42px;
-    padding: 8px 12px;
-  }
-
-  #hud strong {
-    font-size: 15px;
-  }
-
-  #status,
-  #hud a {
-    font-size: 12px;
-  }
-
-  #hud a {
-    padding: 4px 8px;
-  }
-
-  #chatForm {
-    left: 10px;
-    bottom: 12px;
-    width: calc(100vw - 145px);
-    gap: 6px;
-  }
-
-  #chatInput {
-    padding: 9px 12px;
-    font-size: 13px;
-  }
-
-  #chatForm button {
-    padding: 8px 12px;
-    font-size: 13px;
-  }
-
-  #joystick {
-    left: 12px;
-    bottom: 68px;
-    width: 108px;
-    height: 108px;
-  }
-
-  #stick {
-    top: 28px;
-    left: 28px;
-  }
-
-}
-
-/* Sprungknopf rechts */
-#jumpButton {
+#touchTasten {
   position: absolute;
   z-index: 3;
-  right: 22px;
-  bottom: 92px;
-  width: 92px;
-  height: 92px;
-  border: 2px solid #ffffff66;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #b8ffe4, var(--accent));
-  box-shadow: 0 8px 24px #0005;
-  color: #08231a;
-  font-weight: 700;
+  right: 16px;
+  bottom: 84px;
+  display: flex;
+  flex-wrap: wrap-reverse;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 240px;
+}
+#touchTasten button {
+  min-width: 64px;
+  height: 52px;
+  padding: 0 10px;
+  border: 2px solid #ffffff55;
+  border-radius: 16px;
+  background: #0c1522aa;
+  font-size: 12px;
+  font-weight: 600;
   touch-action: none;
   user-select: none;
-  -webkit-user-select: none;
+}
+#touchTasten button.an { background: var(--accent); color: #2a1700; }
+body:not(.touch) #joystick,
+body:not(.touch) #touchTasten,
+body.bau #joystick,
+body.bau #touchTasten { display: none; }
+
+/* Schmale Bildschirme: Baupanel unten als Streifen */
+@media (max-width: 760px) {
+  #hud { gap: 8px; padding: 6px 12px; }
+  #hud a { padding: 4px 6px; font-size: 12px; }
+  #hud a:nth-of-type(3) { display: none; }
+  .panel { width: auto; left: 8px !important; right: 8px !important; }
+  #baupanel { top: auto; bottom: 74px; max-height: 38%; }
+  #inspector { top: 64px; max-height: 40%; }
+  #fahrpanel { display: none; }
+  body.bau #chatForm, #chatForm { left: 8px; width: calc(100vw - 170px); }
+  #btnModus { right: 8px; bottom: 18px; padding: 11px 16px; }
 }
 
-#jumpButton:active {
-  transform: scale(0.94);
-  filter: brightness(1.1);
-}
-
-/* Zoom-Tasten */
-#zoom {
-  position: absolute;
-  z-index: 3;
-  top: 78px;
-  right: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-#zoom button {
-  width: 42px;
-  height: 42px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--panel);
-  backdrop-filter: blur(10px);
-  font-size: 22px;
-  line-height: 1;
-}
-
-#zoom button:active {
-  background: var(--accent-soft);
-}
-
-/* Bedienhinweis */
-#hint {
-  position: absolute;
-  z-index: 2;
-  top: 78px;
-  left: 50%;
-  max-width: calc(100vw - 140px);
-  transform: translateX(-50%);
-  padding: 8px 16px;
+/* ---------------------------------------------------------------------------
+   Symbole, Sprachknopf, Chat-Knopf
+   --------------------------------------------------------------------------- */
+.ico { margin-right: 6px; }
+#palette button, .zeile button, #btnModus, #btnNeu, #btnAus { display: inline-flex; align-items: center; gap: 0; }
+#palette button { display: flex; }
+#hud #langBtn {
+  pointer-events: auto;
+  padding: 3px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 13px;
-  text-align: center;
-  pointer-events: none;
-  backdrop-filter: blur(10px);
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
 }
+#hud #langBtn b { color: var(--accent); }
+#chatToggle { display: none; }
 
-#hint[hidden] {
-  display: none;
+/* ---------------------------------------------------------------------------
+   Handheld-Modus: minimalistisch. Teile-Leiste unten, nur Symbole, kaum Text.
+   --------------------------------------------------------------------------- */
+body.touch .txt { display: none; }
+body.touch .ico { margin: 0; }
+body.touch #hud { top: 6px; left: 6px; right: 6px; min-height: 34px; padding: 3px 10px; gap: 8px; }
+body.touch #hud strong { font-size: 14px; }
+body.touch #hud .nurDesktop { display: none; }
+body.touch #status { font-size: 0; gap: 0; }
+body.touch #tacho { font-size: 13px; white-space: nowrap; min-width: 0; }
+body.touch #hud a.hilfeLink { padding: 3px 8px; font-size: 12px; }
+body.touch #hint { display: none; }
+body.touch #meldung { top: 46px; font-size: 12px; padding: 6px 12px; }
+body.touch #fahrpanel { display: none; }
+
+/* Leiste zum Platzieren der Teile */
+body.touch #baupanel {
+  top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: none; overflow: visible;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  padding: 5px 6px calc(5px + env(safe-area-inset-bottom));
+  border-radius: 12px 12px 0 0; border-width: 1px 0 0 0;
 }
+body.touch #baupanel[hidden] { display: none; }
+body.touch #baupanel .kopf, body.touch #palette h3 { display: none; }
+body.touch #palette { flex: 0 0 100%; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+body.touch #palette::-webkit-scrollbar { display: none; }
+body.touch #palette .gruppe { display: flex; flex: 0 0 auto; gap: 4px; padding-right: 6px; border-right: 1px solid #ffffff22; }
+body.touch #palette button { min-width: 44px; height: 36px; padding: 0 9px; justify-content: center; font-size: 12px; white-space: nowrap; }
+body.touch #baupanel .zeile { display: contents; }
+body.touch #baupanel .zeile button { flex: 0 0 auto; min-width: 34px; height: 32px; padding: 0 6px; justify-content: center; font-size: 16px; }
+body.touch #farben button { width: 22px; height: 22px; min-width: 22px; padding: 0; flex: 0 0 auto; }
+body.touch #farben input[type="color"] { width: 24px; height: 24px; }
+body.touch #btnKoerper, body.touch #btnLeeren { display: none; }
 
-@media (max-width: 600px) {
-  #zoom {
-    top: 66px;
-    right: 10px;
-  }
+/* Einstellungen eines Teils: schmal und ohne Erklärtext */
+body.touch #inspector { top: 88px; left: 6px; right: 6px; width: auto; max-height: calc(100% - 100px - var(--bar, 130px)); padding: 8px; font-size: 12px; }
+body.touch #inspector .hinweis { display: none; }
+body.touch .feld { margin: 5px 0; }
 
-  #hint {
-    top: 66px;
-    font-size: 12px;
-    max-width: calc(100vw - 80px);
-  }
-
-  #jumpButton {
-    right: 16px;
-    bottom: 76px;
-    width: 84px;
-    height: 84px;
-  }
+/* Runde Knöpfe */
+body.touch #btnModus, body.touch #btnNeu, body.touch #btnAus {
+  width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 20px; justify-content: center;
 }
+body.touch.bau #btnModus { right: 8px; bottom: calc(var(--bar, 130px) + 8px); }
+body.touch.fahr #btnModus { right: 8px; bottom: 14px; }
+body.touch #btnNeu { bottom: 14px; }
+body.touch #btnAus { bottom: 14px; margin-left: 30px; }
+body.touch #touchTasten button { min-width: 52px; height: 44px; font-size: 11px; }
+
+/* Chat hinter einem Knopf */
+body.touch #chatToggle {
+  display: block; position: absolute; z-index: 4; top: 46px; left: 8px;
+  width: 36px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 50%;
+  background: var(--panel); font-size: 17px;
+}
+body.touch #chatForm { display: none; }
+body.touch.chat-offen #chatForm { display: flex; top: 46px; left: 52px; bottom: auto; width: calc(100vw - 60px); }

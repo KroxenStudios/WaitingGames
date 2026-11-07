@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bastelkarre – Help</title>
+  <style>
+    :root { color-scheme: dark; --accent: #ffb547; }
+    body { margin: 0; background: #0c1522; color: #eef4ff; font: 15px/1.55 system-ui, sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 28px 18px 60px; }
+    h1 { color: var(--accent); margin: 0 0 4px; }
+    h2 { margin: 28px 0 8px; font-size: 18px; }
+    a { color: #ffd38a; }
+    table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+    td { padding: 6px 8px; border-bottom: 1px solid #ffffff18; vertical-align: top; }
+    td:first-child { width: 34%; color: #f3e3c8; font-weight: 600; }
+    kbd { padding: 1px 6px; border-radius: 5px; background: #ffffff1a; border: 1px solid #ffffff30; font: 600 12.5px system-ui, sans-serif; }
+    .muted { color: #a9bad0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Bastelkarre</h1>
+    <p class="muted">Build a vehicle from parts on your parking lot and drive around with the other players. <a href="index.html">Back to the game</a></p>
+
+    <h2>Building</h2>
+    <table>
+      <tr><td>Place a part</td><td>Pick a part on the left, then left-click a surface or the floor of the parking lot. The preview is <b style="color:#46e07a">green</b> = connected, <b style="color:#ffd43b">yellow</b> = loose, <b style="color:#ff4040">red</b> = not possible.</td></tr>
+      <tr><td>Remove a part</td><td>Right-click (or the “Remove” tool)</td></tr>
+      <tr><td>Adjust a part</td><td>Middle-click or <kbd>Alt</kbd>+click (or the “Adjust” tool): colour, keys, steering angle, thrust …</td></tr>
+      <tr><td>Rotate / tilt</td><td><kbd>R</kbd> rotates the next part, <kbd>T</kbd> tilts blocks and wedges. Attachments (wheels, exhaust, engines …) align to the surface you click.</td></tr>
+      <tr><td>View</td><td>Drag to rotate, right-drag or <kbd>Shift</kbd>+drag to pan, mouse wheel to zoom, <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to move.</td></tr>
+      <tr><td>Check connections</td><td><kbd>V</kbd> colours every rigid body differently. Everything in one colour is firmly connected.</td></tr>
+      <tr><td>Undo</td><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td></tr>
+    </table>
+    <p class="muted">Parts connect when they touch with connecting faces. Unconnected parts don't move with the vehicle – unless a force acts on them (a loose engine flies off on its own). Your design is saved in the browser.</p>
+
+    <h2>Parts</h2>
+    <table>
+      <tr><td>Seat</td><td>This is where you sit. You can build as many seats as you like. The first seat built defines “forward” for throttle and steering. Press <kbd>X</kbd> to get out and back in – into any free seat nearby, even in other players' vehicles (then you ride along). Or just click (or tap) a seat. Only your own vehicle is steered, and only while you sit in one of its seats.</td></tr>
+      <tr><td>Block, slab, wedge, corner wedge</td><td>Body and frame.</td></tr>
+      <tr><td>Steerable wheel</td><td>Steers with <kbd>A</kbd>/<kbd>D</kbd>; maximum steering angle adjustable. Wheels behind the centre of mass steer in the opposite direction automatically (adjustable).</td></tr>
+      <tr><td>Fixed wheel</td><td>Only rolls straight. Driven or free-rolling.</td></tr>
+      <tr><td>Caster wheel</td><td>Swivels freely through 360° in the direction of travel, no drive.</td></tr>
+      <tr><td>Exhaust</td><td>Exhaust smoke while the engine runs (<kbd>M</kbd>). Colour adjustable.</td></tr>
+      <tr><td>Fog generator</td><td>Fog at the press of a key (default <kbd>F</kbd>), even with the engine off. Colour adjustable.</td></tr>
+      <tr><td>Jet engine</td><td>Continuous thrust while the key is held (default <kbd>Shift</kbd>).</td></tr>
+      <tr><td>Rocket engine</td><td>Very strong thrust for a few seconds (default <kbd>R</kbd>), then it recharges.</td></tr>
+      <tr><td>Wing</td><td>Flat plate that creates lift and drag in the airflow. Lift needs an angle of attack (nose slightly up or the surface tilted); above about 17° the flow stalls. Effective area adjustable.</td></tr>
+      <tr><td>Control surface</td><td>Like the wing, but its trailing edge (yellow) can be tilted. Channel <b>Pitch</b> (elevator, <kbd>↓</kbd> = nose up), <b>Roll</b> (aileron, <kbd>←</kbd><kbd>→</kbd>, set left and right to “opposite”) or <b>Yaw</b> (rudder, built upright, <kbd>Q</kbd><kbd>E</kbd>). Deflection and keys adjustable. The arrow keys no longer steer wheels – use WASD for that.</td></tr>
+      <tr><td>Camera</td><td>A key (default <kbd>V</kbd>, further cameras <kbd>B</kbd>, <kbd>N</kbd> …) switches the view to that camera; press again to return. The camera looks in the direction of its lens, moves with its part and also works when you got out or the camera lies around loose. Field of view adjustable.</td></tr>
+      <tr><td>Parachute</td><td>A key (default <kbd>P</kbd>) opens it, press again to pack it. Brakes through air drag: the faster, the stronger – also when falling after jumps. Size and colour adjustable.</td></tr>
+      <tr><td>Servo motor</td><td>Whatever hangs on the turntable on top turns against the rest (default <kbd>Q</kbd>/<kbd>E</kbd>). Mode “hold angle” with a limit, or “continuous rotation”.</td></tr>
+      <tr><td>Breakaway joint</td><td>Holds both sides firmly together until you press its key (default <kbd>1</kbd>, <kbd>2</kbd>, …). Then the parts separate.</td></tr>
+    </table>
+
+    <h2>Driving</h2>
+    <table>
+      <tr><td>Drive / back</td><td>Button at the bottom right or <kbd>Tab</kbd></td></tr>
+      <tr><td>Throttle, reverse, steer</td><td><kbd>W</kbd> <kbd>S</kbd> <kbd>A</kbd> <kbd>D</kbd></td></tr>
+      <tr><td>Brake</td><td><kbd>Space</kbd></td></tr>
+      <tr><td>Engine on/off</td><td><kbd>M</kbd></td></tr>
+      <tr><td>Camera</td><td>Drag to rotate, mouse wheel to zoom, <kbd>C</kbd> near/far</td></tr>
+      <tr><td>Get out / get in</td><td><kbd>X</kbd>. On foot: WASD to walk, <kbd>Space</kbd> to jump, <kbd>Shift</kbd> to run. Without a driver the vehicle stands with the brake on.</td></tr>
+      <tr><td>Restart</td><td><kbd>Backspace</kbd> (the vehicle stands intact on the parking lot again)</td></tr>
+      <tr><td>Chat</td><td><kbd>Enter</kbd></td></tr>
+      <tr><td>Phone / tablet</td><td>Joystick on the left to drive, buttons on the right for brake and all parts with keys.</td></tr>
+    </table>
+
+    <h2>Altitude and space</h2>
+    <p class="muted">The air gets thinner with altitude: wings, control surfaces and parachute lose their effect, rockets and engines do not. Between roughly 3000 and 7000 m gravity fades away; above that you are weightless in black space with stars and a small Earth. Your altitude is shown next to your speed. If you sink again, gravity pulls you back from about 3000 m.</p>
+
+    <h2>Online</h2>
+    <p class="muted">Up to 12 players, everyone gets a parking lot. Each browser simulates the physics of its own vehicle and sends the position of its parts to the server; the others see them and can drive into them. Name and colour come from the <a href="charakter.html">character page</a>. Nothing is stored on the server.</p>
+  </main>
+</body>
+</html>

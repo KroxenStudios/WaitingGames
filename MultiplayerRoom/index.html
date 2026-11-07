@@ -4,8 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <meta name="theme-color" content="#2b2f34">
-  <title>MultiplayerRoom</title>
+  <title>Bastelkarre</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232b2f34'/%3E%3Crect x='6' y='12' width='20' height='9' rx='2' fill='%23ffb547'/%3E%3Ccircle cx='10' cy='23' r='3.5' fill='%23fff'/%3E%3Ccircle cx='22' cy='23' r='3.5' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
+  <script src="lang.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.180.0/examples/jsm/"
+      }
+    }
+  </script>
   <style>
     /* Start-Overlay "KroxenStudios" (wie in den anderen WaitingGames) */
     .splash { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 22px; background: #2b2f34; pointer-events: none; animation: splash-out 0.6s ease 2.2s forwards; }
@@ -17,7 +27,7 @@
     @keyframes splash-out { to { opacity: 0; visibility: hidden; } }
   </style>
 </head>
-<body>
+<body class="bau">
   <div class="splash" id="splash" aria-hidden="true">
     <div class="splash-name">KroxenStudios</div>
     <div class="splash-bar"><i></i></div>
@@ -25,37 +35,70 @@
 
   <main id="game">
     <div id="hud">
-      <strong>MultiplayerRoom</strong>
+      <strong>Bastelkarre</strong>
       <span id="status">Verbinde …</span>
-      <a href="docs.html">Spielhilfe</a>
-      <a href="charakter.html">Charakter anpassen</a>
+      <span id="tacho" hidden>0 km/h</span>
+      <a class="hilfeLink" href="hilfe.html" data-en-href="help.html"><span data-en="Help">Spielhilfe</span></a>
+      <a class="nurDesktop" href="charakter.html" data-en="Character">Charakter</a>
+      <a class="nurDesktop" href="../index.html">Waiting Games</a>
+      <button id="langBtn" type="button" aria-label="Sprache wechseln / Switch language">DE | EN</button>
     </div>
 
+    <div id="laden" data-en="Loading physics …">Lade Physik …</div>
     <div id="hint" aria-live="polite"></div>
+    <div id="meldung" aria-live="polite"></div>
 
-    <div id="zoom">
-      <button id="zoomIn" type="button" aria-label="Hineinzoomen">+</button>
-      <button id="zoomOut" type="button" aria-label="Herauszoomen">&minus;</button>
-    </div>
+    <!-- Bauen: Teile, Farben, Werkzeuge -->
+    <aside id="baupanel" class="panel">
+      <div class="kopf">
+        <span><span data-en="Parking lot">Parkplatz</span> <b id="lotNr">–</b></span>
+        <span id="teileZahl">0</span>
+      </div>
+      <div id="palette"></div>
+      <div class="zeile" id="farben"></div>
+      <div class="zeile werkzeuge">
+        <button type="button" data-tool="setzen" class="an" title="Linksklick" data-en-title="Left click"><span class="ico">✚</span><span class="txt" data-en="Place">Setzen</span></button>
+        <button type="button" data-tool="entfernen" title="Rechtsklick" data-en-title="Right click"><span class="ico">✕</span><span class="txt" data-en="Remove">Entfernen</span></button>
+        <button type="button" data-tool="einstellen" title="Mittelklick oder Alt+Klick" data-en-title="Middle click or Alt+click"><span class="ico">⚙</span><span class="txt" data-en="Adjust">Einstellen</span></button>
+      </div>
+      <div class="zeile">
+        <button type="button" id="btnDrehen" title="R"><span class="ico">↻</span><span class="txt" data-en="Rotate (R)">Drehen (R)</span></button>
+        <button type="button" id="btnKippen" title="T"><span class="ico">⤵</span><span class="txt" data-en="Tilt (T)">Kippen (T)</span></button>
+        <button type="button" id="btnKoerper" title="V"><span class="ico">🔗</span><span class="txt" data-en="Connections (V)">Verbindungen (V)</span></button>
+        <button type="button" id="btnUndo" title="Strg+Z" data-en-title="Ctrl+Z"><span class="ico">↶</span><span class="txt" data-en="Undo">Rückgängig</span></button>
+        <button type="button" id="btnStarter"><span class="ico">🏎</span><span class="txt" data-en="Starter kart">Starter-Kart</span></button>
+        <button type="button" id="btnLeeren"><span class="ico">🗑</span><span class="txt" data-en="Clear all">Alles weg</span></button>
+      </div>
+    </aside>
+
+    <!-- Einstellungen eines Teils -->
+    <aside id="inspector" class="panel" hidden>
+      <div class="kopf"><b id="inspTitel">Teil</b><button type="button" id="inspZu" aria-label="Schließen" data-en-aria="Close">✕</button></div>
+      <div id="inspInhalt"></div>
+    </aside>
+
+    <!-- Fahren: Belegung der Tasten -->
+    <aside id="fahrpanel" class="panel" hidden>
+      <div class="kopf"><b data-en="Controls">Steuerung</b></div>
+      <div id="tastenListe"></div>
+    </aside>
+
+    <button id="btnModus" type="button"><span class="ico">▶</span><span class="txt">Losfahren</span></button>
+    <button id="btnNeu" type="button" hidden title="Rücktaste" data-en-title="Backspace"><span class="ico">↻</span><span class="txt" data-en="Restart">Neu starten</span></button>
+    <button id="btnAus" type="button" hidden title="X"><span class="ico">⇄</span><span class="txt">Aussteigen (X)</span></button>
+    <button id="chatToggle" type="button" aria-label="Chat">💬</button>
+
+    <div id="camOverlay" hidden><span id="camText"></span></div>
 
     <form id="chatForm" autocomplete="off">
-      <input
-        id="chatInput"
-        type="text"
-        maxlength="100"
-        placeholder="Nachricht (max. 100 Zeichen)"
-        aria-label="Chatnachricht"
-      >
-      <button type="submit">Senden</button>
+      <input id="chatInput" type="text" maxlength="100" placeholder="Nachricht (Enter)" data-en-placeholder="Message (Enter)" aria-label="Chatnachricht" data-en-aria="Chat message">
+      <button type="submit" data-en="Send">Senden</button>
     </form>
 
-    <div id="joystick" aria-label="Ziehen zum Bewegen">
-      <div id="stick"></div>
-    </div>
-
-    <button id="jumpButton" type="button" aria-label="Springen">Sprung</button>
+    <div id="joystick" aria-label="Ziehen zum Fahren" data-en-aria="Drag to drive"><div id="stick"></div></div>
+    <div id="touchTasten"></div>
   </main>
 
-  <script type="module" src="game.js"></script>
+  <script type="module" src="spiel.js"></script>
 </body>
 </html>

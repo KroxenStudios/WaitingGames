@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Charakter anpassen</title>
+    <script src="lang.js"></script>
     <style>
       body {
         margin: 0;
@@ -56,10 +57,10 @@
 
   <body>
     <main>
-      <h1>Charakter anpassen</h1>
+      <h1 data-en="Customise character">Charakter anpassen</h1>
 
       <form id="characterForm">
-        <label for="characterName">Name</label>
+        <label for="characterName" data-en="Name">Name</label>
         <input
           id="characterName"
           name="name"
@@ -68,7 +69,7 @@
           required
         >
 
-        <label for="characterColor">Kleidungsfarbe</label>
+        <label for="characterColor" data-en="Clothing colour">Kleidungsfarbe</label>
         <input
           id="characterColor"
           name="color"
@@ -76,17 +77,20 @@
           value="#62e6b2"
         >
 
-        <button type="submit">Speichern und spielen</button>
+        <button type="submit" data-en="Save and play">Speichern und spielen</button>
       </form>
 
-      <a href="index.html">Zurück zum Spiel</a>
+      <a href="index.html" data-en="Back to the game">Zurück zum Spiel</a>
     </main>
 
     <script>
       const form = document.querySelector("#characterForm");
-      const saved = JSON.parse(
-        localStorage.getItem("characterSettings") || "{}"
-      );
+      let saved = {};
+      try {
+        saved = JSON.parse(localStorage.getItem("characterSettings") || "{}");
+      } catch {
+        saved = {};
+      }
 
       form.elements.name.value = saved.name || "";
       form.elements.color.value = saved.color || "#62e6b2";
@@ -95,7 +99,7 @@
         event.preventDefault();
 
         const settings = {
-          name: form.elements.name.value.trim().slice(0, 20) || "Gast",
+          name: form.elements.name.value.trim().slice(0, 20) || (WG.lang === "en" ? "Guest" : "Gast"),
           color: form.elements.color.value
         };
 

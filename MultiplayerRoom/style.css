@@ -363,6 +363,7 @@ body.touch #status { font-size: 0; gap: 0; }
 body.touch #tacho { font-size: 13px; white-space: nowrap; min-width: 0; }
 body.touch #hud a.hilfeLink { padding: 3px 8px; font-size: 12px; }
 body.touch #hint { display: none; }
+body.touch #btnExport, body.touch #btnImport { display: none; }
 body.touch #meldung { top: 46px; font-size: 12px; padding: 6px 12px; }
 body.touch #fahrpanel { display: none; }
 

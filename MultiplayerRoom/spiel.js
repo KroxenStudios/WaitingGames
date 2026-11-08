@@ -71,6 +71,8 @@ const TEXTE = {
     "WASD drive · Space brake · X get out/in or click a seat · M engine · C camera · Tab back to building · Backspace restart",
   // Meldungen
   "Jede Farbe = ein starrer Körper. Gleiche Farbe = fest verbunden.": "Each colour = one rigid body. Same colour = firmly connected.",
+  "Ungültige Fahrzeug-Datei": "Invalid vehicle file",
+  "Fahrzeug importiert (Rückgängig mit Strg+Z)": "Vehicle imported (undo with Ctrl+Z)",
   "Normale Farben": "Normal colours", "Nichts rückgängig zu machen": "Nothing to undo",
   "Alles entfernt (Rückgängig mit Strg+Z)": "Everything removed (undo with Ctrl+Z)",
   "X ist zum Ein- und Aussteigen reserviert": "X is reserved for getting in and out",
@@ -887,6 +889,30 @@ $("#btnUndo").onclick = rueckgaengig;
     meldung(`${tr("Vorlage")}: ${tr(v.name)}`);
   };
 }
+// JSON-Export/-Import des Fahrzeugs (Import läuft durch bereinige)
+$("#btnExport").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(plan)], { type: "application/json" }));
+  a.download = "bastelkarre.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$("#btnImport").onclick = () => $("#importDatei").click();
+$("#importDatei").onchange = async e => {
+  const datei = e.target.files[0];
+  e.target.value = "";
+  if (!datei) return;
+  let neu = null;
+  try {
+    neu = BAU.bereinige(JSON.parse(await datei.text()));
+  } catch {}
+  if (!neu || !neu.parts.length) return meldung("Ungültige Fahrzeug-Datei");
+  merkeVerlauf();
+  plan = neu;
+  schliesseInspector();
+  planGeaendert();
+  meldung("Fahrzeug importiert (Rückgängig mit Strg+Z)");
+};
 $("#btnLeeren").onclick = () => {
   if (!plan.parts.length) return;
   merkeVerlauf();

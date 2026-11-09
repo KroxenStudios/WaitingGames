@@ -2285,6 +2285,14 @@ let socket = null;
 let wiederverbinden = 0;
 const andere = new Map();
 
+function zeigeSpielerZahl() {
+  const el = document.getElementById("spielerZahl");
+  if (!el) return;
+  const online = socket?.readyState === WebSocket.OPEN;
+  el.hidden = !online;
+  el.textContent = `👥 ${andere.size + 1}`;
+}
+
 function verbinde() {
   if (params.has("offline")) {
     statusEl.textContent = tr("Offline");
@@ -2303,6 +2311,7 @@ function verbinde() {
     wiederverbinden = 0;
     statusEl.textContent = tr("Online");
     statusEl.dataset.state = "online";
+    zeigeSpielerZahl();
     socket.send(JSON.stringify({ type: "join", name: spielerName, color: spielerFarbe }));
     sendePlan();
   });
@@ -2319,6 +2328,7 @@ function verbinde() {
     statusEl.textContent = tr("Offline – du kannst trotzdem bauen und fahren");
     statusEl.dataset.state = "offline";
     for (const id of [...andere.keys()]) entferneAnderen(id);
+    zeigeSpielerZahl();
     if (wiederverbinden++ < 20) setTimeout(verbinde, Math.min(30000, 3000 * wiederverbinden));
   };
   socket.addEventListener("close", weg);
@@ -2356,6 +2366,7 @@ function empfange(m) {
       for (const id of [...andere.keys()]) if (!da.has(id)) entferneAnderen(id);
       chatItems = Array.isArray(m.chat) ? m.chat : chatItems;
       aktualisiereSchilder();
+      zeigeSpielerZahl();
       break;
     }
     case "chat":
@@ -2363,6 +2374,7 @@ function empfange(m) {
       break;
     case "leave":
       entferneAnderen(String(m.id));
+      zeigeSpielerZahl();
       break;
   }
 }

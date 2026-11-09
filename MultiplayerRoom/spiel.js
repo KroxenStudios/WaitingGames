@@ -1072,11 +1072,11 @@ function zeigeInspector() {
       break;
     case "duese":
       taste("Schub (halten)", "taste");
-      regler("Schub", "schub", 1, 10, 0.5, " kN");
+      regler("Schub", "schub", 1, 50, 0.5, " kN");
       break;
     case "rakete":
       taste("Zünden (halten)", "taste");
-      regler("Schub", "schub", 5, 30, 1, " kN");
+      regler("Schub", "schub", 5, 100, 1, " kN");
       regler("Brenndauer", "dauer", 1, 8, 0.5, " s");
       break;
     case "fluegel":

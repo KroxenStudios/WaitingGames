@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark light;
   /* dunkelblau (Standard) */
-  --bg: #10151c; --card: #0a0f16; --text: #eceff2; --dim: #9eacba; --line: #2a3340;
+  --bg: #0d1117; --card: #0a0f16; --text: #eceff2; --dim: #9eacba; --line: #2a3340;
   --accent: #65e6a5; --accent-hover: #8bf0be; --on-accent: #0a0f16; --brand: #e10600;
 }
 @media (prefers-color-scheme: light) {

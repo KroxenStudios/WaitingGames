@@ -1,6 +1,4 @@
 # WaitingGames
-Work-in-progress collection of simple browser games.
+Work-in-progress collection of simple Apache 2.0-licensed browser games by KroxenStudios.
 
-Aktuell nur auf Deutsch.
-
-Demo: https://kroxenstudios.github.io/WaitingGames/
+https://kroxenstudios.github.io/WaitingGames/

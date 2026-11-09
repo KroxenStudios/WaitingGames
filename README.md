@@ -1,4 +1,6 @@
 # WaitingGames
+<img width="882" height="228" alt="image" src="https://github.com/user-attachments/assets/155640a8-c28a-4876-9e09-aac0f8c84b39" />
+
 
 A work-in-progress collection of simple browser games by **KroxenStudios**, released under the Apache License 2.0.
 

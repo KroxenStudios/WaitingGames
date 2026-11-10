@@ -99,7 +99,7 @@ const TEXTE = {
   "Kart": "Kart", "Dragster": "Dragster", "Einkaufswagen": "Shopping cart", "Geländewagen": "Off-roader",
   "Flugzeug": "Plane", "Kranwagen": "Crane truck", "Zugmaschine mit Anhänger": "Truck with trailer",
   "Vorlage laden …": "Load a preset …", "Vorlage": "Preset",
-  "Reisebus": "Coach", "Raumrakete": "Space rocket", "Propellerflugzeug": "Propeller plane", "Feuerwehrauto": "Fire truck",
+  "Reisebus": "Coach", "Rakete": "Space rocket", "Propellerflugzeug": "Propeller plane", "Feuerwehrauto": "Fire truck",
   "Propeller-Buggy": "Propeller buggy", "Zug mit zwei Wagen": "Train with two cars",
   "Scheinwerfer": "Headlight", "Leiter": "Ladder", "Propellermotor": "Propeller engine", "Treibstofftank": "Fuel tank",
   "Lichtfarbe": "Light colour", "Gashebel +": "Throttle +", "Gashebel −": "Throttle −",
@@ -112,7 +112,7 @@ const TEXTE = {
     "Climb on foot: W/S at the ladder, Space jumps off. Several ladders stacked make a long ladder (R/T rotates it).",
   "Schiebt wie ein Propeller: Die Gashebel-Tasten stellen die Leistung ein und sie bleibt eingestellt. Der Schub sinkt mit dem Tempo und in dünner Luft; im Weltraum gibt es keinen.":
     "Pushes like a propeller: the throttle keys set the power and it stays set. Thrust falls with speed and in thin air; there is none in space.",
-  "Treibstoff für Triebwerke, Propeller und den Fahrmotor (Raketen haben eigenen). Mit Tank geht ohne Treibstoff nichts, ohne Tank ist der Verbrauch aus. K schaltet den Verbrauch aus und an.":
+  "Treibstoff für Triebwerke, Propeller und den Motor (Raketen haben eigenen). Mit Tank geht ohne Treibstoff nichts, ohne Tank ist der Verbrauch aus. K schaltet den Verbrauch aus und an.":
     "Fuel for jet engines, propellers and the drive motor (rockets have their own). With a tank nothing runs without fuel, without a tank fuel use is off. K switches fuel use off and on.",
 };
 function tr(s) {
@@ -1072,11 +1072,11 @@ function zeigeInspector() {
       break;
     case "duese":
       taste("Schub (halten)", "taste");
-      regler("Schub", "schub", 1, 50, 0.5, " kN");
+      regler("Schub", "schub", 1, 200, 0.5, " kN");
       break;
     case "rakete":
       taste("Zünden (halten)", "taste");
-      regler("Schub", "schub", 5, 100, 1, " kN");
+      regler("Schub", "schub", 5, 1000, 1, " kN");
       regler("Brenndauer", "dauer", 1, 8, 0.5, " s");
       break;
     case "fluegel":

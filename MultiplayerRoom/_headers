@@ -1,0 +1,17 @@
+# sicherheitsköpfe für alle seiten (cloudflare workers assets liest diese datei, sie wird selbst nicht ausgeliefert).
+# die content-security-policy erlaubt skripte nur aus dem eigenen ordner (alle bibliotheken liegen unter lib/) und genau
+# eine eingebettete importmap (hash). fremdskripte laufen dadurch nicht, auch wenn irgendwo eine einschleusung gelänge:
+# gestohlene anmelde-token könnten nicht an fremde server gesendet werden.
+# ändert sich die importmap in einer seite, muss der hash hier angepasst werden (ein test prüft das).
+# die localhost-einträge in connect-src sind für die lokale entwicklung (konten-server auf port 8799).
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-CDHiq9PV4ZZwiorfnrF3m7cFs8lny3Hj7zxTv6JUgDo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://krox-accounts.kroxenstudios.workers.dev https://kroxenstudios.goatcounter.com; connect-src 'self' https://krox-accounts.kroxenstudios.workers.dev https://bastelkarre-online.kroxenstudios.workers.dev wss://bastelkarre-online.kroxenstudios.workers.dev http://localhost:8799 http://127.0.0.1:8799; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+/lib/*
+  Cache-Control: public, max-age=31536000, immutable

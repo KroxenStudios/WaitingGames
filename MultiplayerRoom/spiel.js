@@ -1,32 +1,37 @@
-// Bastelkarre: Fahrzeuge aus Teilen bauen und online zusammen fahren.
-// Grundlage ist der MultiplayerRoom (three.js, Cloudflare-Worker per WebSocket).
+// bastelkarre: fahrzeuge aus teilen bauen und online zusammen fahren.
+// grundlage ist der multiplayerroom (three.js, cloudflare-worker per websocket).
 import * as THREE from "three";
-import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.21.0/dist/rapier.mjs";
+import RAPIER from "./lib/rapier.mjs";   // lokale kopie von @dimforge/rapier3d-compat 0.21.0 (kein fremdcode von cdns)
 import * as BAU from "./bau.js";
 import * as PH from "./physik.js";
 import {
-  fahrzeugGrafik, setzeRaeder, geistModell, schirmModell, spielfigur, setzeSitzen, textSprite, entsorge, mat
+  fahrzeugGrafik, setzeRaeder, geistModell, schirmModell, spielfigur, figurAktualisieren, setzeSitzen, textSprite, entsorge, mat
 } from "./teile3d.js";
+import { lookAus } from "./look.js";
 import { Partikel } from "./partikel.js";
 import { ladeWeltDaten, baueGelaende, hoeheBei } from "./gelaende.js";
+import { Konto } from "./accounts.js";
+import { startModelle } from "./modelle.js";
+import { zeigeProfil } from "./profil.js";
+import { startRaeume, raumName, raumTitel } from "./raeume.js";
 
 const $ = s => document.querySelector(s);
 
 // ---------------------------------------------------------------------------
-// Sprache (Deutsch/Englisch): Texte im Code sind deutsch, tr() liefert die englische Fassung.
-// Die Sprachwahl kommt aus lang.js (gleicher Schlüssel wie die anderen Waiting Games).
+// sprache (deutsch/englisch): texte im code sind deutsch, tr() liefert die englische fassung.
+// die sprachwahl kommt aus lang.js (gleicher schlüssel wie die anderen waiting games).
 // ---------------------------------------------------------------------------
 const EN = !!window.WG && WG.lang === "en";
 const TEXTE = {
-  // Teile und Gruppen
-  "Block": "Block", "Stufe (halb)": "Slab (half)", "Schräge": "Wedge", "Eckschräge": "Corner wedge", "Sitz": "Seat",
+  // teile und gruppen
+  "Block": "Block", "Glas": "Glass","Stufe (halb)": "Slab (half)", "Schräge": "Wedge", "Eckschräge": "Corner wedge", "Sitz": "Seat",
   "Lenkrad (lenkbar)": "Steerable wheel", "Starres Rad": "Fixed wheel", "Einkaufswagenrad": "Caster wheel",
   "Auspuff": "Exhaust", "Nebelgenerator": "Fog generator", "Triebwerk": "Jet engine", "Raketentriebwerk": "Rocket engine",
   "Tragfläche": "Wing", "Steuerfläche": "Control surface", "Kamera": "Camera", "Fallschirm": "Parachute",
   "Stellmotor": "Servo motor", "Sollbruchstelle": "Breakaway joint",
   "Verkleidung": "Body", "Fahrer": "Driver", "Räder": "Wheels", "Effekte": "Effects", "Antrieb": "Drive",
   "Mechanik": "Mechanics", "Flug": "Flight",
-  // Einstellungen
+  // einstellungen
   "Eigene Farbe": "Custom colour", "Max. Lenkwinkel": "Max. steering angle", "Größe": "Size", "Klein": "Small",
   "Mittel": "Medium", "Groß": "Large", "angetrieben": "driven", "frei rollend": "free-rolling",
   "Lenkrichtung": "Steering direction", "automatisch": "automatic", "normal": "normal", "umgekehrt": "reversed",
@@ -39,9 +44,9 @@ const TEXTE = {
   "Schirmfläche": "Canopy area", "Schirmfarbe": "Canopy colour", "Drehen +": "Rotate +", "Drehen −": "Rotate −",
   "Modus": "Mode", "Winkel halten": "Hold angle", "Dauerdrehung": "Continuous rotation", "Max. Winkel": "Max. angle",
   "Tempo": "Speed", "Trennen": "Detach", "Teil entfernen": "Remove part", "Taste drücken …": "Press a key …",
-  // Tasten
+  // tasten
   "Leertaste": "Space", "Strg": "Ctrl",
-  // Hinweise zu den Teilen
+  // hinweise zu den teilen
   "Hier sitzt du (X zum Ein-/Aussteigen). Beliebig viele Sitze möglich; der zuerst gebaute legt fest, wo vorne ist.":
     "This is where you sit (X to get in/out). Any number of seats; the first one built defines where forward is.",
   "Lenkt mit A/D. Räder hinter dem Schwerpunkt lenken automatisch gegenläufig.":
@@ -62,14 +67,15 @@ const TEXTE = {
   "Sehr starker Schub, aber nur für die Brenndauer. Danach lädt sie wieder auf.": "Very strong thrust, but only for the burn time. Then it recharges.",
   "Alles, was oben (an der Drehscheibe) angebaut ist, dreht sich gegen den Rest.": "Everything attached on top (the turntable) turns against the rest.",
   "Hält fest, bis du die Taste drückst. Dann trennt sie die Teile.": "Holds firmly until you press the key. Then it separates the parts.",
-  // Hinweiszeilen
+  // hinweiszeilen
   "Tippen = Werkzeug · Ziehen = drehen · Zwei Finger = zoomen/schieben": "Tap = tool · drag = rotate · two fingers = zoom/pan",
   "Linksklick setzen · Rechtsklick entfernen · Mittelklick einstellen · Ziehen dreht die Ansicht · WASD schiebt · R/T drehen/kippen":
     "Left-click place · right-click remove · middle-click adjust · drag rotates the view · WASD moves · R/T rotate/tilt",
   "Joystick fahren · Knöpfe rechts für Teile": "Joystick drives · buttons on the right for parts",
+  "Joystick: Nicken und Rollen · Knöpfe rechts: Gieren und Teile": "Joystick: pitch and roll · buttons on the right: yaw and parts",
   "WASD fahren · Leertaste bremsen · X aus-/einsteigen oder Klick auf einen Sitz · M Motor · C Kamera · Tab zurück zum Bauen · Rücktaste neu starten":
     "WASD drive · Space brake · X get out/in or click a seat · M engine · C camera · Tab back to building · Backspace restart",
-  // Meldungen
+  // meldungen
   "Jede Farbe = ein starrer Körper. Gleiche Farbe = fest verbunden.": "Each colour = one rigid body. Same colour = firmly connected.",
   "Ungültige Fahrzeug-Datei": "Invalid vehicle file",
   "Fahrzeug importiert (Rückgängig mit Strg+Z)": "Vehicle imported (undo with Ctrl+Z)",
@@ -84,13 +90,14 @@ const TEXTE = {
   "Neu gestartet": "Restarted",
   "Außerhalb des Bauraums": "Outside the build area", "Platz belegt": "Space occupied",
   "Räder gehören an eine Seitenfläche": "Wheels belong on a side face",
-  // Fahren
+  // fahren
   "Gas / Rückwärts": "Throttle / Reverse", "Lenken": "Steer", "Bremse": "Brake", "Motor an/aus": "Engine on/off",
   "Bauen": "Build", "Neu starten": "Restart", "Aus-/Einsteigen": "Get out/in", "Nebel": "Fog", "Rakete": "Rocket",
   "Motor +": "Servo +", "Motor −": "Servo −", "Nicken +": "Pitch +", "Nicken −": "Pitch −", "Rollen +": "Roll +",
   "Rollen −": "Roll −", "Gieren +": "Yaw +", "Gieren −": "Yaw −", "Ruder +": "Rudder +", "Ruder −": "Rudder −",
   "Bremse / Sprung": "Brake / Jump", "Aus/Ein": "Out/In", "Raketen-Treibstoff": "Rocket fuel",
-  // Status und Anzeigen
+  // status und anzeigen
+  "Zum Laden erst in den Baumodus wechseln": "Switch to build mode to load", "Fahrzeug aus dem Konto geladen": "Vehicle loaded from your account", "Fahrzeug geladen": "Vehicle loaded", "du": "you", "Zum Chatten anmelden (👤)": "Sign in to chat (👤)", "gehört einem registrierten Konto. Du heißt hier „Gast“ – melde dich an oder wähle im Konto einen anderen Namen.": "belongs to a registered account. You are called “Guest” here – sign in or pick another name in your account.", "Auch Werte außerhalb des Reglers sind möglich": "Values outside the slider range are possible too", "Wert auf die zulässige Grenze begrenzt": "Value limited to the allowed maximum", "Ansicht umschalten (C)": "Switch view (C)", "Ansicht: Verfolger": "View: chase", "Ansicht: Verfolger nah": "View: chase close", "Ansicht: Ich-Perspektive": "View: first person", "Raum": "Room", "Raum voll": "Room full", "Du bist vom Moderator stummgeschaltet": "You have been muted by a moderator", "Zum Chatten musst du angemeldet sein": "You need to be signed in to chat", "Zum Chatten bitte anmelden (👤)": "Sign in to chat (👤)", "Nachricht (Enter)": "Message (Enter)", "Profil ansehen": "View profile", "Gast ohne Konto": "Guest without account",
   "Offline": "Offline", "Verbinde …": "Connecting …", "Online": "Online",
   "Offline – du kannst trotzdem bauen und fahren": "Offline – you can still build and drive",
   "frei": "free", "Aussteigen (X)": "Get out (X)", "Einsteigen (X)": "Get in (X)", "schwerelos": "weightless",
@@ -99,7 +106,7 @@ const TEXTE = {
   "Kart": "Kart", "Dragster": "Dragster", "Einkaufswagen": "Shopping cart", "Geländewagen": "Off-roader",
   "Flugzeug": "Plane", "Kranwagen": "Crane truck", "Zugmaschine mit Anhänger": "Truck with trailer",
   "Vorlage laden …": "Load a preset …", "Vorlage": "Preset",
-  "Reisebus": "Coach", "Rakete": "Space rocket", "Propellerflugzeug": "Propeller plane", "Feuerwehrauto": "Fire truck",
+  "Reisebus": "Coach", "Raumrakete": "Space rocket", "Propellerflugzeug": "Propeller plane", "Feuerwehrauto": "Fire truck",
   "Propeller-Buggy": "Propeller buggy", "Zug mit zwei Wagen": "Train with two cars",
   "Scheinwerfer": "Headlight", "Leiter": "Ladder", "Propellermotor": "Propeller engine", "Treibstofftank": "Fuel tank",
   "Lichtfarbe": "Light colour", "Gashebel +": "Throttle +", "Gashebel −": "Throttle −",
@@ -110,18 +117,19 @@ const TEXTE = {
     "Shines forward (in the direction of the lens). The key switches it on and off.",
   "Zu Fuß hochklettern: W/S an der Leiter, Leertaste springt ab. Mehrere Leitern übereinander ergeben eine lange Leiter (R/T dreht sie).":
     "Climb on foot: W/S at the ladder, Space jumps off. Several ladders stacked make a long ladder (R/T rotates it).",
-  "Schiebt wie ein Propeller: Die Gashebel-Tasten stellen die Leistung ein und sie bleibt eingestellt. Der Schub sinkt mit dem Tempo und in dünner Luft; im Weltraum gibt es keinen.":
-    "Pushes like a propeller: the throttle keys set the power and it stays set. Thrust falls with speed and in thin air; there is none in space.",
+  "Schiebt wie ein Propeller: Die Gashebel-Tasten stellen die Leistung ein und sie bleibt eingestellt. Der Schub sinkt in dünner Luft; im Weltraum gibt es keinen.":
+    "Pushes like a propeller: the throttle keys set the power and it stays set. Thrust falls in thin air; there is none in space.",
   "Treibstoff für Triebwerke, Propeller und den Motor (Raketen haben eigenen). Mit Tank geht ohne Treibstoff nichts, ohne Tank ist der Verbrauch aus. K schaltet den Verbrauch aus und an.":
     "Fuel for jet engines, propellers and the drive motor (rockets have their own). With a tank nothing runs without fuel, without a tank fuel use is off. K switches fuel use off and on.",
 };
+window.bastelkarreTr = s => tr(s);   // für den hangar (modelle.js), der die vorlagen-namen übersetzt
 function tr(s) {
   if (!EN || typeof s !== "string") return s;
   if (TEXTE[s] !== undefined) return TEXTE[s];
   const m = /^Höchstens (\d+) Teile$/.exec(s);
   return m ? `At most ${m[1]} parts` : s;
 }
-// Knopf mit Symbol und Text (im Handheld-Modus wird nur das Symbol gezeigt)
+// knopf mit symbol und text (im handheld-modus wird nur das symbol gezeigt)
 function setBtn(sel, ico, txt) {
   const b = $(sel);
   b.querySelector(".ico").textContent = ico;
@@ -134,7 +142,7 @@ const hintEl = $("#hint");
 const meldungEl = $("#meldung");
 
 // ---------------------------------------------------------------------------
-// Spieler (Name und Farbe von der Charakterseite des MultiplayerRooms)
+// spieler (name und aussehen kommen aus den konto-einstellungen, konto.html)
 // ---------------------------------------------------------------------------
 let charakter = {};
 try {
@@ -142,8 +150,12 @@ try {
 } catch {
   charakter = {};
 }
-const spielerName = (charakter.name || tr("Gast")).trim().slice(0, 20) || "Gast";
+// ohne eigenen namen gilt der kontoname (falls angemeldet), sonst "gast"
+let kontoName = "";
+try { kontoName = localStorage.getItem("krox-user") || ""; } catch {}
+const spielerName = (charakter.name || kontoName || tr("Gast")).trim().slice(0, 20) || "Gast";
 const spielerFarbe = /^#[0-9a-f]{6}$/i.test(charakter.color || "") ? charakter.color : "#62e6b2";
+const spielerLook = lookAus(charakter);   // kleidung, frisur, haar- und hautfarbe
 
 function meldung(text, ms = 2200) {
   meldungEl.textContent = tr(text);
@@ -153,24 +165,8 @@ function meldung(text, ms = 2200) {
 }
 
 // ---------------------------------------------------------------------------
-// Szene
+// szene
 // ---------------------------------------------------------------------------
-function himmelTextur() {
-  const c = document.createElement("canvas");
-  c.width = 2;
-  c.height = 256;
-  const ctx = c.getContext("2d");
-  const g = ctx.createLinearGradient(0, 0, 0, 256);
-  g.addColorStop(0, "#5fb4f0");
-  g.addColorStop(0.55, "#a9dbf5");
-  g.addColorStop(1, "#d8f0f7");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 2, 256);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#000008");
 scene.fog = new THREE.Fog("#cdebf5", 150, 1300);
@@ -198,7 +194,7 @@ sonne.shadow.normalBias = 0.03;
 scene.add(sonne, sonne.target);
 
 // ---------------------------------------------------------------------------
-// Himmel, Sterne und kleine Erde: mit der Höhe geht das Blau ins Schwarze des Weltraums über
+// himmel, sterne und kleine erde: mit der höhe geht das blau ins schwarze des weltraums über
 // ---------------------------------------------------------------------------
 const himmel = new THREE.Mesh(
   new THREE.SphereGeometry(2300, 32, 16),
@@ -284,7 +280,7 @@ scene.add(erde);
 const ERDE_RICHTUNG = new THREE.Vector3(0.35, -0.7, -0.6).normalize();
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-// Pro Bild: Himmel, Nebel und Licht an die Kamerahöhe anpassen
+// pro bild: himmel, nebel und licht an die kamerahöhe anpassen
 const nebelFarbe = new THREE.Color("#cdebf5"), schwarz = new THREE.Color("#000008");
 function aktualisiereHimmel(zeit) {
   const raum = smooth(1500, 5000, camera.position.y);
@@ -313,16 +309,16 @@ const rauch = new Partikel(scene, 2600, false);
 const feuer = new Partikel(scene, 1400, true);
 
 // ---------------------------------------------------------------------------
-// Physikwelt
+// physikwelt
 // ---------------------------------------------------------------------------
 await RAPIER.init();
 $("#laden").hidden = true;
 const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
 
-// Welt: Fahrfläche mit Rampen, Parkplätze am Südrand
-const LOT_ANZAHL = 12;
+// welt: fahrfläche mit rampen, parkplätze am südrand
+const LOT_ANZAHL = 20;
 const LOT_Z = 70;
-const lotPos = i => new THREE.Vector3((((i % LOT_ANZAHL) + LOT_ANZAHL) % LOT_ANZAHL - 5.5) * 14, 0, LOT_Z);
+const lotPos = i => new THREE.Vector3((((i % LOT_ANZAHL) + LOT_ANZAHL) % LOT_ANZAHL - (LOT_ANZAHL - 1) / 2) * 14, 0, LOT_Z);
 const WELT_X = 400, WELT_N = -1500, WELT_S = 84;
 
 function asphaltTextur() {
@@ -360,7 +356,7 @@ function statischeBox(pos, halb, quat, farbe, { schatten = true, kollision = tru
   return mesh;
 }
 
-// Rampe: beginnt bei "start" auf dem Boden und steigt in Richtung "dir" auf Höhe h.
+// rampe: beginnt bei "start" auf dem boden und steigt in richtung "dir" auf höhe h.
 function rampe(x, z, dir, laenge, breite, h, farbe = "#c98f4a", stuetze = true) {
   const d = new THREE.Vector3(dir[0], 0, dir[1]).normalize();
   const up = new THREE.Vector3(0, 1, 0);
@@ -382,7 +378,7 @@ function rampe(x, z, dir, laenge, breite, h, farbe = "#c98f4a", stuetze = true) 
   }
 }
 
-// Durchsichtiges Raster mit Flecken (Kachel = 120 m)
+// durchsichtiges raster mit flecken (kachel = 120 m)
 function rasterTextur() {
   const s = 1024;
   const c = document.createElement("canvas");
@@ -409,7 +405,7 @@ function rasterTextur() {
   return t;
 }
 
-// Felder und Flecken für die Wiese außerhalb (Kachel = 400 m)
+// felder und flecken für die wiese außerhalb (kachel = 400 m)
 function wiesenTextur() {
   const s = 1024;
   const c = document.createElement("canvas");
@@ -442,7 +438,7 @@ function baueWelt() {
   tex.repeat.set((WELT_X * 2) / 6, (WELT_S - WELT_N) / 6);
   const boden = new THREE.Mesh(
     new THREE.PlaneGeometry(WELT_X * 2, WELT_S - WELT_N),
-    // polygonOffset: Boden gewinnt gegen die Wiese darunter, egal wie weit weg (kein Flackern beim Überfliegen)
+    // polygonoffset: boden gewinnt gegen die wiese darunter, egal wie weit weg (kein flackern beim überfliegen)
     new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })
   );
   boden.rotation.x = -Math.PI / 2;
@@ -450,7 +446,7 @@ function baueWelt() {
   boden.receiveShadow = true;
   scene.add(boden);
 
-  // Großes Raster (120 m, 30 m) und Flecken: damit man Höhe und Tempo am Boden erkennt
+  // großes raster (120 m, 30 m) und flecken: damit man höhe und tempo am boden erkennt
   const rt = rasterTextur();
   rt.repeat.set((WELT_X * 2) / 120, (WELT_S - WELT_N) / 120);
   const raster = new THREE.Mesh(
@@ -461,7 +457,7 @@ function baueWelt() {
   raster.position.set(0, 0.002, (WELT_S + WELT_N) / 2);
   scene.add(raster);
 
-  // Große Karte aus welt.json (Gelände, Straßen, Dörfer, Wald); ohne die Datei bleibt die flache Arena mit Wiese und Wänden
+  // große karte aus welt.json (gelände, straßen, dörfer, wald); ohne die datei bleibt die flache arena mit wiese und wänden
   if (WELTDATEN) {
     baueGelaende({ d: WELTDATEN, RAPIER, world, scene, box: statischeBox });
   } else {
@@ -476,7 +472,7 @@ function baueWelt() {
   wiese.receiveShadow = true;
   scene.add(wiese);
 
-  // Bäume außerhalb der Arena: Maßstab und Höhe sind aus der Luft gut zu erkennen
+  // bäume außerhalb der arena: maßstab und höhe sind aus der luft gut zu erkennen
   {
     const n = 1400;
     const kronen = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 2.4, 7), new THREE.MeshStandardMaterial({ roughness: 1 }), n);
@@ -502,7 +498,7 @@ function baueWelt() {
 
   world.createCollider(RAPIER.ColliderDesc.cuboid(3000, 1, 3000).setTranslation(0, -1, 0).setFriction(0.95));
 
-  // Begrenzung: Betonwände
+  // begrenzung: betonwände
   const wand = "#b9b4a8";
   const lx = WELT_X * 2, lz = WELT_S - WELT_N, mz = (WELT_S + WELT_N) / 2;
   statischeBox(new THREE.Vector3(0, 0.6, WELT_N), [lx / 2 + 0.5, 0.6, 0.5], null, wand);
@@ -511,7 +507,7 @@ function baueWelt() {
   statischeBox(new THREE.Vector3(WELT_X, 0.6, mz), [0.5, 0.6, lz / 2], null, wand);
   }
 
-  // Startbahn östlich der Hindernisse (nur Optik), 1,4 km lang
+  // startbahn östlich der hindernisse (nur optik), 1,4 km lang
   const flach = (breite, laenge, farbe, x, y, z, lage = -3) => {
     const m = new THREE.Mesh(
       new THREE.PlaneGeometry(breite, laenge),
@@ -535,7 +531,7 @@ function baueWelt() {
   scene.add(bahnSchild);
 
   if (!WELTDATEN) {
-  // Ferne Hügel als Kulisse
+  // ferne hügel als kulisse
   let seed = 99;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
   for (let i = 0; i < 22; i++) {
@@ -548,14 +544,14 @@ function baueWelt() {
   }
   }
 
-  // Parkplätze
+  // parkplätze
   for (let i = 0; i < LOT_ANZAHL; i++) {
     const p = lotPos(i);
     const pad = new THREE.Mesh(new THREE.BoxGeometry(12.4, 0.04, 12.4), new THREE.MeshStandardMaterial({ color: "#cfcac0", roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
     pad.position.set(p.x, 0.02, p.z);
     pad.receiveShadow = true;
     scene.add(pad);
-    // Rasterlinien alle 0,5 m (fein) und alle 2 m (kräftig)
+    // rasterlinien alle 0,5 m (fein) und alle 2 m (kräftig)
     const pts = [];
     for (let k = -12; k <= 12; k++) {
       const v = k * 0.5;
@@ -565,12 +561,12 @@ function baueWelt() {
     lg.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
     const linien = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: "#9b968c", transparent: true, opacity: 0.6 }));
     scene.add(linien);
-    // Markierung vorne (Fahrtrichtung) und Seitenstreifen
+    // markierung vorne (fahrtrichtung) und seitenstreifen
     statischeBox(new THREE.Vector3(p.x, 0.05, p.z - 6.35), [6.2, 0.01, 0.12], null, "#ffd43b", { schatten: false, kollision: false });
     for (const sx of [-1, 1]) {
       statischeBox(new THREE.Vector3(p.x + sx * 6.6, 0.05, p.z), [0.1, 0.01, 6.2], null, "#f2f2f2", { schatten: false, kollision: false });
     }
-    // Schild mit Nummer
+    // schild mit nummer
     const pfosten = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3, 8), mat("#3a4352", { metalness: 0.4 }));
     pfosten.position.set(p.x - 6.6, 1.5, p.z + 6.6);
     scene.add(pfosten);
@@ -580,23 +576,23 @@ function baueWelt() {
     lotSchilder.push({ pfosten, schild, name: null });
   }
 
-  // Hindernisse und Rampen (Fahrtrichtung vom Parkplatz aus: -Z)
+  // hindernisse und rampen (fahrtrichtung vom parkplatz aus: -z)
   rampe(0, 46, [0, -1], 7, 5, 1.2);
   rampe(-14, 46, [0, -1], 5, 3, 0.5, "#d9a35a");
   rampe(14, 46, [0, -1], 5, 3, 0.5, "#d9a35a");
 
-  // Großer Sprung mit Landerampe
+  // großer sprung mit landerampe
   rampe(-32, 34, [0, -1], 11, 7, 3.2, "#c46a3f");
   rampe(-32, -8, [0, 1], 11, 7, 3.2, "#c46a3f", false);
   statischeBox(new THREE.Vector3(-32, 1.6, 3.2), [3.45, 1.6, 0.2], null, "#8a6a45");
 
-  // Tafelberg mit Auffahrten
+  // tafelberg mit auffahrten
   statischeBox(new THREE.Vector3(36, 1.5, 6), [8, 1.5, 8], null, "#9aa3ab");
   rampe(36, 24, [0, -1], 10, 6, 3, "#8f979e", false);
   rampe(36, -12, [0, 1], 10, 6, 3, "#8f979e", false);
   rampe(54, 6, [-1, 0], 10, 6, 3, "#8f979e", false);
 
-  // Wellenbahn
+  // wellenbahn
   for (let i = 0; i < 9; i++) {
     const z = 40 - i * 4.5;
     const m = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 8, 20), mat("#e0d6c2", { roughness: 0.9 }));
@@ -610,12 +606,12 @@ function baueWelt() {
     );
   }
 
-  // Treppe
+  // treppe
   for (let i = 0; i < 8; i++) {
     statischeBox(new THREE.Vector3(72, 0.125 + i * 0.125, -30 - i * 1.6), [4, 0.125 + i * 0.125, 0.8], null, i % 2 ? "#a7a097" : "#b8b1a7");
   }
 
-  // Viertelröhre an der Nordwand
+  // viertelröhre an der nordwand
   const R = 7;
   for (let i = 0; i < 7; i++) {
     const a0 = (i / 7) * (Math.PI / 2), a1 = ((i + 1) / 7) * (Math.PI / 2);
@@ -628,7 +624,7 @@ function baueWelt() {
     statischeBox(pos, [30, 0.2, len / 2], q, i % 2 ? "#8fb3c9" : "#9cc0d6");
   }
 
-  // Pylonen (beweglich, nur lokal simuliert)
+  // pylonen (beweglich, nur lokal simuliert)
   for (let i = 0; i < 12; i++) {
     const x = 66 + (i % 2 ? 2.5 : -2.5);
     const z = 44 - i * 5;
@@ -648,7 +644,7 @@ function baueWelt() {
   }
 }
 
-// Die große Karte kommt fertig erzeugt aus welt.json (nicht zur Laufzeit generiert)
+// die große karte kommt fertig erzeugt aus welt.json (nicht zur laufzeit generiert)
 const WELTDATEN = await ladeWeltDaten("welt.json");
 const bodenHoehe = (x, z) => (WELTDATEN ? hoeheBei(WELTDATEN, x, z) : 0);
 const lotSchilder = [];
@@ -656,7 +652,7 @@ const pylonen = [];
 baueWelt();
 
 // ---------------------------------------------------------------------------
-// Zustand
+// zustand
 // ---------------------------------------------------------------------------
 const PLAN_KEY = "bastelkarre-plan";
 let plan;
@@ -677,14 +673,14 @@ let werkzeug = "setzen";
 let drehY = 0, kippX = 0, drehAnbau = 0;
 let koerperFarben = false;
 const verlauf = [];
-let geist = null;          // Vorschau des nächsten Teils
+let geist = null;          // vorschau des nächsten teils
 let geistSchluessel = "";
 
-let meinFahrzeug = null;  // Physik
-let meineGrafik = null;   // Gruppen je Körper
-let bauGrafik = null;     // Anzeige auf dem Parkplatz
+let meinFahrzeug = null;  // physik
+let meineGrafik = null;   // gruppen je körper
+let bauGrafik = null;     // anzeige auf dem parkplatz
 
-const meineFigur = spielfigur(spielerFarbe);
+const meineFigur = spielfigur(spielerFarbe, spielerLook);
 meineFigur.scale.setScalar(0.62);
 scene.add(meineFigur);
 const meinNamensschild = textSprite(spielerName);
@@ -692,7 +688,7 @@ meinNamensschild.position.set(0, 2.0, 0);
 meineFigur.add(meinNamensschild);
 
 // ---------------------------------------------------------------------------
-// Bauansicht
+// bauansicht
 // ---------------------------------------------------------------------------
 function lotBasis(lot, lift) {
   return lotPos(lot).add(new THREE.Vector3(0, lift, 0));
@@ -708,7 +704,7 @@ function stelleAuf(grafik, basis) {
 
 function entferneGrafik(grafik) {
   if (!grafik) return;
-  // Figuren in den Sitzen nicht mit entsorgen
+  // figuren in den sitzen nicht mit entsorgen
   for (const s of grafik.sitze || []) {
     for (const c of [...s.obj.children]) if (c.userData.clothes) scene.attach(c);
   }
@@ -754,6 +750,31 @@ function planGeaendert(merken = true) {
   }
   baueBauansicht();
   sendePlanBald();
+  if (merken) Konto.planGeaendert();
+}
+
+// fahrzeug aus dem konto übernehmen (garage oder anmeldung auf neuem gerät)
+function planAusKonto(text) {
+  let neu;
+  try {
+    neu = BAU.bereinige(JSON.parse(text));
+  } catch {
+    return;
+  }
+  if (!neu.parts.length) return;
+  if (modus !== "bau") return meldung("Zum Laden erst in den Baumodus wechseln");
+  merkeVerlauf();
+  plan = neu;
+  try { localStorage.setItem(PLAN_KEY, JSON.stringify(plan)); } catch {}
+  baueBauansicht();
+  const ausdehnung = ["x", "y", "z"].map(a => {
+    const w = plan.parts.map(p => p[a]);
+    return (Math.max(...w) - Math.min(...w) + 1) * BAU.ZELLE;
+  });
+  bauKamera.dist = THREE.MathUtils.clamp(Math.max(...ausdehnung) * 1.5 + 3, 9, 40);
+  bauKamera.ziel.y = 0.4 + ausdehnung[1] * 0.4;
+  sendePlanBald();
+  meldung("Fahrzeug geladen");
 }
 
 function merkeVerlauf() {
@@ -762,7 +783,7 @@ function merkeVerlauf() {
 }
 
 // ---------------------------------------------------------------------------
-// Baupanel
+// baupanel
 // ---------------------------------------------------------------------------
 const palette = $("#palette");
 const gruppen = {};
@@ -785,7 +806,7 @@ for (const [name, typen] of Object.entries(gruppen)) {
   palette.append(box);
 }
 
-// Mausrad scrollt die (im Handheld-Modus waagerechte) Leiste seitlich
+// mausrad scrollt die (im handheld-modus waagerechte) leiste seitlich
 palette.addEventListener("wheel", e => {
   if (document.body.classList.contains("touch") && palette.scrollWidth > palette.clientWidth) {
     palette.scrollLeft += e.deltaY + e.deltaX;
@@ -858,38 +879,9 @@ $("#btnDrehen").onclick = drehen;
 $("#btnKippen").onclick = kippen;
 $("#btnKoerper").onclick = schalteKoerper;
 $("#btnUndo").onclick = rueckgaengig;
-// Vorlagen: fertige Fahrzeuge laden (Rückgängig bringt das alte Fahrzeug zurück)
-{
-  const wahl = $("#presetWahl");
-  const leer = document.createElement("option");
-  leer.value = "";
-  leer.textContent = tr("Vorlage laden …");
-  wahl.append(leer);
-  for (const v of BAU.VORLAGEN) {
-    const o = document.createElement("option");
-    o.value = v.id;
-    o.textContent = tr(v.name);
-    wahl.append(o);
-  }
-  wahl.onchange = () => {
-    const v = BAU.VORLAGEN.find(x => x.id === wahl.value);
-    wahl.value = "";
-    if (!v) return;
-    merkeVerlauf();
-    plan = v.bauen();
-    schliesseInspector();
-    planGeaendert();
-    // Große Vorlagen: Kamera so weit wegfahren, dass das ganze Fahrzeug im Bild ist
-    const ausdehnung = ["x", "y", "z"].map(a => {
-      const w = plan.parts.map(p => p[a]);
-      return (Math.max(...w) - Math.min(...w) + 1) * BAU.ZELLE;
-    });
-    bauKamera.dist = THREE.MathUtils.clamp(Math.max(...ausdehnung) * 1.5 + 3, 9, 40);
-    bauKamera.ziel.y = 0.4 + ausdehnung[1] * 0.4;
-    meldung(`${tr("Vorlage")}: ${tr(v.name)}`);
-  };
-}
-// JSON-Export/-Import des Fahrzeugs (Import läuft durch bereinige)
+// hangar-knopf im bauen-panel: öffnet denselben dialog wie das symbol oben (dort liegen auch die vorlagen)
+$("#btnHangar").onclick = () => document.getElementById("modelleBtn")?.click();
+// json-export/-import des fahrzeugs (import läuft durch bereinige)
 $("#btnExport").onclick = () => {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([JSON.stringify(plan)], { type: "application/json" }));
@@ -923,7 +915,7 @@ $("#btnLeeren").onclick = () => {
 };
 
 // ---------------------------------------------------------------------------
-// Einstellungen eines Teils (Inspector)
+// einstellungen eines teils (inspector)
 // ---------------------------------------------------------------------------
 const inspector = $("#inspector");
 const inspInhalt = $("#inspInhalt");
@@ -990,8 +982,27 @@ function zeigeInspector() {
     r.min = min; r.max = max; r.step = step;
     r.value = p.k[key];
     const d = feld(label, r, `${p.k[key]}${einheit}`);
-    r.oninput = () => { d.querySelector(".wert").textContent = `${r.value}${einheit}`; };
+    r.value = Math.min(max, Math.max(min, p.k[key]));   // der regler zeigt nur seinen bereich, gespeichert bleibt der echte wert
+    // zahlenfeld: auch werte außerhalb des reglers (bis zur harten grenze) lassen sich eingeben und speichern
+    const zahl = document.createElement("input");
+    zahl.type = "number";
+    zahl.className = "wertFeld";
+    zahl.step = step;
+    zahl.value = p.k[key];
+    zahl.title = tr("Auch Werte außerhalb des Reglers sind möglich");
+    const [lo, hi] = BAU.GRENZEN[key] || [-1e9, 1e9];
+    const wertBox = d.querySelector(".wert");   // zahlenfeld und einheit in einer zelle des rasters
+    wertBox.textContent = "";
+    wertBox.append(zahl, document.createTextNode(einheit));
+    r.oninput = () => { zahl.value = r.value; };
     r.onchange = () => aendern(() => { p.k[key] = Number(r.value); });
+    zahl.onchange = () => {
+      const v = Number(zahl.value);
+      if (!Number.isFinite(v)) { zahl.value = p.k[key]; return; }
+      const geklemmt = Math.min(hi, Math.max(lo, v));
+      if (geklemmt !== v) meldung("Wert auf die zulässige Grenze begrenzt");
+      aendern(() => { p.k[key] = geklemmt; });
+    };
   };
 
   const auswahl = (label, key, optionen) => {
@@ -1030,7 +1041,7 @@ function zeigeInspector() {
     f.onchange = () => aendern(() => { p.k[key] = f.value; });
   };
 
-  // Teilfarbe
+  // teilfarbe
   const fz = document.createElement("div");
   fz.className = "zeile";
   for (const f of BAU.FARBEN) {
@@ -1111,7 +1122,6 @@ function zeigeInspector() {
       taste("Gashebel +", "plus");
       taste("Gashebel −", "minus");
       regler("Schub", "schub", 0.5, 10, 0.5, " kN");
-      regler("Max. Fluggeschwindigkeit", "tempo", 20, 200, 5, " m/s");
       break;
     case "tank":
       regler("Kapazität", "kapazitaet", 10, 300, 10, "");
@@ -1152,7 +1162,7 @@ function zeigeInspector() {
     steuerflaeche: "Ruder: kippt ihre Hinterkante mit den Tasten. Kanal Nicken = Höhenruder (hinten), Rollen = Querruder (links und rechts gegenläufig!), Gieren = Seitenruder (senkrecht stellen mit T). Hinterkante ist die gelbe Seite.",
     scheinwerfer: "Leuchtet nach vorn (in Richtung der Linse). Die Taste schaltet ihn an und aus.",
     leiter: "Zu Fuß hochklettern: W/S an der Leiter, Leertaste springt ab. Mehrere Leitern übereinander ergeben eine lange Leiter (R/T dreht sie).",
-    propeller: "Schiebt wie ein Propeller: Die Gashebel-Tasten stellen die Leistung ein und sie bleibt eingestellt. Der Schub sinkt mit dem Tempo und in dünner Luft; im Weltraum gibt es keinen.",
+    propeller: "Schiebt wie ein Propeller: Die Gashebel-Tasten stellen die Leistung ein und sie bleibt eingestellt. Der Schub sinkt in dünner Luft; im Weltraum gibt es keinen.",
     tank: "Treibstoff für Triebwerke, Propeller und den Fahrmotor (Raketen haben eigenen). Mit Tank geht ohne Treibstoff nichts, ohne Tank ist der Verbrauch aus. K schaltet den Verbrauch aus und an.",
     kamera: "Schalte mit der Taste auf den Blick durch die Kamera um (ohne im Fahrzeug zu sein). Sie schaut in Richtung der Linse.",
     fallschirm: "Taste öffnet den Schirm, nochmal drücken packt ihn ein. Er bremst umso stärker, je schneller du bist – auch beim Fallen.",
@@ -1182,7 +1192,7 @@ function entferneTeil(i) {
 }
 
 // ---------------------------------------------------------------------------
-// Kamera
+// kamera
 // ---------------------------------------------------------------------------
 const bauKamera = { yaw: 0.75, pitch: 0.55, dist: 9, ziel: new THREE.Vector3() };
 const fahrKamera = { yawOffset: 0, pitch: 0.28, dist: 8, zuletztGezogen: 0, pos: new THREE.Vector3(), blick: new THREE.Vector3(), yaw: 0 };
@@ -1204,15 +1214,17 @@ function kameraBau() {
 }
 
 // ---------------------------------------------------------------------------
-// Eingabe
+// eingabe
 // ---------------------------------------------------------------------------
 const gedrueckt = new Set();
 const touchGedrueckt = new Set();
-// Kurz angetippte Tasten: bleiben bis zum nächsten Physikschritt gemerkt,
-// auch wenn sie schon vor dem nächsten Frame losgelassen wurden.
+// kurz angetippte tasten: bleiben bis zum nächsten physikschritt gemerkt,
+// auch wenn sie schon vor dem nächsten frame losgelassen wurden.
 const angetippt = new Set();
 let touchModus = matchMedia("(pointer: coarse)").matches;
 let joyX = 0, joyY = 0, joyPointer = null;
+// welche kanäle der steuerflächen das fahrzeug hat: dann übernimmt der joystick nicken (y) und rollen (x) statt gas und lenken
+let steuerKanaele = { nick: false, roll: false };
 const chatInput = $("#chatInput");
 const tippt = () => document.activeElement === chatInput;
 
@@ -1230,7 +1242,7 @@ function zeigeHinweis() {
       : "Linksklick setzen · Rechtsklick entfernen · Mittelklick einstellen · Ziehen dreht die Ansicht · WASD schiebt · R/T drehen/kippen";
   } else {
     text = touchModus
-      ? "Joystick fahren · Knöpfe rechts für Teile"
+      ? (steuerKanaele.nick || steuerKanaele.roll ? "Joystick: Nicken und Rollen · Knöpfe rechts: Gieren und Teile" : "Joystick fahren · Knöpfe rechts für Teile")
       : "WASD fahren · Leertaste bremsen · X aus-/einsteigen oder Klick auf einen Sitz · M Motor · C Kamera · Tab zurück zum Bauen · Rücktaste neu starten";
   }
   hintEl.textContent = tr(text);
@@ -1286,9 +1298,7 @@ addEventListener("keydown", e => {
       meinFahrzeug.motorAn = !meinFahrzeug.motorAn;
       meldung(meinFahrzeug.motorAn ? "Motor an" : "Motor aus");
     }
-    if (t === "c" && !e.repeat) {
-      kameraNah = !kameraNah;
-    }
+    if (t === "c" && !e.repeat) schalteAnsicht();
   }
   if (!e.repeat) angetippt.add(t);
   gedrueckt.add(t);
@@ -1300,7 +1310,7 @@ addEventListener("keyup", e => {
 addEventListener("blur", () => gedrueckt.clear());
 chatInput.addEventListener("focus", () => gedrueckt.clear());
 
-// Zeiger: Klick = Werkzeug, Ziehen = Kamera
+// zeiger: klick = werkzeug, ziehen = kamera
 const zeiger = new Map();
 let pinchAbstand = 0;
 let zeigerStart = null;
@@ -1357,7 +1367,12 @@ canvas.addEventListener("pointermove", e => {
       bauKamera.pitch = THREE.MathUtils.clamp(bauKamera.pitch + dy * 0.005, 0.05, 1.45);
     }
   } else {
-    if (istFahrer()) {
+    if (ansicht === 2) {
+      // ich-perspektive: ziehen dreht den kopf (im fahrzeug) bzw. den körper (zu fuß)
+      if (ichSitz) egoBlick.yaw -= dx * 0.005;
+      else fuss.yaw -= dx * 0.005;
+      egoBlick.pitch = THREE.MathUtils.clamp(egoBlick.pitch - dy * 0.004, -1.35, 1.35);
+    } else if (istFahrer()) {
       fahrKamera.yawOffset -= dx * 0.006;
       fahrKamera.pitch = THREE.MathUtils.clamp(fahrKamera.pitch + dy * 0.004, -0.1, 1.2);
       fahrKamera.zuletztGezogen = performance.now();
@@ -1421,7 +1436,7 @@ function begrenzeBauZiel() {
   bauKamera.ziel.z = THREE.MathUtils.clamp(bauKamera.ziel.z, lp.z - 7, lp.z + 7);
 }
 
-// Joystick
+// joystick
 const joystick = $("#joystick"), stick = $("#stick");
 joystick.addEventListener("pointerdown", e => {
   e.preventDefault();
@@ -1451,7 +1466,7 @@ function bewegeJoystick(e) {
 }
 
 // ---------------------------------------------------------------------------
-// Bauen: Zielzelle unter dem Mauszeiger, Vorschau, Setzen/Entfernen
+// bauen: zielzelle unter dem mauszeiger, vorschau, setzen/entfernen
 // ---------------------------------------------------------------------------
 const raycaster = new THREE.Raycaster();
 const bodenEbene = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -1491,7 +1506,7 @@ function neuesTeil(treffer) {
   return p;
 }
 
-// Ist das neue Teil mit etwas verbunden?
+// ist das neue teil mit etwas verbunden?
 function verbunden(p) {
   const probe = { v: 1, parts: [...plan.parts, p] };
   const ana = BAU.analysiere(probe);
@@ -1551,13 +1566,13 @@ function bauKlick(w) {
 
 
 // ---------------------------------------------------------------------------
-// Ein- und Aussteigen
+// ein- und aussteigen
 // ---------------------------------------------------------------------------
-let ichSitz = null;        // { o: "ich" | Spieler-ID, i: Teilindex des Sitzes } oder null (zu Fuß)
+let ichSitz = null;        // { o: "ich" | spieler-id, i: teilindex des sitzes } oder null (zu fuß)
 let ichSitzObj = null;
 let fussRb = null, fussCol = null;
 const fuss = { yaw: 0, pitch: 0.3, dist: 5 };
-const FUSS_H = 0.5;         // Kapselmitte über den Füßen
+const FUSS_H = 0.5;         // kapselmitte über den füßen
 const idVon = o => (o === "ich" ? meineId || "ich" : o);
 const istFahrer = () => !!(ichSitz && ichSitz.o === "ich" && meinFahrzeug);
 
@@ -1680,21 +1695,35 @@ function steigeAus() {
   meineFigur.position.copy(pos);
 }
 
-// Mausklick/Tippen auf einen Sitz (eigenes oder fremdes Fahrzeug): dort einsteigen
+// mausklick/tippen auf einen sitz (eigenes oder fremdes fahrzeug): dort einsteigen
 function klickSitz() {
   raycaster.setFromCamera(maus, camera);
   let best = null;
   const pruefe = (o, g) => {
     if (!g) return;
     for (const h of raycaster.intersectObjects(g.groups, true)) {
-      if (h.object.userData.teil === undefined) continue; // Spielfiguren überspringen
+      if (h.object.userData.teil === undefined) continue; // spielfiguren überspringen
       if (!best || h.distance < best.d) best = { d: h.distance, o, g, teil: h.object.userData.teil };
-      break; // das erste getroffene Teil verdeckt alles dahinter
+      break; // das erste getroffene teil verdeckt alles dahinter
     }
   };
   pruefe("ich", meineGrafik);
   for (const r of andere.values()) if (r.m === "fahr") pruefe(r.id, r.grafik);
-  if (!best || !best.g.sitze.some(s => s.index === best.teil)) return;
+  if (!best) return;
+  if (!best.g.sitze.some(s => s.index === best.teil)) {
+    // klick auf ein anderes bauteil des fahrzeugs (der sitz ist oft verdeckt): nächster freier sitz in reichweite.
+    // wer schon sitzt, wechselt durch einen klick auf irgendein bauteil nicht den platz.
+    if (ichSitz) return;
+    const ich = meineFigur.getWorldPosition(new THREE.Vector3());
+    let wahl = null, bestD = 10;
+    for (const s of best.g.sitze) {
+      if (sitzBelegt(best.o, s.index)) continue;
+      const d = s.obj.getWorldPosition(tmpSitzPos).distanceTo(ich);
+      if (d < bestD) { bestD = d; wahl = s; }
+    }
+    if (!wahl) return;
+    best.teil = wahl.index;
+  }
   if (ichSitz && idVon(ichSitz.o) === idVon(best.o) && ichSitz.i === best.teil) return;
   if (sitzBelegt(best.o, best.teil)) return meldung("Der Sitz ist besetzt");
   setzeIchSitz({ o: best.o, i: best.teil });
@@ -1713,7 +1742,7 @@ function ausEinsteigen() {
   meldung(s.o === "ich" ? "Eingestiegen" : "Du fährst mit");
 }
 
-// Sitz weg (Besitzer neu gestartet oder gegangen)? Dann aussteigen; neue Sitzgrafik? Dann neu hinsetzen.
+// sitz weg (besitzer neu gestartet oder gegangen)? dann aussteigen; neue sitzgrafik? dann neu hinsetzen.
 function pflegeSitz() {
   if (!ichSitz) return;
   const s = sitzObjekt(ichSitz);
@@ -1724,8 +1753,8 @@ function pflegeSitz() {
   }
 }
 
-// Zu Fuß: Eingabe in Geschwindigkeit der Kapsel umsetzen
-// Leitern: zu Fuß in der Nähe einer (senkrechten) Leiter mit W/S klettern, Leertaste springt ab
+// zu fuß: eingabe in geschwindigkeit der kapsel umsetzen
+// leitern: zu fuß in der nähe einer (senkrechten) leiter mit w/s klettern, leertaste springt ab
 let fussKlettert = false, fussSprungSperre = 0;
 function leiterNah(t) {
   const gs = [meineGrafik];
@@ -1774,7 +1803,7 @@ function steuereFuss() {
   }
   if (fussKlettert) {
     fussRb.setGravityScale(0, true);
-    fussRb.setLinvel({ x: 0, y: (hoch - runter) * 2.6, z: 0 }, true); // an der Leiter bleiben (Leertaste springt ab)
+    fussRb.setLinvel({ x: 0, y: (hoch - runter) * 2.6, z: 0 }, true); // an der leiter bleiben (leertaste springt ab)
     return;
   }
   fussRb.setGravityScale(PH.gravFaktor(t0.y), true);
@@ -1805,7 +1834,7 @@ function setzeFov(f) {
   for (const p of [rauch, feuer]) p.setzeSkala(innerHeight * renderer.getPixelRatio(), f);
 }
 
-// Blick durch ein Kamera-Teil: ersetzt die normale Kamera, solange es angeschaltet ist
+// blick durch ein kamera-teil: ersetzt die normale kamera, solange es angeschaltet ist
 let camTextAlt = "";
 function kameraVonTeil() {
   const p = aktiveKamera !== null ? plan.parts[aktiveKamera] : null;
@@ -1816,7 +1845,7 @@ function kameraVonTeil() {
     const pos = e.obj.localToWorld(e.punkt.clone());
     const dir = new THREE.Vector3(0, 1, 0).transformDirection(e.obj.matrixWorld);
     camera.position.copy(pos);
-    // "oben" bleibt die Welt-Oberseite, außer die Kamera schaut senkrecht
+    // "oben" bleibt die welt-oberseite, außer die kamera schaut senkrecht
     if (Math.abs(dir.y) > 0.95) camera.up.copy(new THREE.Vector3(0, 0, -1).transformDirection(e.obj.matrixWorld));
     camera.lookAt(pos.clone().add(dir));
     camera.up.set(0, 1, 0);
@@ -1834,7 +1863,53 @@ function kameraVonTeil() {
   }
 }
 
+// ansicht: 0 verfolger fern, 1 verfolger nah, 2 ich-perspektive (aus den augen der figur)
+let ansicht = 0;
+let egoFahrer = false;
+const egoBlick = { yaw: 0, pitch: 0 };
+const AUGEN = new THREE.Vector3(0, 1.5, -0.1);   // augenpunkt im koordinatensystem der figur (sie schaut nach -z)
+const ANSICHTEN = ["Ansicht: Verfolger", "Ansicht: Verfolger nah", "Ansicht: Ich-Perspektive"];
+function schalteAnsicht() {
+  ansicht = (ansicht + 1) % 3;
+  egoBlick.yaw = 0;
+  egoBlick.pitch = 0;
+  meldung(ANSICHTEN[ansicht]);
+}
+
+// im fahrzeug: augen der sitzenden figur, blick folgt dem sitz (kopf lässt sich durch ziehen drehen)
+const egoQ0 = new THREE.Quaternion(), egoDrehung = new THREE.Quaternion(), egoEuler = new THREE.Euler(0, 0, 0, "YXZ");
+// sitzend (fahrer oder mitfahrer): die ausrichtung des sitzmodells ist die blickrichtung (die figur schaut nach -z des sitzes)
+function kameraEgoSitzend() {
+  const sitz = ichSitz ? sitzObjekt(ichSitz) : null;
+  if (!sitz) return false;
+  sitz.obj.updateWorldMatrix(true, false);
+  sitz.obj.getWorldQuaternion(egoQ0);
+  meineFigur.updateWorldMatrix(true, false);
+  const augen = meineFigur.localToWorld(AUGEN.clone());
+  egoDrehung.setFromEuler(egoEuler.set(egoBlick.pitch, egoBlick.yaw, 0));
+  camera.position.copy(augen);
+  camera.quaternion.copy(egoQ0).multiply(egoDrehung);
+  fahrKamera.blick.copy(augen);
+  fahrKamera.pos.copy(augen);
+  return true;
+}
+function kameraEgoFahrzeug() {
+  kameraEgoSitzend();
+}
+
+// zu fuß: kamera auf augenhöhe, ziehen dreht die laufrichtung
+function kameraEgoFuss() {
+  if (kameraEgoSitzend()) return;   // mitfahrer in einem fremden fahrzeug
+  meineFigur.updateWorldMatrix(true, false);
+  const augen = meineFigur.localToWorld(AUGEN.clone());
+  camera.position.copy(augen);
+  camera.rotation.set(egoBlick.pitch, fuss.yaw, 0, "YXZ");
+  fahrKamera.blick.copy(augen);
+  fahrKamera.pos.copy(augen);
+}
+
 function kameraFuss() {
+  if (ansicht === 2) return kameraEgoFuss();
   const ziel = meineFigur.getWorldPosition(new THREE.Vector3());
   ziel.y += 0.7;
   fahrKamera.blick.copy(ziel);
@@ -1850,12 +1925,11 @@ function kameraFuss() {
 }
 
 // ---------------------------------------------------------------------------
-// Fahren
+// fahren
 // ---------------------------------------------------------------------------
-let kameraNah = false;
-let aktiveKamera = null;   // Teilindex der Kamera, durch die gerade geschaut wird
+let aktiveKamera = null;   // teilindex der kamera, durch die gerade geschaut wird
 
-// Treibstoffverbrauch an/aus (gilt für alle eigenen Fahrzeuge, bleibt gespeichert)
+// treibstoffverbrauch an/aus (gilt für alle eigenen fahrzeuge, bleibt gespeichert)
 let verbrauchAn = true;
 try { verbrauchAn = localStorage.getItem("bastelkarre-verbrauch") !== "0"; } catch {}
 function schalteVerbrauch() {
@@ -1929,6 +2003,7 @@ function wechsleModus() {
   $("#tacho").hidden = modus !== "fahr";
   $("#btnNeu").hidden = modus !== "fahr";
   $("#btnAus").hidden = modus !== "fahr";
+  $("#btnAnsicht").hidden = modus !== "fahr";
   setBtn("#btnModus", modus === "bau" ? "▶" : "◀", tr(modus === "bau" ? "Losfahren" : "Zum Parkplatz"));
   $("#btnModus").blur();
   zeigeHinweis();
@@ -1937,12 +2012,13 @@ function wechsleModus() {
 $("#btnModus").onclick = wechsleModus;
 $("#btnNeu").onclick = () => { neuStarten(); $("#btnNeu").blur(); };
 $("#btnAus").onclick = () => { ausEinsteigen(); $("#btnAus").blur(); };
+$("#btnAnsicht").onclick = () => { schalteAnsicht(); $("#btnAnsicht").blur(); };
 
-// Tastenbelegung im Fahrmodus (und Touch-Knöpfe)
+// tastenbelegung im fahrmodus (und touch-knöpfe)
 const touchTasten = $("#touchTasten");
 function baueTastenListe() {
   const liste = [["W / S", "Gas / Rückwärts"], ["A / D", "Lenken"], ["Leertaste", "Bremse"], ["M", "Motor an/aus"], ["C", "Kamera"], ["Tab", "Bauen"], ["⌫", "Neu starten"], ["X", "Aus-/Einsteigen"]];
-  const aktionen = new Map(); // Taste -> Beschriftung
+  const aktionen = new Map(); // taste -> beschriftung
   const add = (t, text) => {
     if (!t) return;
     const alt = aktionen.get(t);
@@ -1950,6 +2026,8 @@ function baueTastenListe() {
   };
   const raketen = [];
   let hatTank = false;
+  steuerKanaele = { nick: false, roll: false };
+  const joystickTasten = new Set();   // tasten, die als touch-knopf wegfallen, weil der joystick sie ersetzt
   plan.parts.forEach((p, i) => {
     switch (p.t) {
       case "nebel": add(p.k.taste, "Nebel"); break;
@@ -1964,6 +2042,11 @@ function baueTastenListe() {
         const n = { nick: "Nicken", roll: "Rollen", gier: "Gieren" }[p.k.kanal] || "Ruder";
         add(p.k.plus, `${n} +`);
         add(p.k.minus, `${n} −`);
+        if (p.k.kanal === "nick" || p.k.kanal === "roll") {
+          steuerKanaele[p.k.kanal] = true;
+          joystickTasten.add(p.k.plus);
+          joystickTasten.add(p.k.minus);
+        }
         break;
       }
       case "servo": add(p.k.plus, "Motor +"); add(p.k.minus, "Motor −"); break;
@@ -1994,7 +2077,7 @@ function baueTastenListe() {
     el.append(d);
   }
 
-  // Touch
+  // touch
   touchTasten.innerHTML = "";
   const knopf = (taste, text) => {
     const b = document.createElement("button");
@@ -2021,24 +2104,31 @@ function baueTastenListe() {
     kb.addEventListener("pointerdown", e => { e.preventDefault(); schalteVerbrauch(); });
     touchTasten.append(kb);
   }
-  for (const [k, t] of aktionen) knopf(k, t);
+  for (const [k, t] of aktionen) if (!joystickTasten.has(k)) knopf(k, t);
 }
 
 function eingabe() {
   const alle = new Set([...gedrueckt, ...touchGedrueckt, ...angetippt]);
-  // Pfeiltasten sind für die Steuerflächen (Fliegen) frei
-  const gas = (alle.has("w") ? 1 : 0) - (alle.has("s") ? 1 : 0) - joyY;
+  // pfeiltasten sind für die steuerflächen (fliegen) frei
+  // hat das fahrzeug nick-steuerflächen, gehört die joystick-y-achse dem höhenruder (zurückziehen = nase hoch), sonst dem gas
+  const gas = (alle.has("w") ? 1 : 0) - (alle.has("s") ? 1 : 0) - (steuerKanaele.nick ? 0 : joyY);
+  // x steuert weiter die räder (rollen am boden) und zusätzlich das querruder, falls vorhanden
   const lenk = (alle.has("d") ? 1 : 0) - (alle.has("a") ? 1 : 0) + joyX;
+  const totzone = v => (Math.abs(v) < 0.12 ? 0 : (v - Math.sign(v) * 0.12) / 0.88);   // kleine ausschläge des daumens ignorieren
+  const achsen = {};
+  if (steuerKanaele.nick) achsen.nick = totzone(joyY);
+  if (steuerKanaele.roll) achsen.roll = totzone(joyX);
   return {
     gas: THREE.MathUtils.clamp(gas, -1, 1),
     lenk: THREE.MathUtils.clamp(lenk, -1, 1),
     bremse: alle.has("space"),
+    achsen,
     tasten: tippt() ? new Set() : alle
   };
 }
 
 // ---------------------------------------------------------------------------
-// Effekte (eigene und fremde Fahrzeuge)
+// effekte (eigene und fremde fahrzeuge)
 // ---------------------------------------------------------------------------
 const fxAkku = new Map();
 const tmpV = new THREE.Vector3(), tmpD = new THREE.Vector3(), tmpVel = new THREE.Vector3();
@@ -2066,7 +2156,7 @@ function emitEffekte(besitzer, planX, grafik, fx, dt) {
     while (akku >= 1) {
       akku -= 1;
       const pos = tmpV.clone().add(new THREE.Vector3(zufall(0.05), zufall(0.05), zufall(0.05)));
-      const versatz = Math.random() * dt; // Teilchen über den Frame verteilen, sonst entstehen Perlen
+      const versatz = Math.random() * dt; // teilchen über den frame verteilen, sonst entstehen perlen
       if (p.t === "auspuff") {
         tmpVel.copy(tmpD).multiplyScalar(1.5 + staerke * 2).add(new THREE.Vector3(zufall(0.4), 0.3, zufall(0.4)));
         rauch.emit(pos, tmpVel, tmpFarbe.set(p.k.farbe || "#5b5f66"), 0.12, 0.7 + staerke * 0.5, 1.1 + Math.random() * 0.6, 0.55, 0.6);
@@ -2089,11 +2179,11 @@ function emitEffekte(besitzer, planX, grafik, fx, dt) {
   }
 }
 
-// Offene Fallschirme: hängen am Befestigungspunkt und wehen gegen die Bewegung.
-// Die Richtung kommt aus der Bewegung des Punkts, damit es auch für fremde Fahrzeuge geht.
+// offene fallschirme: hängen am befestigungspunkt und wehen gegen die bewegung.
+// die richtung kommt aus der bewegung des punkts, damit es auch für fremde fahrzeuge geht.
 const schirme = new Map();
 
-// Scheinwerfer: alle Linsen leuchten, aber höchstens 4 echte Lichtkegel (die nächsten zur Kamera)
+// scheinwerfer: alle linsen leuchten, aber höchstens 4 echte lichtkegel (die nächsten zur kamera)
 const lichtPool = [];
 function aktualisiereLichter() {
   const kandidaten = [];
@@ -2113,7 +2203,7 @@ function aktualisiereLichter() {
   if (meinFahrzeug) sammle(plan, meineGrafik, meinFahrzeug.fx);
   for (const r of andere.values()) if (r.m === "fahr" && r.plan && r.grafik) sammle(r.plan, r.grafik, r.fx);
   kandidaten.sort((a, b) => a.d - b.d);
-  // Lichter werden bei Bedarf angelegt und danach nie entfernt (nur Helligkeit 0), sonst baut three.js die Shader neu
+  // lichter werden bei bedarf angelegt und danach nie entfernt (nur helligkeit 0), sonst baut three.js die shader neu
   for (let n = 0; n < Math.min(4, kandidaten.length); n++) {
     if (!lichtPool[n]) {
       const licht = new THREE.SpotLight("#fff6d0", 0, 70, 0.5, 0.6, 2);
@@ -2131,7 +2221,7 @@ function aktualisiereLichter() {
   });
 }
 
-// Propeller: drehen mit der Leistung (fx 0..1), bei hoher Drehzahl verschwimmen die Blätter zur Scheibe
+// propeller: drehen mit der leistung (fx 0..1), bei hoher drehzahl verschwimmen die blätter zur scheibe
 function setzeRotoren(grafik, fx, dt) {
   for (const [i, r] of grafik.rotoren) {
     const s = fx.get(i) ?? 0;
@@ -2142,7 +2232,7 @@ function setzeRotoren(grafik, fx, dt) {
   }
 }
 
-// Ruderklappen: fx-Wert 0..1 (0,5 = neutral) in Ausschlag umrechnen
+// ruderklappen: fx-wert 0..1 (0,5 = neutral) in ausschlag umrechnen
 function setzeKlappen(grafik, planX, fx) {
   for (const [i, klappe] of grafik.klappen) {
     const p = planX.parts[i];
@@ -2169,9 +2259,9 @@ function aktualisiereSchirme(besitzer, planX, grafik, fx, dt, da) {
     }
     if (dt > 0) s.v.lerp(anker.clone().sub(s.vorher).divideScalar(dt), Math.min(1, dt * 10));
     s.vorher.copy(anker);
-    // Schirm zieht hinter dem Punkt her; ohne Tempo bleibt er stehen und richtet sich langsam auf
+    // schirm zieht hinter dem punkt her; ohne tempo bleibt er stehen und richtet sich langsam auf
     const soll = s.v.lengthSq() > 1 ? s.v.clone().negate().normalize() : s.richtung.clone();
-    soll.y += 0.35; // Schirm steigt leicht nach oben
+    soll.y += 0.35; // schirm steigt leicht nach oben
     s.richtung.lerp(soll.normalize(), Math.min(1, dt * 5)).normalize();
     s.obj.position.copy(anker);
     s.obj.lookAt(anker.clone().add(s.richtung));
@@ -2181,7 +2271,7 @@ function aktualisiereSchirme(besitzer, planX, grafik, fx, dt, da) {
 }
 
 // ---------------------------------------------------------------------------
-// Chat-Sprechblasen
+// chat-sprechblasen
 // ---------------------------------------------------------------------------
 let chatItems = [];
 
@@ -2254,14 +2344,63 @@ function aktualisiereBlasen() {
   const jetzt = Date.now();
   chatItems = chatItems.filter(i => i.expires > jetzt);
   const neueste = new Map();
-  for (const i of chatItems) neueste.set(String(i.playerId), i);
+  const blockiert = Konto.blockiert();
+  for (const i of chatItems) if (!(i.acc && blockiert.has(String(i.acc).toLowerCase()))) neueste.set(String(i.playerId), i);
   setzeBlase(meineFigur, neueste.get(meineId) || null);
   for (const [id, r] of andere) setzeBlase(r.figur, neueste.get(id) || null);
 }
 
+// chat-protokoll oben links: die letzten nachrichten stehen dort auch dann, wenn der sprecher nicht im bild ist
+const chatProtokoll = document.createElement("ul");
+chatProtokoll.id = "chatProtokoll";
+chatProtokoll.setAttribute("aria-live", "polite");
+chatProtokoll.setAttribute("aria-label", "Chat");
+game.append(chatProtokoll);
+function chatProtokollNeu(item) {
+  if (item.acc && Konto.blockiert().has(String(item.acc).toLowerCase())) return;   // blockierte bleiben unsichtbar
+  const li = document.createElement("li");
+  const punkt = document.createElement("i");
+  const sprecher = String(item.playerId) === String(meineId) ? null : andere.get(String(item.playerId));
+  punkt.style.background = sprecher ? sprecher.color : spielerFarbe;
+  const name = document.createElement("b");
+  name.textContent = item.name;
+  li.append(punkt, name, document.createTextNode(": " + item.text));
+  chatProtokoll.append(li);
+  while (chatProtokoll.children.length > 6) chatProtokoll.firstElementChild.remove();
+  setTimeout(() => li.classList.add("verblasst"), 12000);
+  setTimeout(() => li.remove(), 14000);
+}
+
+// chatten geht nur mit konto. abgemeldet bleibt im eingabefeld dauerhaft "zum chatten anmelden" stehen
+// (das feld ist gesperrt); ein klick darauf öffnet den anmelde-dialog.
+function chatHinweis() {
+  const an = Konto.angemeldet();
+  chatInput.readOnly = !an;
+  chatInput.classList.toggle("gesperrt", !an);
+  chatInput.placeholder = an ? tr("Nachricht (Enter)") : tr("Zum Chatten anmelden (👤)");
+  if (!an) chatInput.value = "";
+  const senden = document.querySelector("#chatForm button[type=submit]");
+  if (senden) senden.disabled = !an;
+}
+chatInput.addEventListener("focus", () => {
+  if (!Konto.angemeldet()) {
+    chatInput.blur();
+    document.body.classList.remove("chat-offen");
+    Konto.oeffneKonto();
+  }
+});
+chatHinweis();
+setInterval(chatHinweis, 1000);   // reagiert auch auf an- und abmelden im dialog
 $("#chatForm").addEventListener("submit", e => {
   e.preventDefault();
   const text = chatInput.value.trim().slice(0, 100);
+  if (text && !Konto.angemeldet()) {
+    meldung("Zum Chatten musst du angemeldet sein");
+    chatInput.blur();
+    document.body.classList.remove("chat-offen");
+    Konto.oeffneKonto();
+    return;
+  }
   if (text && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "chat", text }));
   chatInput.value = "";
   chatInput.blur();
@@ -2269,31 +2408,130 @@ $("#chatForm").addEventListener("submit", e => {
 });
 
 // ---------------------------------------------------------------------------
-// Netz
+// netz
 // ---------------------------------------------------------------------------
 const WORKER_HOST = "bastelkarre-online.kroxenstudios.workers.dev";
 const params = new URLSearchParams(location.search);
-function socketUrl() {
-  if (params.get("server")) return params.get("server");
+let raumId = raumName(params.get("raum")) || raumName((() => { try { return localStorage.getItem("krox-raum"); } catch { return null; } })()) || "r1";
+function serverBasis() {
+  if (params.get("server")) return params.get("server").replace(/^ws/, "http").replace(/\/ws.*$/, "");
   const eigener = location.host === WORKER_HOST || location.port === "8787";
-  return eigener
-    ? `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws`
-    : `wss://${WORKER_HOST}/ws`;
+  return eigener ? `${location.protocol}//${location.host}` : `https://${WORKER_HOST}`;
+}
+function socketUrl() {
+  const basis = serverBasis().replace(/^http/, "ws");
+  return `${basis}/ws?room=${encodeURIComponent(raumId)}`;
+}
+let bewussterWechsel = false;
+async function wechsleRaum(id) {
+  if (!id || id === raumId) return;
+  try {
+    const r = await (await fetch(`${serverBasis()}/roominfo?room=${encodeURIComponent(id)}`, { signal: AbortSignal.timeout(6000) })).json();
+    if (r.count >= r.max) { meldung("Raum voll"); return; }
+  } catch {}
+  raumId = id;
+  try { localStorage.setItem("krox-raum", id); } catch {}
+  history.replaceState(null, "", `${location.pathname}?raum=${encodeURIComponent(id)}${location.hash}`);
+  chatItems = [];
+  if (socket && socket.readyState <= WebSocket.OPEN) {
+    bewussterWechsel = true;
+    try { socket.close(1000, "raum"); } catch { bewussterWechsel = false; verbinde(); }
+  } else {
+    verbinde();
+  }
+  meldung(`${tr("Raum")}: ${raumTitel(id)}`);
+}
+// beim start: ist der raum voll, in den ersten freien öffentlichen wechseln
+async function freienRaumWaehlen() {
+  try {
+    const r = await (await fetch(`${serverBasis()}/roominfo?room=${encodeURIComponent(raumId)}`, { signal: AbortSignal.timeout(6000) })).json();
+    if (r.count < r.max) return;
+    const alle = (await (await fetch(`${serverBasis()}/rooms`, { signal: AbortSignal.timeout(6000) })).json()).rooms;
+    const frei = alle.find(x => x.count < x.max);
+    if (frei) { raumId = frei.id; meldung(`${tr("Raum voll")} – ${raumTitel(frei.id)}`); }
+  } catch {}
 }
 
 let socket = null;
 let wiederverbinden = 0;
 const andere = new Map();
 
+let spielerListeKey = "";
 function zeigeSpielerZahl() {
   const el = document.getElementById("spielerZahl");
   if (!el) return;
   const online = socket?.readyState === WebSocket.OPEN;
   el.hidden = !online;
   el.textContent = `👥 ${andere.size + 1}`;
+  const liste = document.getElementById("spielerListe");
+  if (!liste) return;
+  if (!online) { liste.hidden = true; spielerListeKey = ""; return; }
+  const freunde = Konto.freunde();
+  const meinKonto = Konto.angemeldet() ? String(Konto.benutzer() || "").toLowerCase() : null;
+  const eintraege = [{ name: spielerName, color: spielerFarbe, ich: true, acc: meinKonto, freund: false }];
+  for (const r of andere.values()) if (r.name) eintraege.push({ name: r.name, color: r.color, ich: false, acc: r.acc || null, freund: !!r.acc && freunde.has(r.acc) });
+  const key = JSON.stringify(eintraege);
+  if (key === spielerListeKey) return;
+  spielerListeKey = key;
+  liste.replaceChildren(...eintraege.map(e => {
+    const li = document.createElement("li");
+    const punkt = document.createElement("i");
+    punkt.style.background = e.color;
+    const name = document.createElement("b");
+    name.textContent = e.name;
+    li.append(punkt, name);
+    if (e.ich) li.append(document.createTextNode(` (${tr("du")})`));
+    if (e.acc) {
+      // spieler mit konto: anklickbar, öffnet das profil (bio, fahrzeuge, freund hinzufügen)
+      li.className = "klick konto" + (e.freund ? " freund" : "");
+      li.title = tr("Profil ansehen");
+      li.addEventListener("click", () => oeffneSpielerProfil(e.acc));
+    } else if (!e.ich) {
+      li.title = tr("Gast ohne Konto");
+    }
+    return li;
+  }));
 }
 
-function verbinde() {
+function oeffneSpielerProfil(konto) {
+  let dlg = document.getElementById("spielerDialog");
+  if (!dlg) {
+    dlg = document.createElement("dialog");
+    dlg.id = "spielerDialog";
+    const inhalt = document.createElement("div");
+    inhalt.className = "kontoInhalt";
+    dlg.append(inhalt);
+    dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+    document.body.append(dlg);
+  }
+  const inhalt = dlg.firstElementChild;
+  const zu = document.createElement("button");
+  zu.type = "button";
+  zu.className = "kontoZu";
+  zu.textContent = "✕";
+  zu.onclick = () => dlg.close();
+  const box = document.createElement("div");
+  box.className = "kontoBox";
+  inhalt.replaceChildren(zu, box);
+  if (!dlg.open) dlg.showModal();
+  zeigeProfil(box, konto, {
+    onLaden: async m => {
+      try {
+        const d = await Konto.anfrage("POST", `/models/${m.id}/download`);
+        planAusKonto(d.data);
+        dlg.close();
+      } catch (e) { alert(Konto.fehlerText(e.message)); }
+    }
+  });
+}
+{
+  const z = document.getElementById("spielerZahl"), l = document.getElementById("spielerListe");
+  z?.addEventListener("click", () => { if (l) l.hidden = !l.hidden; });
+  addEventListener("pointerdown", e => { if (l && !l.hidden && !l.contains(e.target) && e.target !== z) l.hidden = true; });
+}
+
+async function verbinde() {
+  if (!socket && !params.has("offline")) await freienRaumWaehlen();
   if (params.has("offline")) {
     statusEl.textContent = tr("Offline");
     statusEl.dataset.state = "offline";
@@ -2307,12 +2545,16 @@ function verbinde() {
   statusEl.textContent = tr("Verbinde …");
   delete statusEl.dataset.state;
 
-  socket.addEventListener("open", () => {
+  const sock = socket;
+  sock.addEventListener("open", async () => {
     wiederverbinden = 0;
     statusEl.textContent = tr("Online");
     statusEl.dataset.state = "online";
     zeigeSpielerZahl();
-    socket.send(JSON.stringify({ type: "join", name: spielerName, color: spielerFarbe }));
+    // mit konto: signiertes ticket mitschicken, damit der raum deinen kontonamen bestätigen kann
+    const ticket = await Konto.ticket();
+    if (sock.readyState !== WebSocket.OPEN) return;
+    sock.send(JSON.stringify({ type: "join", name: spielerName, color: spielerFarbe, look: spielerLook, ...(ticket ? { ticket } : {}) }));
     sendePlan();
   });
   socket.addEventListener("message", e => {
@@ -2325,6 +2567,14 @@ function verbinde() {
     empfange(m);
   });
   const weg = () => {
+    if (bewussterWechsel) {
+      bewussterWechsel = false;
+      wiederverbinden = 0;
+      for (const id of [...andere.keys()]) entferneAnderen(id);
+      zeigeSpielerZahl();
+      verbinde();
+      return;
+    }
     statusEl.textContent = tr("Offline – du kannst trotzdem bauen und fahren");
     statusEl.dataset.state = "offline";
     for (const id of [...andere.keys()]) entferneAnderen(id);
@@ -2370,7 +2620,16 @@ function empfange(m) {
       break;
     }
     case "chat":
-      if (m.item) chatItems.push(m.item);
+      if (m.item) { chatItems.push(m.item); chatProtokollNeu(m.item); }
+      break;
+    case "nameGeaendert":
+      meldung(`„${m.wunsch}“ ${tr("gehört einem registrierten Konto. Du heißt hier „Gast“ – melde dich an oder wähle im Konto einen anderen Namen.")}`, 7000);
+      break;
+    case "chatStumm":
+      meldung("Du bist vom Moderator stummgeschaltet");
+      break;
+    case "chatNurKonto":
+      meldung("Zum Chatten musst du angemeldet sein");
       break;
     case "leave":
       entferneAnderen(String(m.id));
@@ -2418,12 +2677,12 @@ setInterval(() => {
 }, 5000);
 addEventListener("pagehide", () => { try { socket?.close(1000, "pagehide"); } catch {} });
 
-// Andere Spieler
+// andere spieler
 function anderer(id) {
   let r = andere.get(id);
   if (!r) {
-    r = { id, name: "", color: "#7bb7ff", lot: 0, m: "bau", s: -1, dv: -1, plan: null, grafik: null, kin: null, puffer: [], neu: true, fx: new Map() };
-    r.figur = spielfigur(r.color);
+    r = { id, name: "", color: "#7bb7ff", look: lookAus(null), lot: 0, m: "bau", s: -1, dv: -1, plan: null, grafik: null, kin: null, puffer: [], neu: true, fx: new Map() };
+    r.figur = spielfigur(r.color, r.look);
     r.figur.scale.setScalar(0.62);
     scene.add(r.figur);
     andere.set(id, r);
@@ -2445,6 +2704,7 @@ function setzePlanAnderer(id, dv, text) {
 
 function aktualisiereAnderen(id, p) {
   const r = anderer(id);
+  r.acc = typeof p.acc === "string" ? p.acc : null;
   const name = String(p.name || "Spieler").slice(0, 20);
   if (name !== r.name) {
     r.name = name;
@@ -2453,9 +2713,13 @@ function aktualisiereAnderen(id, p) {
     r.label.position.set(0, 2.0, 0);
     r.figur.add(r.label);
   }
-  if (/^#[0-9a-f]{6}$/i.test(p.color || "") && p.color !== r.color) {
-    r.color = p.color;
-    r.figur.userData.clothes.color.set(r.color);
+  // farbe oder aussehen geändert: figur neu aufbauen (namensschild bleibt)
+  const look = lookAus(p.look);
+  const neueFarbe = /^#[0-9a-f]{6}$/i.test(p.color || "") ? p.color : r.color;
+  if (neueFarbe !== r.color || JSON.stringify(look) !== JSON.stringify(r.look)) {
+    r.color = neueFarbe;
+    r.look = look;
+    figurAktualisieren(r.figur, r.color, r.look);
   }
   const lot = Number(p.lot) || 0;
   if (lot !== r.lot || p.m !== r.m || p.s !== r.s) {
@@ -2496,7 +2760,7 @@ function baueAnderen(r) {
   for (const g of r.grafik.groups) scene.add(g);
   stelleAuf(r.grafik, basis);
   r.kin = PH.erzeugeFahrzeug(RAPIER, world, r.plan, { basis: basis.toArray(), kinematisch: true });
-  setzeFigurInSitz(r.figur, null, steh); // im Fahrmodus setzt bewegeFigurAnderer die Figur um
+  setzeFigurInSitz(r.figur, null, steh); // im fahrmodus setzt bewegefiguranderer die figur um
 }
 
 function entferneAnderen(id) {
@@ -2510,7 +2774,7 @@ function entferneAnderen(id) {
   andere.delete(id);
 }
 
-// Figur eines anderen Spielers: im Sitz (auch in fremden Fahrzeugen) oder zu Fuß
+// figur eines anderen spielers: im sitz (auch in fremden fahrzeugen) oder zu fuß
 function bewegeFigurAnderer(r, jetzt, dt) {
   if (r.m !== "fahr") return;
   let ziel = null;
@@ -2608,7 +2872,7 @@ function aktualisiereSchilder() {
 }
 
 // ---------------------------------------------------------------------------
-// Spielschleife
+// spielschleife
 // ---------------------------------------------------------------------------
 let letzteZeit = 0;
 let akku = 0;
@@ -2622,7 +2886,7 @@ function schleife(zeit) {
 
   bewegeAndere(zeit, dt);
 
-  // Physik in festen Schritten
+  // physik in festen schritten
   akku += dt;
   let schritte = 0;
   const ein = modus === "fahr"
@@ -2689,11 +2953,14 @@ function schleife(zeit) {
       });
       balken.style.width = `${max ? (summe / max) * 100 : 0}%`;
     }
+    if (!!ichSitz !== egoFahrer) { egoFahrer = !!ichSitz; egoBlick.yaw = 0; egoBlick.pitch = 0; }   // kopf zurück in die mitte, wenn man sich hinsetzt oder aufsteht
     if (istFahrer()) kameraFahr(dt);
     else kameraFuss();
     kameraVonTeil();
+    meineFigur.visible = !(ansicht === 2 && aktiveKamera === null);
   } else {
     begrenzeBauZiel();
+    meineFigur.visible = true;
     const k = bauKamera;
     const s = dt * k.dist * 0.6;
     const vor = new THREE.Vector3(-Math.sin(k.yaw), 0, -Math.cos(k.yaw));
@@ -2710,7 +2977,7 @@ function schleife(zeit) {
 
   scene.updateMatrixWorld();
 
-  // Effekte
+  // effekte
   if (meinFahrzeug && meineGrafik) emitEffekte("ich", plan, meineGrafik, meinFahrzeug.fx, dt);
   for (const r of andere.values()) {
     if (r.m === "fahr" && r.grafik && r.plan) emitEffekte(r.id, r.plan, r.grafik, r.fx, dt);
@@ -2729,7 +2996,7 @@ function schleife(zeit) {
     }
   }
 
-  // Sonne folgt der Kamera
+  // sonne folgt der kamera
   const fokus = modus === "fahr" ? fahrKamera.blick : bauKamera.ziel;
   sonne.target.position.set(fokus.x, 0, fokus.z);
   sonne.position.set(fokus.x - 18, 34, fokus.z + 14);
@@ -2742,13 +3009,17 @@ function schleife(zeit) {
 }
 
 function kameraFahr(dt) {
-  const b = PH.sitzKoerper(meinFahrzeug);
+  if (ansicht === 2) return kameraEgoFahrzeug();
+  // im standardsitz (der erste sitz) bleibt alles wie bisher; in einem anderen sitz folgt die kamera diesem sitz
+  const anderer = ichSitz && ichSitz.o === "ich" && ichSitz.i !== meinFahrzeug.ana.sitz ? sitzObjekt(ichSitz) : null;
+  const sitzKoerperIdx = anderer ? meinFahrzeug.ana.bodyOf[ichSitz.i] : undefined;
+  const b = (sitzKoerperIdx !== undefined && meinFahrzeug.bodies[sitzKoerperIdx]) || PH.sitzKoerper(meinFahrzeug);
   if (!b) return;
   const pos = b.rb.translation();
   const rot = b.rb.rotation();
   const vor = new THREE.Vector3(...meinFahrzeug.vorwaerts).applyQuaternion(tmpQ.set(rot.x, rot.y, rot.z, rot.w));
   if (Math.hypot(vor.x, vor.z) > 0.2) {
-    const zielYaw = Math.atan2(-vor.x, -vor.z); // Kamera hinter dem Fahrzeug
+    const zielYaw = Math.atan2(-vor.x, -vor.z); // kamera hinter dem fahrzeug
     let d = zielYaw - fahrKamera.yaw;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     fahrKamera.yaw += d * Math.min(1, dt * 3.5);
@@ -2756,14 +3027,19 @@ function kameraFahr(dt) {
   if (performance.now() - fahrKamera.zuletztGezogen > 2500) {
     fahrKamera.yawOffset *= Math.exp(-dt * 2);
   }
-  // Offener Fallschirm: Kamera weiter weg und höher, damit er nicht das Bild verdeckt
+  // offener fallschirm: kamera weiter weg und höher, damit er nicht das bild verdeckt
   let schirm = 0;
   for (const [i, s] of meinFahrzeug.fx) if (plan.parts[i]?.t === "fallschirm") schirm = Math.max(schirm, s);
   fahrKamera.schirm = (fahrKamera.schirm || 0) + (schirm - (fahrKamera.schirm || 0)) * Math.min(1, dt * 3);
-  const dist = (kameraNah ? 4.2 : fahrKamera.dist) + fahrKamera.schirm * 5;
+  const dist = (ansicht === 1 ? 4.2 : fahrKamera.dist) + fahrKamera.schirm * 5;
   const yaw = fahrKamera.yaw + fahrKamera.yawOffset;
   const p = fahrKamera.pitch + fahrKamera.schirm * 0.6;
   const blick = new THREE.Vector3(pos.x, pos.y + 0.9, pos.z);
+  if (anderer) {
+    anderer.obj.updateWorldMatrix(true, false);
+    anderer.obj.getWorldPosition(blick);   // auf den besetzten sitz schauen, nicht auf den schwerpunkt oder den ersten sitz
+    blick.y += 0.9;
+  }
   fahrKamera.blick.lerp(blick, fahrKamera.blick.lengthSq() ? Math.min(1, dt * 12) : 1);
   const soll = new THREE.Vector3(
     fahrKamera.blick.x + Math.sin(yaw) * Math.cos(p) * dist,
@@ -2786,8 +3062,8 @@ addEventListener("resize", () => {
 });
 for (const p of [rauch, feuer]) p.setzeSkala(innerHeight * renderer.getPixelRatio(), fov);
 
-// Start
-// Handy: kein Text markieren, kein Kopieren-/Übersetzen-Menü bei langem Drücken (Eingabefelder ausgenommen)
+// start
+// handy: kein text markieren, kein kopieren-/übersetzen-menü bei langem drücken (eingabefelder ausgenommen)
 const istEingabe = el => !!(el && el.closest && el.closest("input, textarea, select"));
 addEventListener("contextmenu", e => { if (!istEingabe(e.target)) e.preventDefault(); });
 document.addEventListener("selectstart", e => {
@@ -2796,9 +3072,10 @@ document.addEventListener("selectstart", e => {
 });
 setBtn("#btnModus", "▶", tr("Losfahren"));
 setBtn("#btnAus", "⇄", tr("Einsteigen (X)"));
+$("#btnAnsicht").title = $("#btnAnsicht").ariaLabel = tr("Ansicht umschalten (C)");
 $("#langBtn").innerHTML = EN ? "DE | <b>EN</b>" : "<b>DE</b> | EN";
 $("#langBtn").onclick = () => window.WG && WG.set(EN ? "de" : "en");
-// Höhe der Bau-Leiste für die Position des Fahren-Knopfs (Handheld)
+// höhe der bau-leiste für die position des fahren-knopfs (handheld)
 if (window.ResizeObserver) {
   new ResizeObserver(() => document.documentElement.style.setProperty("--bar", `${$("#baupanel").offsetHeight || 0}px`)).observe($("#baupanel"));
 }
@@ -2812,22 +3089,27 @@ document.body.classList.add("bau");
 baueBauansicht();
 aktualisiereSchilder();
 verbinde();
+Konto.start({ getPlan: () => plan, setPlan: planAusKonto });
+startRaeume({ httpBasis: serverBasis(), aktuell: () => raumId, wechseln: wechsleRaum });
+{
+  const warnung = Konto.warnungText();   // fehlversuche seit der letzten anmeldung
+  if (warnung) meldung(warnung, 12000);
+}
+startModelle();
 requestAnimationFrame(schleife);
 
-// GoatCounter wie im MultiplayerRoom (nicht lokal)
+// besuchszählung mit goatcounter als einzelnes zählpixel (ein bild, kein fremdes skript, nicht lokal)
 if (/^https?:$/.test(location.protocol) && !["localhost", "127.0.0.1"].includes(location.hostname)) {
-  const gs = document.createElement("script");
-  gs.async = true;
-  gs.src = "https://gc.zgo.at/count.js";
-  gs.dataset.goatcounter = "https://kroxenstudios.goatcounter.com/count";
-  document.head.appendChild(gs);
+  const pixel = new Image();
+  pixel.referrerPolicy = "no-referrer";
+  pixel.src = `https://kroxenstudios.goatcounter.com/count?p=${encodeURIComponent("/bastelkarre")}&t=Bastelkarre&rnd=${Math.random().toString(36).slice(2)}`;
 }
 
-// Für Tests im Browser
+// für tests im browser
 window.bastelkarre = { bodenHoehe, weltDaten: () => WELTDATEN, leiterPos: () => meineGrafik.leitern.map(o => o.getWorldPosition(new THREE.Vector3()).toArray()), setzeFuss: (x, y, z) => fussRb && fussRb.setTranslation({ x, y, z }, true), lichter: () => lichtPool.map(l => +l.intensity.toFixed(0)), oeffneInspector, klickSitz, maus, treffer: () => { raycaster.setFromCamera(maus, camera); const out = []; const gs = [meineGrafik, ...[...andere.values()].map(r => r.grafik)].filter(Boolean); for (const g of gs) for (const h of raycaster.intersectObjects(g.groups, true).slice(0, 3)) out.push([h.object.userData.teil, +h.distance.toFixed(1), h.object.type]); return out; }, fussKamera: fuss, sitzPixel: (o, i) => {
     const s = sitzObjekt({ o, i });
     if (!s) return null;
-    const v = s.obj.localToWorld(new THREE.Vector3(0, -0.1, 0.1)).project(camera); // Sitzfläche
+    const v = s.obj.localToWorld(new THREE.Vector3(0, -0.1, 0.1)).project(camera); // sitzfläche
     const r = canvas.getBoundingClientRect();
     return [((v.x + 1) / 2) * r.width + r.left, ((1 - v.y) / 2) * r.height + r.top, v.z];
-  }, planGeaendert, sitz: () => ichSitz, fuss: () => fussRb && fussRb.translation(), ausEinsteigen, plan: () => plan, modus: () => modus, wechsleModus, fahrzeug: () => meinFahrzeug, gedrueckt, andere };
+  }, planGeaendert, sitz: () => ichSitz, fuss: () => fussRb && fussRb.translation(), ausEinsteigen, plan: () => plan, modus: () => modus, wechsleModus, setzeIchSitz, kameraPos: () => camera.position.toArray(), sitzPos: (o, i) => sitzObjekt({ o, i })?.obj.getWorldPosition(new THREE.Vector3()).toArray(), fahrzeug: () => meinFahrzeug, gedrueckt, andere };

@@ -41,7 +41,7 @@ button { color: var(--text); cursor: pointer; }
   touch-action: none;
 }
 
-/* Kopfzeile */
+/* kopfzeile */
 #hud {
   position: absolute;
   z-index: 4;
@@ -119,7 +119,7 @@ button { color: var(--text); cursor: pointer; }
 #meldung { top: 108px; color: #fff; background: #3a1d0ccc; opacity: 0; transition: opacity 0.25s; }
 #meldung.zeigen { opacity: 1; }
 
-/* Seitenleisten */
+/* seitenleisten */
 .panel {
   position: absolute;
   z-index: 3;
@@ -176,7 +176,7 @@ button { color: var(--text); cursor: pointer; }
 #farben button.an { outline: 2px solid #fff; outline-offset: 1px; }
 #farben input[type="color"] { width: 26px; height: 24px; padding: 0; border: 0; background: none; }
 
-/* Einstellungen */
+/* einstellungen */
 .feld { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; margin: 7px 0; }
 .feld input[type="range"] { grid-column: 1 / -1; width: 100%; }
 .feld select { background: #0c1522; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 3px 6px; }
@@ -195,7 +195,7 @@ button.taste.warte { background: #ffd43b; color: #000; }
 .treibstoff { display: block; height: 5px; border-radius: 2px; background: #ffffff20; overflow: hidden; margin-top: 2px; }
 .treibstoff i { display: block; height: 100%; background: #ff7a1a; }
 
-/* Blick durch eine Kamera */
+/* blick durch eine kamera */
 #camOverlay {
   position: absolute;
   z-index: 2;
@@ -217,7 +217,7 @@ button.taste.warte { background: #ffd43b; color: #000; }
 #camText::before { content: "●"; color: #ff2a2a; margin-right: 8px; animation: rec 1s steps(2) infinite; }
 @keyframes rec { 50% { opacity: 0.15; } }
 
-/* Modus-Knopf */
+/* modus-knopf */
 #btnModus, #btnNeu, #btnAus {
   position: absolute;
   z-index: 3;
@@ -237,7 +237,7 @@ button.taste.warte { background: #ffd43b; color: #000; }
 #btnAus { right: auto; left: 50%; margin-left: 74px; transform: none; background: #ffffffdd; font-size: 14px; padding: 9px 16px; }
 #btnAus[hidden] { display: none; }
 
-/* Chat */
+/* chat */
 #chatForm {
   position: absolute;
   z-index: 3;
@@ -268,7 +268,7 @@ body.bau #chatForm { left: 292px; width: min(380px, calc(100vw - 500px)); }
   font-weight: 600;
 }
 
-/* Touch-Steuerung */
+/* touch-steuerung */
 #joystick {
   position: absolute;
   z-index: 3;
@@ -320,7 +320,7 @@ body:not(.touch) #touchTasten,
 body.bau #joystick,
 body.bau #touchTasten { display: none; }
 
-/* Schmale Bildschirme: Baupanel unten als Streifen */
+/* schmale bildschirme: baupanel unten als streifen */
 @media (max-width: 760px) {
   #hud { gap: 8px; padding: 6px 12px; }
   #hud a { padding: 4px 6px; font-size: 12px; }
@@ -334,7 +334,7 @@ body.bau #touchTasten { display: none; }
 }
 
 /* ---------------------------------------------------------------------------
-   Symbole, Sprachknopf, Chat-Knopf
+   symbole, sprachknopf, chat-knopf
    --------------------------------------------------------------------------- */
 .ico { margin-right: 6px; }
 #palette button, .zeile button, #btnModus, #btnNeu, #btnAus { display: inline-flex; align-items: center; gap: 0; }
@@ -352,7 +352,7 @@ body.bau #touchTasten { display: none; }
 #chatToggle { display: none; }
 
 /* ---------------------------------------------------------------------------
-   Handheld-Modus: minimalistisch. Teile-Leiste unten, nur Symbole, kaum Text.
+   handheld-modus: minimalistisch. teile-leiste unten, nur symbole, kaum text.
    --------------------------------------------------------------------------- */
 body.touch .txt { display: none; }
 body.touch .ico { margin: 0; }
@@ -367,7 +367,7 @@ body.touch #btnExport, body.touch #btnImport { display: none; }
 body.touch #meldung { top: 46px; font-size: 12px; padding: 6px 12px; }
 body.touch #fahrpanel { display: none; }
 
-/* Leiste zum Platzieren der Teile */
+/* leiste zum platzieren der teile */
 body.touch #baupanel {
   top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: none; overflow: visible;
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
@@ -386,12 +386,12 @@ body.touch #farben button { width: 22px; height: 22px; min-width: 22px; padding:
 body.touch #farben input[type="color"] { width: 24px; height: 24px; }
 body.touch #btnKoerper, body.touch #btnLeeren { display: none; }
 
-/* Einstellungen eines Teils: schmal und ohne Erklärtext */
+/* einstellungen eines teils: schmal und ohne erklärtext */
 body.touch #inspector { top: 88px; left: 6px; right: 6px; width: auto; max-height: calc(100% - 100px - var(--bar, 130px)); padding: 8px; font-size: 12px; }
 body.touch #inspector .hinweis { display: none; }
 body.touch .feld { margin: 5px 0; }
 
-/* Runde Knöpfe */
+/* runde knöpfe */
 body.touch #btnModus, body.touch #btnNeu, body.touch #btnAus {
   width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 20px; justify-content: center;
 }
@@ -401,7 +401,7 @@ body.touch #btnNeu { bottom: 14px; }
 body.touch #btnAus { bottom: 14px; margin-left: 30px; }
 body.touch #touchTasten button { min-width: 52px; height: 44px; font-size: 11px; }
 
-/* Chat hinter einem Knopf */
+/* chat hinter einem knopf */
 body.touch #chatToggle {
   display: block; position: absolute; z-index: 4; top: 46px; left: 8px;
   width: 36px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 50%;
@@ -410,7 +410,7 @@ body.touch #chatToggle {
 body.touch #chatForm { display: none; }
 body.touch.chat-offen #chatForm { display: flex; top: 46px; left: 52px; bottom: auto; width: calc(100vw - 60px); }
 
-/* Vorlagen-Auswahl: sieht aus wie ein Knopf, die Liste öffnet das unsichtbare select darüber */
+/* hangar-knopf im bauen-panel */
 .presetBtn {
   position: relative; flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center;
   padding: 6px 9px; border: 1px solid var(--line); border-radius: 9px; background: #ffffff10;
@@ -421,7 +421,7 @@ body.touch.chat-offen #chatForm { display: flex; top: 46px; left: 52px; bottom: 
 .presetBtn select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
 body.touch .presetBtn { flex: 0 0 auto; min-width: 34px; height: 32px; padding: 0 6px; font-size: 16px; order: 9; margin: 0; }
 
-/* Teile-Leiste im Handheld-Modus: kompakter, Rand blendet aus = "hier geht es weiter" */
+/* teile-leiste im handheld-modus: kompakter, rand blendet aus = "hier geht es weiter" */
 body.touch #palette button { min-width: 0; padding: 0 8px; font-size: 11.5px; }
 body.touch #palette {
   scroll-snap-type: x proximity;
@@ -431,7 +431,7 @@ body.touch #palette {
 }
 body.touch #palette button { scroll-snap-align: start; }
 
-/* Handy: nichts markieren, kein Kopieren-/Übersetzen-Overlay bei langem Drücken */
+/* handy: nichts markieren, kein kopieren-/übersetzen-overlay bei langem drücken */
 html, body, .panel, #hud, #touchTasten, #joystick, #meldung, #hint, #camOverlay, #game {
   -webkit-user-select: none;
   user-select: none;
@@ -439,3 +439,168 @@ html, body, .panel, #hud, #touchTasten, #joystick, #meldung, #hint, #camOverlay,
 }
 button, label, .panel, #touchTasten, #joystick { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 input, textarea, select { -webkit-user-select: text; user-select: text; }
+
+/* konto (accounts.js) */
+#hud #kontoBtn, #hud #modelleBtn {
+  pointer-events: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+#hud #kontoBtn:hover, #hud #modelleBtn:hover { background: var(--accent-soft); }
+#modelleDialog { width: 100vw; max-width: none; height: 100vh; height: 100dvh; max-height: none; margin: 0; border: 0; border-radius: 0; overflow: auto; padding: 0; background: #0c1522; color: var(--text); }
+#modelleDialog .kontoInhalt { max-width: 1100px; margin: 0 auto; padding: 28px 20px 24px; }
+#modelleDialog .kontoZu { position: fixed; top: 12px; right: 16px; font-size: 22px; z-index: 2; }
+#modelleDialog .modellListe { max-height: none; overflow: visible; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
+#kontoDialog {
+  width: min(400px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel-solid);
+  color: var(--text);
+  box-shadow: 0 20px 60px #000a;
+}
+#kontoDialog::backdrop { background: #0008; backdrop-filter: blur(3px); }
+.kontoInhalt { position: relative; padding: 22px 20px 18px; display: grid; gap: 10px; }
+.kontoInhalt h2 { margin: 0; font-size: 18px; }
+.kontoInhalt h3 { margin: 6px 0 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.kontoZu { position: absolute; top: 8px; right: 8px; border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; }
+.kontoInfo { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.kontoMeldung { margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+.kontoMeldung.fehler { background: #ff6b6b22; color: #ffb3b3; }
+.kontoMeldung.ok { background: #62e6b222; color: #b5f5dc; }
+.kontoForm, .kontoSpeichern { display: grid; gap: 8px; }
+.kontoInhalt input { padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: #ffffff10; color: var(--text); font-size: 14px; }
+.kontoInhalt button:not(.kontoZu) { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: #ffffff14; color: var(--text); font-size: 13px; cursor: pointer; }
+.kontoInhalt button:not(.kontoZu):hover { background: #ffffff26; }
+.kontoInhalt button.primaer { background: var(--accent); border-color: var(--accent); color: #2a1700; font-weight: 600; }
+.kontoInhalt button.link { border: 0; background: none; color: var(--accent); padding: 4px 2px; }
+.kontoInhalt button:disabled { opacity: 0.6; cursor: wait; }
+.kontoLinks { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.kontoCode { padding: 14px; border-radius: 10px; background: #0006; border: 1px dashed var(--accent); font: 600 15px/1.4 ui-monospace, Consolas, monospace; text-align: center; letter-spacing: 0.06em; user-select: all; word-break: break-all; }
+.kontoGarage { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.kontoGarage li { display: flex; gap: 6px; align-items: center; }
+.kontoGarage li span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.kontoGarage li.leer { color: var(--muted); font-size: 13px; }
+body.touch #hud #kontoBtn { padding: 2px 8px; max-width: 90px; }
+
+/* fahrzeug-börse (modelle.js) */
+
+.modellTabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.modellTabs button.an { background: var(--accent) !important; border-color: var(--accent) !important; color: #2a1700 !important; font-weight: 600; }
+.modellListe { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; max-height: 46vh; overflow: auto; }
+.modell { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #ffffff0a; }
+.modellText { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.modellText b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modellText small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.modellKnoepfe { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.modellListe .leer { color: var(--muted); font-size: 13px; padding: 6px 2px; border: 0; background: none; }
+
+/* spielerzahl und namensliste */
+#hud #spielerZahl { pointer-events: auto; cursor: pointer; font-size: 13px; color: var(--text); padding: 3px 8px; border-radius: 999px; }
+#hud #spielerZahl:hover { background: var(--accent-soft); }
+#spielerListe { position: absolute; top: calc(100% + 6px); left: 16px; z-index: 5; margin: 0; padding: 8px 12px; list-style: none; display: grid; gap: 4px; min-width: 150px; max-width: 240px; max-height: 50vh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-solid); box-shadow: 0 10px 34px #0006; pointer-events: auto; font-size: 13px; }
+#spielerListe[hidden] { display: none; }
+#spielerListe li { display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#spielerListe li i { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #fff6; }
+.kontoBox { display: grid; gap: 8px; }
+.kontoCharakter { display: flex; gap: 8px; align-items: center; }
+.kontoCharakter input[type="text"] { flex: 1; min-width: 0; }
+.kontoCharakter input[type="color"] { width: 42px; height: 36px; padding: 2px; cursor: pointer; }
+
+/* sterne-bewertung, profile, spieler-popup */
+.sterne { display: inline-flex; vertical-align: middle; }
+.kontoInhalt .sterne > *, .sterne > * { padding: 0; border: 0; background: none; font-size: 15px; line-height: 1; color: #ffffff30; }
+.sterne > .an { color: #ffc83d; }
+.kontoInhalt .sterne.klickbar > button { cursor: pointer; font-size: 20px; padding: 0 1px; }
+.kontoInhalt .sterne.klickbar > button:hover { color: #ffe08a; }
+.kontoInhalt .sterne > button { border: 0 !important; background: none !important; padding: 0 1px !important; }
+.kontoInhalt .sterne > .an { color: #ffc83d; }
+.profilKopf { display: flex; gap: 12px; align-items: center; }
+.profilKopf h2 { margin: 0; }
+.profilKopf small { color: var(--muted); }
+.profilPunkt { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 2px solid #fff6; }
+.profilBio { margin: 0; padding: 10px 12px; border-radius: 10px; background: #ffffff0a; line-height: 1.45; overflow-wrap: anywhere; }
+.profilZahlen { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.profilFreund { justify-content: flex-start; }
+.kontoSeite, .kontoInfo a, .modellText a, .kontoGarage a { color: var(--accent); }
+.kontoSeite { font-size: 13px; text-decoration: none; }
+.kontoInhalt h4 { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.kontoInhalt textarea { padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: #ffffff10; color: var(--text); font: 14px/1.4 system-ui, sans-serif; resize: vertical; }
+.kontoGarage small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.seitenFuss { text-align: center; font-size: 12px; color: var(--muted); margin: 0; }
+.seitenFuss a { color: var(--muted); }
+/* spieler-popup im spiel */
+#spielerDialog { width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--panel-solid); color: var(--text); box-shadow: 0 20px 60px #000a; }
+#spielerDialog::backdrop { background: #0008; backdrop-filter: blur(3px); }
+#spielerListe li.klick { cursor: pointer; border-radius: 6px; padding: 2px 4px; margin: 0 -4px; }
+#spielerListe li.klick:hover { background: var(--accent-soft); }
+#spielerListe li.freund::after { content: "★"; color: #ffc83d; margin-left: auto; }
+#spielerListe li.konto b { color: var(--accent); font-weight: 600; }
+
+/* charakter-editor */
+.kontoInhalt .feld { display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.kontoInhalt select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #ffffff10; color: var(--text); font-size: 14px; }
+.kontoInhalt select option { background: #0c1522; color: var(--text); }
+.farbReihe { display: flex; flex-wrap: wrap; gap: 8px; }
+.kontoInhalt .farbKnopf { width: 30px; height: 30px; padding: 0 !important; border-radius: 50% !important; border: 2px solid #ffffff44 !important; cursor: pointer; }
+.kontoInhalt .farbKnopf.an { border-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent-soft); }
+
+/* vorschaubilder in der börse, melden */
+.modellBild { flex: none; width: 128px; height: 80px; object-fit: cover; border-radius: 8px; background: #1b2536; }
+.modellBild.leer { display: grid; place-items: center; font-size: 24px; opacity: 0.5; }
+.meldeDialog { width: min(420px, calc(100vw - 24px)); padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--panel-solid); color: var(--text); box-shadow: 0 20px 60px #000a; }
+.meldeDialog::backdrop { background: #0008; backdrop-filter: blur(3px); }
+.meldeKontext { margin: 0; padding: 8px 10px; border-radius: 8px; background: #ffffff0a; font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
+.meldeKontext { margin: 0; padding: 8px 10px; border-radius: 8px; background: #ffffff0a; font-size: 13px; overflow-wrap: anywhere; }
+
+/* raumwahl */
+#hud #raumBtn { pointer-events: auto; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--text); font-size: 13px; cursor: pointer; white-space: nowrap; }
+#hud #raumBtn:hover { background: var(--accent-soft); }
+#raumDialog { width: min(400px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--panel-solid); color: var(--text); box-shadow: 0 20px 60px #000a; }
+#raumDialog::backdrop { background: #0008; backdrop-filter: blur(3px); }
+.raumListe { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.raumListe li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #ffffff08; }
+.raumListe li.hier { border-color: var(--accent); }
+.raumName { flex: 1; font-size: 14px; }
+.raumZahl { font-size: 13px; color: var(--muted); min-width: 64px; text-align: right; }
+.raumZahl.voll { color: #ff9b9b; }
+body.touch #hud #raumBtn { padding: 2px 8px; }
+
+
+/* zahlenfeld neben dem regler im inspektor */
+.feld input.wertFeld { width: 92px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: #ffffff10; color: var(--accent); font: inherit; font-variant-numeric: tabular-nums; text-align: right; justify-self: end; }
+
+/* rote warnung über fehlversuche */
+.kontoWarnung { display: grid; gap: 6px; border: 1px solid #ff6b6b88; background: #ff6b6b26 !important; color: #ffd0d0 !important; }
+.kontoWarnung b { color: #ff8f8f; }
+.kontoWarnung button { justify-self: start; }
+
+/* chat-protokoll oben links (immer sichtbar, unabhängig vom sprecher) */
+#chatProtokoll { position: absolute; z-index: 3; top: 70px; left: 14px; margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; max-width: min(380px, calc(100vw - 28px)); pointer-events: none; }
+#chatProtokoll:empty { display: none; }
+#chatProtokoll li { display: block; padding: 4px 10px; border-radius: 10px; background: #0c1522bb; color: var(--text); font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; transition: opacity 1.8s; backdrop-filter: blur(6px); }
+#chatProtokoll li.verblasst { opacity: 0; }
+#chatProtokoll li i { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; border: 1px solid #fff6; vertical-align: middle; }
+#chatProtokoll li b { color: var(--accent); font-weight: 600; white-space: nowrap; }
+body.bau #chatProtokoll { left: 292px; }
+body.touch #chatProtokoll { top: 90px; left: 8px; }
+#chatInput.gesperrt { cursor: pointer; }
+#chatInput.gesperrt::placeholder { color: var(--accent); opacity: 1; }
+#chatForm button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ansicht umschalten (c): kleines symbol in der oberen leiste, nur beim fahren */
+#hud #btnAnsicht { pointer-events: auto; width: 30px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--text); font-size: 14px; line-height: 1; cursor: pointer; }
+#hud #btnAnsicht:hover { background: var(--accent-soft); }
+#hud #btnAnsicht[hidden] { display: none; }
+body.touch #hud #btnAnsicht { width: 26px; height: 24px; font-size: 13px; }

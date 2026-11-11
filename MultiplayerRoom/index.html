@@ -8,16 +8,9 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232b2f34'/%3E%3Crect x='6' y='12' width='20' height='9' rx='2' fill='%23ffb547'/%3E%3Ccircle cx='10' cy='23' r='3.5' fill='%23fff'/%3E%3Ccircle cx='22' cy='23' r='3.5' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <script src="lang.js"></script>
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.180.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.180.0/examples/jsm/"
-      }
-    }
-  </script>
+  <script type="importmap">{"imports":{"three":"./lib/three.module.js","three/addons/":"./lib/addons/"}}</script>
   <style>
-    /* Start-Overlay "KroxenStudios" (wie in den anderen WaitingGames) */
+    /* start-overlay "kroxenstudios" (wie in den anderen waitinggames) */
     .splash { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 22px; background: #2b2f34; pointer-events: none; animation: splash-out 0.6s ease 2.2s forwards; }
     .splash-name { color: #e10600; font-size: clamp(32px, 9vw, 84px); font-weight: 900; letter-spacing: 0.08em; animation: splash-in 0.9s ease both; }
     .splash-bar { width: clamp(140px, 30vw, 320px); height: 3px; background: #e1060033; overflow: hidden; }
@@ -38,9 +31,11 @@
       <strong>Bastelkarre</strong>
       <span id="status">Verbinde …</span>
       <span id="spielerZahl" hidden title="Verbundene Spieler" data-en-title="Connected players">👥 1</span>
+      <ul id="spielerListe" hidden aria-label="Verbundene Spieler" data-en-aria="Connected players"></ul>
       <span id="tacho" hidden>0 km/h</span>
+      <button id="btnAnsicht" type="button" hidden title="Ansicht umschalten (C)" aria-label="Ansicht umschalten (C)">👁</button>
       <a class="hilfeLink" href="hilfe.html" data-en-href="help.html"><span data-en="Help">Spielhilfe</span></a>
-      <a class="nurDesktop" href="charakter.html" data-en="Character">Charakter</a>
+      <a class="nurDesktop" href="konto.html" data-en="Account">Konto</a>
       <a class="nurDesktop" href="../index.html">Waiting Games</a>
       <button id="langBtn" type="button" aria-label="Sprache wechseln / Switch language">DE | EN</button>
     </div>
@@ -49,13 +44,13 @@
     <div id="hint" aria-live="polite"></div>
     <div id="meldung" aria-live="polite"></div>
 
-    <!-- Bauen: Teile, Farben, Werkzeuge -->
+    <!-- bauen: teile, farben, werkzeuge -->
     <aside id="baupanel" class="panel">
       <div class="kopf">
         <span><span data-en="Parking lot">Parkplatz</span> <b id="lotNr">–</b></span>
         <span id="teileZahl">0</span>
       </div>
-      <label class="presetBtn" title="Vorlagen" data-en-title="Presets"><span class="ico">🏎</span><span class="txt" data-en="Presets ▾">Vorlagen ▾</span><select id="presetWahl" aria-label="Vorlagen" data-en-aria="Presets"></select></label>
+      <button type="button" id="btnHangar" class="presetBtn" title="Hangar: Vorlagen und Fahrzeuge anderer" data-en-title="Hangar: presets and vehicles from others"><span class="ico">📦</span><span class="txt" data-en="Hangar">Hangar</span></button>
       <div id="palette"></div>
       <div class="zeile" id="farben"></div>
       <div class="zeile werkzeuge">
@@ -75,13 +70,13 @@
       </div>
     </aside>
 
-    <!-- Einstellungen eines Teils -->
+    <!-- einstellungen eines teils -->
     <aside id="inspector" class="panel" hidden>
       <div class="kopf"><b id="inspTitel">Teil</b><button type="button" id="inspZu" aria-label="Schließen" data-en-aria="Close">✕</button></div>
       <div id="inspInhalt"></div>
     </aside>
 
-    <!-- Fahren: Belegung der Tasten -->
+    <!-- fahren: belegung der tasten -->
     <aside id="fahrpanel" class="panel" hidden>
       <div class="kopf"><b data-en="Controls">Steuerung</b></div>
       <div id="tastenListe"></div>

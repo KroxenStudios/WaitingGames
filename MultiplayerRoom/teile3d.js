@@ -1,9 +1,10 @@
-// Bastelkarre: 3D-Modelle der Bauteile und Aufbau der Fahrzeuggrafik.
+// bastelkarre: 3d-modelle der bauteile und aufbau der fahrzeuggrafik.
 import * as THREE from "three";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
 import {
   TEILE, ORIENT, ZELLE, analysiere, zellMitte, radRadius
 } from "./bau.js";
+import { bereinigeLook } from "./look.js";
 
 const mats = new Map();
 export function mat(color, extra = {}) {
@@ -57,13 +58,13 @@ const eckGeo = () => geo("ecke", () => new ConvexGeometry([
   v3(-E, -E, -E), v3(E, -E, -E), v3(-E, -E, E), v3(E, -E, E), v3(E, E, E)
 ]));
 
-// Baut das Modell eines Teils im Teil-Koordinatensystem (Zellmitte = Ursprung).
-// Rückgabe: { obj, kopf?, rad?, emit? }
-//  obj  : Object3D, wird in der Zellmitte mit der Teil-Ausrichtung eingesetzt
-//         (bei Rädern: ohne Ausrichtung, die steckt in rad.orient)
-//  kopf : Teil, das mit dem Körper hinter dem Gelenk mitdreht (Stellmotor, Bruchstelle)
-//  rad  : Gelenke zum Animieren von Federung, Lenkung und Drehung
-//  emit : Austrittspunkt für Effekte (im Teil-Koordinatensystem)
+// baut das modell eines teils im teil-koordinatensystem (zellmitte = ursprung).
+// rückgabe: { obj, kopf?, rad?, emit? }
+//  obj  : object3d, wird in der zellmitte mit der teil-ausrichtung eingesetzt
+//         (bei rädern: ohne ausrichtung, die steckt in rad.orient)
+//  kopf : teil, das mit dem körper hinter dem gelenk mitdreht (stellmotor, bruchstelle)
+//  rad  : gelenke zum animieren von federung, lenkung und drehung
+//  emit : austrittspunkt für effekte (im teil-koordinatensystem)
 export function teilModell(p) {
   const c = p.c || "#8b8f98";
   const farbe = mat(c);
@@ -74,6 +75,19 @@ export function teilModell(p) {
     case "block":
       g.add(box(ZELLE - 0.004, ZELLE - 0.004, ZELLE - 0.004, farbe));
       break;
+    case "glas": {
+      // durchsichtig, getönt in der gewählten farbe; schreibt keine tiefe, damit man hindurchsieht
+      const scheibe = mat(c, { transparent: true, opacity: 0.32, roughness: 0.05, metalness: 0.1, depthWrite: false });
+      const rahmen = mat(c, { transparent: true, opacity: 0.85, roughness: 0.3 });
+      const k = ZELLE - 0.004, d = 0.03;
+      g.add(box(k, k, k, scheibe));
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+        g.add(box(k, d, d, rahmen, 0, sy * (k / 2 - d / 2), sx * (k / 2 - d / 2)));
+        g.add(box(d, k, d, rahmen, sx * (k / 2 - d / 2), 0, sy * (k / 2 - d / 2)));
+        g.add(box(d, d, k, rahmen, sx * (k / 2 - d / 2), sy * (k / 2 - d / 2), 0));
+      }
+      break;
+    }
     case "halb":
       g.add(box(ZELLE - 0.004, S - 0.004, ZELLE - 0.004, farbe, 0, -S / 2));
       break;
@@ -240,7 +254,7 @@ export function teilModell(p) {
       orient.quaternion.copy(orientQuat(p.o));
       const spin = new THREE.Group();
       orient.add(spin);
-      // Achsstummel vom Träger zur Nabe; beim Lenkrad mit Achsschenkel
+      // achsstummel vom träger zur nabe; beim lenkrad mit achsschenkel
       orient.add(zyl(0.04, 0.04, 0.16, mat("#9aa0a8", CHROM), 0, -0.17));
       if (p.t === "rad_lenk") orient.add(box(0.08, 0.06, 0.16, mat("#ffd43b"), 0, -0.22));
       spin.add(zyl(r, r, 0.2, mat(REIFEN, { roughness: 0.95 }), 0, 0, 0, 28));
@@ -265,7 +279,7 @@ export function teilModell(p) {
       schwenk.add(box(0.03, 0.22, 0.08, gabel, 0.07, -0.08, 0));
       schwenk.add(box(0.03, 0.22, 0.08, gabel, -0.07, -0.08, 0));
       const spin = new THREE.Group();
-      spin.rotation.z = Math.PI / 2; // Achse entlang lokal X
+      spin.rotation.z = Math.PI / 2; // achse entlang lokal x
       const dreh = new THREE.Group();
       spin.add(dreh);
       dreh.add(zyl(r, r, 0.08, mat("#30343a", { roughness: 0.9 }), 0, 0, 0, 22));
@@ -296,8 +310,8 @@ export function teilModell(p) {
   return out;
 }
 
-// Ganze Fahrzeuggrafik: eine Gruppe je Körper (Ursprung = Körperursprung).
-// opts.koerperFarben: jeden Körper einfarbig zeigen (Verbindungen prüfen)
+// ganze fahrzeuggrafik: eine gruppe je körper (ursprung = körperursprung).
+// opts.koerperfarben: jeden körper einfarbig zeigen (verbindungen prüfen)
 const KOERPER_FARBEN = ["#46b96b", "#2f9ee0", "#f5a524", "#e5484d", "#6e56cf", "#ffd43b", "#ff7ab6", "#38d6d6"];
 
 export function fahrzeugGrafik(plan, opts = {}) {
@@ -345,7 +359,7 @@ export function fahrzeugGrafik(plan, opts = {}) {
   return { ana, groups, raeder, emit, sitz: sitze[0] || null, sitze, klappen, lampen, rotoren, leitern, teilObj };
 }
 
-// Räder animieren: zustand = [{teil, feder, lenk, dreh}]
+// räder animieren: zustand = [{teil, feder, lenk, dreh}]
 export function setzeRaeder(grafik, zustand) {
   for (const z of zustand) {
     const r = grafik.raeder.get(z.teil);
@@ -361,13 +375,13 @@ export function setzeRaeder(grafik, zustand) {
   }
 }
 
-// Offener Fallschirm: Ursprung = Befestigungspunkt, der Schirm liegt auf +Z.
+// offener fallschirm: ursprung = befestigungspunkt, der schirm liegt auf +z.
 export function schirmModell(flaeche, farbe) {
   const r = Math.sqrt(flaeche / Math.PI);
   const leine = r * 2.2;
   const offen = Math.PI * 0.42;
   const g = new THREE.Group();
-  // Kuppel aus 12 Stoffbahnen, abwechselnd Schirmfarbe und Weiß, etwas flach gedrückt
+  // kuppel aus 12 stoffbahnen, abwechselnd schirmfarbe und weiß, etwas flach gedrückt
   const kuppel = new THREE.Group();
   const bahnen = [
     new THREE.MeshStandardMaterial({ color: farbe, roughness: 0.85, side: THREE.DoubleSide }),
@@ -381,12 +395,12 @@ export function schirmModell(flaeche, farbe) {
     bahn.castShadow = true;
     kuppel.add(bahn);
   }
-  // Loch in der Mitte (wie bei echten Bremsschirmen)
-  kuppel.rotation.x = Math.PI / 2; // Wölbung zeigt nach +Z
-  kuppel.scale.set(1, 0.6, 1);     // lokal Y = Schirmachse
+  // loch in der mitte (wie bei echten bremsschirmen)
+  kuppel.rotation.x = Math.PI / 2; // wölbung zeigt nach +z
+  kuppel.scale.set(1, 0.6, 1);     // lokal y = schirmachse
   kuppel.position.z = leine - r * Math.cos(offen) * 0.6;
   g.add(kuppel);
-  // Leinen vom Befestigungspunkt zum Rand
+  // leinen vom befestigungspunkt zum rand
   const pts = [];
   const randR = r * Math.sin(offen);
   for (let i = 0; i < 12; i++) {
@@ -399,7 +413,7 @@ export function schirmModell(flaeche, farbe) {
   return g;
 }
 
-// Halbdurchsichtiges Vorschau-Modell
+// halbdurchsichtiges vorschau-modell
 export function geistModell(p, farbe) {
   const m = teilModell(p);
   const g = new THREE.Group();
@@ -421,14 +435,32 @@ export function geistModell(p, farbe) {
 }
 
 // ---------------------------------------------------------------------------
-// Spielfigur (wie im MultiplayerRoom), sitzend oder stehend
+// spielfigur (wie im multiplayerroom), sitzend oder stehend
 // ---------------------------------------------------------------------------
-export function spielfigur(color) {
+export function spielfigur(color, look) {
   const group = new THREE.Group();
-  const clothes = new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
-  const skin = mat("#f0c4a4", { roughness: 0.8 });
+  figurAktualisieren(group, color, look);
+  return group;
+}
+
+// baut die figur in "group" neu auf (auch wenn farbe oder aussehen später wechseln).
+// userdata bleibt gültig: { leftleg, rightleg, leftarm, rightarm, clothes }
+export function figurAktualisieren(group, color, look) {
+  const l = bereinigeLook(look);
+  for (const m of group.userData.eigeneStoffe || []) m.dispose();   // materialien des letzten aufbaus freigeben
+  const eigeneStoffe = [];
+  const neuerStoff = optionen => { const m = new THREE.MeshStandardMaterial(optionen); eigeneStoffe.push(m); return m; };
+  for (const c of [...group.children]) {
+    if (!c.userData.figurTeil) continue;
+    group.remove(c);
+    c.traverse(o => { if (o.isMesh && o.geometry && !o.userData.geteilt) o.geometry.dispose(); });
+  }
+  const clothes = neuerStoff({ color, roughness: 0.7 });
+  const dunkler = f => neuerStoff({ color: new THREE.Color(color).multiplyScalar(f), roughness: 0.75 });
+  const skin = mat(l.haut, { roughness: 0.8 });
   const dark = mat("#2a3650", { roughness: 0.85 });
-  const hair = mat("#3b2a22", { roughness: 0.9 });
+  const weiss = mat("#f2f4f8", { roughness: 0.7 });
+  const hair = mat(l.haar, { roughness: 0.9 });
   const shoe = mat("#f4f6fb", { roughness: 0.6 });
   const eye = mat("#141a26", { roughness: 0.3 });
 
@@ -436,51 +468,308 @@ export function spielfigur(color) {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
+    mesh.userData.figurTeil = true;
     parent.add(mesh);
     return mesh;
   };
+  const kiste = (w, h, d, material, x, y, z, parent = group) => part(new THREE.BoxGeometry(w, h, d), material, x, y, z, parent);
 
-  part(new THREE.CapsuleGeometry(0.27, 0.45, 6, 12), clothes, 0, 0.85, 0);
-  part(new THREE.SphereGeometry(0.19, 20, 16), skin, 0, 1.42, 0);
-  const h = part(new THREE.SphereGeometry(0.2, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair, 0, 1.45, 0.015);
-  h.rotation.x = -0.25;
-  const eyeGeo = new THREE.SphereGeometry(0.03, 10, 8);
-  part(eyeGeo, eye, -0.07, 1.43, -0.172);
-  part(eyeGeo, eye, 0.07, 1.43, -0.172);
+  const og = l.koerper === "og";
+  let leftArm, rightArm, leftLeg, rightLeg;
+  if (og) {
+    // alter körper: kapselrumpf, punktaugen, arme schweben neben dem rumpf
+    // stoffe je kleidung: oberkörper, ärmel, hosenbeine
+    let torso = clothes, aermel = clothes, hose = dark, bein = dark, schuh = shoe;
+    switch (l.kleidung) {
+      case "top": aermel = skin; hose = dunkler(0.6); bein = skin; break;
+      case "overall": torso = weiss; aermel = weiss; hose = clothes; bein = clothes; break;
+      case "kleid": bein = skin; break;
+      case "anzug": hose = clothes; bein = clothes; schuh = dark; break;
+      case "raumanzug": torso = weiss; aermel = weiss; bein = weiss; hose = weiss; schuh = mat("#8b8f98"); break;
+    }
 
-  const armGeo = new THREE.CapsuleGeometry(0.075, 0.34, 4, 8);
-  const handGeo = new THREE.SphereGeometry(0.075, 10, 8);
-  const leftArm = new THREE.Group(); leftArm.position.set(-0.36, 1.1, 0); group.add(leftArm);
-  const rightArm = new THREE.Group(); rightArm.position.set(0.36, 1.1, 0); group.add(rightArm);
-  part(armGeo, clothes, 0, -0.21, 0, leftArm);
-  part(armGeo, clothes, 0, -0.21, 0, rightArm);
-  part(handGeo, skin, 0, -0.48, 0, leftArm);
-  part(handGeo, skin, 0, -0.48, 0, rightArm);
+    part(new THREE.CapsuleGeometry(0.27, 0.45, 6, 12), torso, 0, 0.85, 0);
+    part(new THREE.SphereGeometry(0.19, 20, 16), skin, 0, 1.42, 0);
 
-  const legGeo = new THREE.CapsuleGeometry(0.09, 0.3, 4, 8);
-  const shoeGeo = new THREE.BoxGeometry(0.17, 0.09, 0.27);
-  const leftLeg = new THREE.Group(); leftLeg.position.set(-0.14, 0.5, 0); group.add(leftLeg);
-  const rightLeg = new THREE.Group(); rightLeg.position.set(0.14, 0.5, 0); group.add(rightLeg);
-  part(legGeo, dark, 0, -0.21, 0, leftLeg);
-  part(legGeo, dark, 0, -0.21, 0, rightLeg);
-  part(shoeGeo, shoe, 0, -0.46, -0.04, leftLeg);
-  part(shoeGeo, shoe, 0, -0.46, -0.04, rightLeg);
+    const armGeo = new THREE.CapsuleGeometry(0.075, 0.34, 4, 8);
+    const handGeo = new THREE.SphereGeometry(0.075, 10, 8);
+    leftArm = new THREE.Group(); leftArm.position.set(-0.36, 1.1, 0); group.add(leftArm);
+    rightArm = new THREE.Group(); rightArm.position.set(0.36, 1.1, 0); group.add(rightArm);
+    for (const arm of [leftArm, rightArm]) {
+      arm.userData.figurTeil = true;
+      part(armGeo, aermel, 0, -0.21, 0, arm);
+      part(handGeo, skin, 0, -0.48, 0, arm);
+    }
 
-  group.userData = { leftLeg, rightLeg, leftArm, rightArm, clothes };
-  return group;
+    const legGeo = new THREE.CapsuleGeometry(0.09, 0.3, 4, 8);
+    const shoeGeo = new THREE.BoxGeometry(0.17, 0.09, 0.27);
+    leftLeg = new THREE.Group(); leftLeg.position.set(-0.14, 0.5, 0); group.add(leftLeg);
+    rightLeg = new THREE.Group(); rightLeg.position.set(0.14, 0.5, 0); group.add(rightLeg);
+    for (const leg of [leftLeg, rightLeg]) {
+      leg.userData.figurTeil = true;
+      part(legGeo, bein, 0, -0.21, 0, leg);
+      part(shoeGeo, schuh, 0, -0.46, -0.04, leg);
+      if (l.kleidung === "top") part(new THREE.CylinderGeometry(0.105, 0.105, 0.2, 10), hose, 0, -0.1, 0, leg);   // kurze hose
+    }
+
+    // kleidungsdetails
+    switch (l.kleidung) {
+      case "hoodie":
+        part(new THREE.SphereGeometry(0.17, 12, 10), clothes, 0, 1.28, 0.2);                 // kapuze im nacken
+        kiste(0.3, 0.12, 0.05, dunkler(0.8), 0, 0.7, -0.262);                                // bauchtasche
+        break;
+      case "jacke":
+        kiste(0.04, 0.5, 0.02, weiss, 0, 0.9, -0.272);                                       // reißverschluss
+        kiste(0.34, 0.06, 0.12, dunkler(0.8), 0, 1.3, -0.1);                               // kragen
+        for (const arm of [leftArm, rightArm]) part(new THREE.CylinderGeometry(0.086, 0.086, 0.05, 10), weiss, 0, -0.38, 0, arm);   // bündchen
+        break;
+      case "overall":
+        part(new THREE.CylinderGeometry(0.275, 0.275, 0.3, 14), clothes, 0, 0.62, 0);        // hosenbund
+        kiste(0.34, 0.3, 0.05, clothes, 0, 0.97, -0.255);                                    // latz
+        for (const x of [-0.12, 0.12]) kiste(0.05, 0.2, 0.05, clothes, x, 1.22, -0.2);      // träger
+        break;
+      case "kleid":
+        part(new THREE.CylinderGeometry(0.27, 0.47, 0.55, 18), clothes, 0, 0.6, 0);         // rock
+        break;
+      case "anzug":
+        kiste(0.13, 0.36, 0.02, weiss, 0, 1.05, -0.268);                                     // hemd
+        kiste(0.06, 0.3, 0.02, mat("#c9302c"), 0, 1.0, -0.278);                              // krawatte
+        break;
+      case "raumanzug": {
+        kiste(0.3, 0.42, 0.16, mat("#8b8f98"), 0, 0.98, 0.3);                                // rucksack
+        const helm = new THREE.Mesh(new THREE.SphereGeometry(0.27, 20, 16),
+          neuerStoff({ color: "#bfe3ff", transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0.1, depthWrite: false }));
+        helm.position.set(0, 1.42, 0);
+        helm.userData.figurTeil = true;
+        group.add(helm);
+        break;
+      }
+    }
+
+  } else {
+    // stoffe je kleidung: oberkörper, ärmel, hüfte/hose, hosenbeine, schuhe
+    const jeans = mat("#34476b", { roughness: 0.85 });
+    const grau = mat("#8b8f98", { roughness: 0.6 });
+    const sohle = mat("#cfd4dd", { roughness: 0.8 });
+    let torso = clothes, aermel = clothes, hose = jeans, bein = jeans, schuh = shoe;
+    switch (l.kleidung) {
+      case "top": hose = dunkler(0.6); bein = skin; break;
+      case "overall": torso = weiss; aermel = weiss; hose = clothes; bein = clothes; break;
+      case "kleid": hose = clothes; bein = skin; break;
+      case "anzug": hose = clothes; bein = clothes; schuh = dark; break;
+      case "raumanzug": torso = weiss; aermel = weiss; bein = weiss; hose = weiss; schuh = grau; break;
+    }
+    const zylZ = (rOben, rUnten, h, material, x, y, z, tiefe = 0.72) => {
+      const m = part(new THREE.CylinderGeometry(rOben, rUnten, h, 22), material, x, y, z);
+      m.scale.z = tiefe;   // querschnitt oval: breiter als tief
+      return m;
+    };
+    const ring = (r, rohr, material, y, z = 0) => {
+      const m = part(new THREE.TorusGeometry(r, rohr, 8, 20), material, 0, y, z);
+      m.rotation.x = Math.PI / 2;
+      return m;
+    };
+    const bulk = l.kleidung === "raumanzug" ? 1.08 : 1;
+
+    // rumpf: hüfte (hose bzw. rock), oberkörper, saum, hals und schultern
+    zylZ(0.225 * bulk, 0.2 * bulk, 0.24, hose, 0, 0.64, 0, 0.75);
+    if (l.kleidung === "top") {
+      zylZ(0.24, 0.225, 0.38, torso, 0, 0.94, 0);                                             // trägershirt endet unter den schultern
+      zylZ(0.235, 0.24, 0.1, skin, 0, 1.18, 0);                                               // nackte schultern
+      for (const x of [-0.12, 0.12]) kiste(0.07, 0.13, 0.05, torso, x, 1.19, 0);              // träger
+    } else {
+      zylZ(0.255 * bulk, 0.225 * bulk, 0.46, torso, 0, 0.98, 0, l.kleidung === "raumanzug" ? 0.82 : 0.72);
+      if (l.kleidung !== "kleid" && l.kleidung !== "overall" && l.kleidung !== "anzug") zylZ(0.236 * bulk, 0.236 * bulk, 0.045, torso, 0, 0.765, 0);   // saum über der hose
+    }
+    part(new THREE.CylinderGeometry(0.062, 0.07, 0.12, 12), skin, 0, 1.24, 0);               // hals
+    const schulterStoff = l.kleidung === "top" ? skin : aermel;
+    for (const x of [-0.3, 0.3]) part(new THREE.SphereGeometry(0.095 * bulk, 14, 12), schulterStoff, x, 1.14, 0);
+
+    // kopf mit gesicht
+    part(new THREE.SphereGeometry(0.19, 22, 18), skin, 0, 1.42, 0);
+    for (const x of [-0.188, 0.188]) part(new THREE.SphereGeometry(0.034, 10, 8), skin, x, 1.42, 0);   // ohren
+
+    // arme: kurze ärmel (t-shirt, kleid), lange ärmel (alles andere) oder nackt (trägershirt)
+    const aermelArt = { shirt: "kurz", kleid: "kurz", top: "nackt" }[l.kleidung] || "lang";
+    const handGeo = new THREE.SphereGeometry(0.07, 12, 10);
+    leftArm = new THREE.Group(); leftArm.position.set(-0.36, 1.1, 0); group.add(leftArm);
+    rightArm = new THREE.Group(); rightArm.position.set(0.36, 1.1, 0); group.add(rightArm);
+    for (const arm of [leftArm, rightArm]) {
+      arm.userData.figurTeil = true;
+      if (aermelArt === "lang") {
+        part(new THREE.CapsuleGeometry(0.082 * bulk, 0.31, 4, 10), aermel, 0, -0.2, 0, arm);
+      } else {
+        part(new THREE.CapsuleGeometry(0.068, 0.32, 4, 10), skin, 0, -0.2, 0, arm);
+        if (aermelArt === "kurz") part(new THREE.CylinderGeometry(0.088, 0.094, 0.17, 14), aermel, 0, -0.07, 0, arm);
+      }
+      part(handGeo, skin, 0, -0.47, 0, arm);
+    }
+
+    // beine und schuhe (hosenbeine bzw. nackte beine; schuhe mit heller sohle)
+    const legGeo = new THREE.CapsuleGeometry(0.09, 0.3, 4, 10);
+    const stiefel = l.kleidung === "raumanzug";
+    leftLeg = new THREE.Group(); leftLeg.position.set(-0.14, 0.5, 0); group.add(leftLeg);
+    rightLeg = new THREE.Group(); rightLeg.position.set(0.14, 0.5, 0); group.add(rightLeg);
+    for (const leg of [leftLeg, rightLeg]) {
+      leg.userData.figurTeil = true;
+      part(legGeo, bein, 0, -0.21, 0, leg);
+      kiste(0.17, stiefel ? 0.14 : 0.075, 0.28, schuh, 0, stiefel ? -0.4 : -0.463, -0.045, leg);
+      kiste(0.176, 0.022, 0.286, stiefel ? grau : sohle, 0, -0.494, -0.045, leg);
+      if (l.kleidung === "top") part(new THREE.CylinderGeometry(0.108, 0.112, 0.2, 14), hose, 0, -0.1, 0, leg);   // kurze hose
+      if (l.kleidung === "overall") part(new THREE.CylinderGeometry(0.1, 0.102, 0.035, 14), dunkler(0.8), 0, -0.375, 0, leg);   // hosenaufschlag
+    }
+
+    // kleidungsdetails
+    const vorn = -0.186;   // vordere oberfläche des oberkörpers (mitte)
+    // z-lage der oberkörper-oberfläche an der stelle (x, y): der querschnitt ist oval, am rand liegt sie weiter hinten.
+    // seitlich angebrachte teile (taschen, latz) folgen dem, sonst würden sie in der seitenansicht abstehen.
+    const fl = (x, y) => {
+      const r = 0.225 + (Math.min(1.21, Math.max(0.75, y)) - 0.75) / 0.46 * 0.03;
+      return -(r * 0.72) * Math.sqrt(Math.max(0.05, 1 - (x / r) ** 2));
+    };
+    switch (l.kleidung) {
+      case "shirt":
+        ring(0.085, 0.017, dunkler(0.82), 1.215);                                              // rundhals-kragen
+        break;
+      case "hoodie": {
+        ring(0.112, 0.036, clothes, 1.215);                                                    // kapuze um den hals
+        const kapuze = part(new THREE.SphereGeometry(0.16, 14, 12), clothes, 0, 1.2, 0.13);
+        kapuze.scale.set(1.05, 0.8, 0.7);                                                      // kapuze im nacken
+        kiste(0.22, 0.11, 0.035, dunkler(0.86), 0, 0.84, fl(0.11, 0.84) - 0.012);              // känguru-tasche
+        for (const x of [-0.045, 0.045]) part(new THREE.CylinderGeometry(0.009, 0.009, 0.14, 6), weiss, x, 1.1, fl(x, 1.1) - 0.006);   // kordeln
+        zylZ(0.238, 0.238, 0.05, dunkler(0.84), 0, 0.765, 0);                                  // bündchen unten
+        for (const arm of [leftArm, rightArm]) part(new THREE.CylinderGeometry(0.087, 0.087, 0.05, 12), dunkler(0.84), 0, -0.37, 0, arm);
+        break;
+      }
+      case "jacke":
+        kiste(0.022, 0.46, 0.012, weiss, 0, 0.99, vorn - 0.002);                               // reißverschluss
+        part(new THREE.CylinderGeometry(0.105, 0.115, 0.07, 18, 1, true), dunkler(0.8), 0, 1.255, 0).material.side = THREE.DoubleSide;   // stehkragen
+        for (const x of [-0.1, 0.1]) kiste(0.07, 0.022, 0.012, dunkler(0.75), x, 0.82, fl(Math.abs(x) + 0.035, 0.82) - 0.004);   // taschen
+        zylZ(0.238, 0.238, 0.05, weiss, 0, 0.765, 0);                                          // helles bündchen
+        for (const arm of [leftArm, rightArm]) part(new THREE.CylinderGeometry(0.089, 0.089, 0.05, 12), weiss, 0, -0.37, 0, arm);
+        break;
+      case "top":
+        break;
+      case "overall": {
+        kiste(0.25, 0.27, 0.03, clothes, 0, 0.95, fl(0.125, 0.95) - 0.012);                    // latz
+        for (const x of [-0.1, 0.1]) {
+          kiste(0.05, 0.3, 0.025, clothes, x, 1.1, fl(Math.abs(x) + 0.025, 1.1) - 0.01);       // träger vorn
+          part(new THREE.SphereGeometry(0.02, 8, 6), mat("#f2c230", { roughness: 0.4, metalness: 0.4 }), x, 1.04, fl(Math.abs(x), 1.04) - 0.024);   // knöpfe
+        }
+        break;
+      }
+      case "kleid": {
+        part(new THREE.CylinderGeometry(0.22, 0.43, 0.42, 26), clothes, 0, 0.56, 0);           // rock
+        zylZ(0.232, 0.232, 0.05, dunkler(0.7), 0, 0.77, 0);                                    // gürtel
+        ring(0.095, 0.018, dunkler(0.85), 1.215);                                              // runder ausschnitt
+        break;
+      }
+      case "anzug": {
+        kiste(0.11, 0.3, 0.012, weiss, 0, 1.06, vorn - 0.002);                                 // hemd
+        kiste(0.05, 0.26, 0.012, mat("#c9302c", { roughness: 0.6 }), 0, 1.0, vorn - 0.012);    // krawatte
+        kiste(0.06, 0.05, 0.014, mat("#c9302c", { roughness: 0.6 }), 0, 1.17, vorn - 0.012);   // krawattenknoten
+        for (const [x, w] of [[-0.085, 0.3], [0.085, -0.3]]) {
+          const rev = kiste(0.07, 0.3, 0.014, dunkler(0.78), x, 1.04, vorn - 0.006);           // revers
+          rev.rotation.z = w * 0.4;
+        }
+        for (const y of [0.86, 0.78]) part(new THREE.SphereGeometry(0.014, 8, 6), dark, 0.0, y, vorn - 0.01);   // knöpfe
+        for (const arm of [leftArm, rightArm]) part(new THREE.CylinderGeometry(0.084, 0.084, 0.04, 12), weiss, 0, -0.38, 0, arm);   // hemdmanschetten
+        break;
+      }
+      case "raumanzug": {
+        kiste(0.3, 0.42, 0.16, grau, 0, 0.98, 0.34);                                           // rucksack
+        kiste(0.16, 0.1, 0.03, clothes, 0, 1.06, -0.2);                                        // brustfeld in wunschfarbe
+        for (const x of [-0.04, 0.04]) part(new THREE.SphereGeometry(0.016, 8, 6), mat("#ffcf40", { roughness: 0.4 }), x, 1.015, -0.22);
+        zylZ(0.262, 0.262, 0.05, grau, 0, 0.765, 0, 0.82);                                     // gürtel
+        ring(0.105, 0.035, grau, 1.215);                                                       // halsring
+        for (const arm of [leftArm, rightArm]) part(new THREE.CylinderGeometry(0.098, 0.098, 0.09, 14), grau, 0, -0.4, 0, arm);   // handschuhe
+        const helm = new THREE.Mesh(new THREE.SphereGeometry(0.27, 24, 18),
+          neuerStoff({ color: "#bfe3ff", transparent: true, opacity: 0.26, roughness: 0.05, metalness: 0.1, depthWrite: false }));
+        helm.position.set(0, 1.42, 0);
+        helm.userData.figurTeil = true;
+        group.add(helm);
+        break;
+      }
+    }
+
+  }
+
+  // gesicht: punktaugen und ein mund, dessen form wählbar ist
+  const mundFarbe = mat("#7a3b2e", { roughness: 0.6 });
+  // beide körper: einfache dunkle punktaugen
+  const punkt = new THREE.SphereGeometry(og ? 0.03 : 0.028, 10, 8);
+  part(punkt, eye, -0.07, 1.43, -0.172);
+  part(punkt, eye, 0.07, 1.43, -0.172);
+  const mundZ = -0.178;
+  switch (l.mund) {
+    case "laecheln": {
+      const m = part(new THREE.TorusGeometry(0.032, 0.007, 6, 14, Math.PI), mundFarbe, 0, 1.385, mundZ);
+      m.rotation.z = Math.PI;                                                                    // bogen nach unten = lächeln
+      break;
+    }
+    case "grinsen": {
+      const m = part(new THREE.TorusGeometry(0.05, 0.009, 6, 18, Math.PI), mundFarbe, 0, 1.395, mundZ + 0.004);
+      m.rotation.z = Math.PI;
+      break;
+    }
+    case "neutral": kiste(0.06, 0.011, 0.008, mundFarbe, 0, 1.37, mundZ); break;
+    case "offen": {
+      const m = part(new THREE.SphereGeometry(0.024, 10, 8), mundFarbe, 0, 1.372, mundZ + 0.006);
+      m.scale.set(1, 1.2, 0.5);
+      break;
+    }
+    case "traurig": part(new THREE.TorusGeometry(0.032, 0.007, 6, 14, Math.PI), mundFarbe, 0, 1.365, mundZ); break;   // bogen nach oben
+    default: break;                                                                                // keiner
+  }
+
+  // frisur
+  const kappe = (r = 0.2, y = 1.45, z = 0.015, material = hair) => {
+    const h = part(new THREE.SphereGeometry(r, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), material, 0, y, z);
+    h.rotation.x = -0.25;
+    return h;
+  };
+  switch (l.frisur) {
+    case "kurz": kappe(); break;
+    case "lang":
+      kappe();
+      kiste(0.36, 0.55, 0.1, hair, 0, 1.2, 0.16);
+      break;
+    case "zopf": {
+      kappe();
+      const z = part(new THREE.CapsuleGeometry(0.055, 0.3, 4, 8), hair, 0, 1.2, 0.25);
+      z.rotation.x = 0.35;
+      part(new THREE.SphereGeometry(0.045, 8, 8), mat("#e0479e"), 0, 1.4, 0.2);
+      break;
+    }
+    case "irokese":
+      for (let i = 0; i < 5; i++) kiste(0.04, 0.12 + (i === 2 ? 0.05 : 0), 0.1, hair, 0, 1.63, -0.14 + i * 0.07);
+      break;
+    case "afro": part(new THREE.SphereGeometry(0.28, 16, 14), hair, 0, 1.5, 0.04); break;
+    case "dutt":
+      kappe();
+      part(new THREE.SphereGeometry(0.085, 12, 10), hair, 0, 1.67, 0.06);
+      break;
+    case "muetze":
+      kappe(0.225, 1.45, 0.01);
+      part(new THREE.SphereGeometry(0.05, 10, 8), weiss, 0, 1.67, 0.0);
+      break;
+  }
+
+  group.userData = { leftLeg, rightLeg, leftArm, rightArm, clothes, eigeneStoffe };
 }
 
 export function setzeSitzen(figur, sitzen) {
   const u = figur.userData;
-  const bein = sitzen ? -Math.PI / 2 : 0;
+  // die figur schaut nach -z: positive drehung um x schwenkt beine und arme nach vorn (nach -z), negative nach hinten
+  const bein = sitzen ? Math.PI / 2 : 0;
   u.leftLeg.rotation.x = bein;
   u.rightLeg.rotation.x = bein;
-  // Hände ans "Lenkrad"
-  u.leftArm.rotation.x = sitzen ? -1.0 : 0;
-  u.rightArm.rotation.x = sitzen ? -1.0 : 0;
+  // hände ans "lenkrad"
+  u.leftArm.rotation.x = sitzen ? 1.0 : 0;
+  u.rightArm.rotation.x = sitzen ? 1.0 : 0;
 }
 
-// Namensschild / Sprechblase als Sprite
+// namensschild / sprechblase als sprite
 export function textSprite(text, { breite = 512, hoehe = 128, font = "bold 44px system-ui, sans-serif", bg = "rgba(8,14,24,0.82)", fg = "#fff", skala = 1.7 } = {}) {
   const canvas = document.createElement("canvas");
   canvas.width = breite;

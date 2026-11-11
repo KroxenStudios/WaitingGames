@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Konto – Bastelkarre</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="seiten.css">
+  <script src="lang.js"></script>
+  <script type="importmap">{"imports":{"three":"./lib/three.module.js","three/addons/":"./lib/addons/"}}</script>
+</head>
+<body class="seite breit">
+  <header class="seitenKopf">
+    <a href="index.html" data-en="← Back to the game">← Zurück zum Spiel</a>
+    <strong>Bastelkarre</strong>
+    <button id="langBtn" type="button" aria-label="Sprache wechseln / Switch language">DE | EN</button>
+  </header>
+  <main class="seitenInhalt">
+    <div class="kontoLayout">
+      <div id="app" class="kontoInhalt"></div>
+      <aside class="vorschau" aria-label="Vorschau" data-en-aria="Preview">
+        <div id="vorschau3d"></div>
+        <small data-en="Live preview – drag to rotate">Live-Vorschau – zum Drehen ziehen</small>
+      </aside>
+    </div>
+    <p class="seitenFuss"><a href="datenschutz.html" data-en="Privacy">Datenschutz</a> · <a href="lizenzen.html" data-en="Licences">Lizenzen</a></p>
+  </main>
+  <script type="module" src="konto.js"></script>
+</body>
+</html>

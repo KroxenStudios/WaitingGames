@@ -1,33 +1,33 @@
-// Bastelkarre: Fahrzeugphysik mit Rapier (ohne Grafik, läuft auch in Node).
+// bastelkarre: fahrzeugphysik mit rapier (ohne grafik, läuft auch in node).
 //
-// Aus dem Bauplan entstehen:
-//  - ein starrer Körper je Gruppe fest verbundener Teile,
-//  - Raycast-Räder (Federung, Antrieb, Lenkung) an den Körpern mit Rädern,
-//  - Drehgelenke mit Motor für Stellmotoren, feste Gelenke für Sollbruchstellen.
-// Lose Teile sind eigene Körper; Triebwerke schieben den Körper, an dem sie sitzen.
+// aus dem bauplan entstehen:
+//  - ein starrer körper je gruppe fest verbundener teile,
+//  - raycast-räder (federung, antrieb, lenkung) an den körpern mit rädern,
+//  - drehgelenke mit motor für stellmotoren, feste gelenke für sollbruchstellen.
+// lose teile sind eigene körper; triebwerke schieben den körper, an dem sie sitzen.
 
 import {
   TEILE, ORIENT, ZELLE, RAD_TIEFE, analysiere, zellMitte, teilAchse, radRadius, matVec
 } from "./bau.js";
 
 export const PHYSIK_TAKT = 1 / 60;
-// Collider-Handles, die die Radstrahlen nicht treffen sollen (zu Fuß gehende Spieler)
+// collider-handles, die die radstrahlen nicht treffen sollen (zu fuß gehende spieler)
 export const ignoriere = new Set();
 
-// Höhenmodell: Luftdichte nimmt mit der Höhe exponentiell ab, die Schwerkraft verschwindet
-// zwischen 3000 und 7000 m ("Weltraum": schwerelos, praktisch keine Luft).
+// höhenmodell: luftdichte nimmt mit der höhe exponentiell ab, die schwerkraft verschwindet
+// zwischen 3000 und 7000 m ("weltraum": schwerelos, praktisch keine luft).
 export const LUFT0 = 1.2;
 export const dichte = h => LUFT0 * Math.exp(-Math.max(0, h) / 1500);
 const glatt = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 export const gravFaktor = h => 1 - glatt(3000, 7000, h);
 
-const MOTOR_LEISTUNG = 55000;   // W
-const MOTOR_KRAFT = 5200;       // N, gesamt an allen angetriebenen Rädern
+const MOTOR_LEISTUNG = 55000;   // w
+const MOTOR_KRAFT = 5200;       // n, gesamt an allen angetriebenen rädern
 const HOECHST_TEMPO = 32;       // m/s
-const FEDER_WEG = 0.2;          // m, Ruhelänge der Federung
+const FEDER_WEG = 0.2;          // m, ruhelänge der federung
 const BREMSE = 60;
 
-// Drehmatrix (zeilenweise) -> Quaternion
+// drehmatrix (zeilenweise) -> quaternion
 export function matQuat(m) {
   const [m00, m01, m02, m10, m11, m12, m20, m21, m22] = m;
   const tr = m00 + m11 + m22;
@@ -69,7 +69,7 @@ const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a
 const vec = a => ({ x: a[0], y: a[1], z: a[2] });
 const arr = v => [v.x, v.y, v.z];
 
-// Form der Kollisionskörper in lokalen Teilkoordinaten
+// form der kollisionskörper in lokalen teilkoordinaten
 const H = ZELLE / 2 - 0.004;
 const KEIL_PUNKTE = [
   [-H, -H, -H], [H, -H, -H], [-H, -H, H], [H, -H, H],
@@ -88,6 +88,7 @@ function colliderFuer(R, part, lokal) {
 
   switch (part.t) {
     case "block":
+    case "glas":
     case "sitz":
     case "tank":
       desc = R.ColliderDesc.cuboid(H, H, H);
@@ -124,11 +125,11 @@ function colliderFuer(R, part, lokal) {
 }
 
 // ---------------------------------------------------------------------------
-// Fahrzeug erzeugen
+// fahrzeug erzeugen
 // ---------------------------------------------------------------------------
-// opts.basis: Weltposition des Bauraum-Ursprungs (inkl. Anhebung)
-// opts.drehung: Quaternion für das ganze Fahrzeug
-// opts.kinematisch: true für Fahrzeuge anderer Spieler (nur Kollision)
+// opts.basis: weltposition des bauraum-ursprungs (inkl. anhebung)
+// opts.drehung: quaternion für das ganze fahrzeug
+// opts.kinematisch: true für fahrzeuge anderer spieler (nur kollision)
 export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
   const basis = opts.basis || [0, 0, 0];
   const dreh = opts.drehung || { x: 0, y: 0, z: 0, w: 1 };
@@ -139,7 +140,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
   const sitz = ana.sitz >= 0 ? parts[ana.sitz] : null;
   const vorwaerts = sitz ? teilAchse(sitz, [0, 0, -1]) : [0, 0, -1];
 
-  // Gesamtschwerpunkt für die automatische Lenkrichtung (Hinterachslenkung)
+  // gesamtschwerpunkt für die automatische lenkrichtung (hinterachslenkung)
   let gm = 0, gs = [0, 0, 0];
   for (const b of ana.bodies) { gm += b.masse; gs = add(gs, scale(b.ursprung, b.masse)); }
   const schwerpunkt = gm > 0 ? scale(gs, 1 / gm) : [0, 0, 0];
@@ -170,7 +171,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
       const def = TEILE[p.t];
 
       if (def.rad && !nurRaeder) {
-        // Masse des Rads ohne Kollision (das Rad selbst ist ein Strahl)
+        // masse des rads ohne kollision (das rad selbst ist ein strahl)
         const md = R.ColliderDesc.ball(0.1).setTranslation(...lokal).setMass(def.masse)
           .setCollisionGroups(0).setSolverGroups(0);
         veh.colliderSet.add(world.createCollider(md, rb).handle);
@@ -179,7 +180,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
 
       let cd;
       if (def.rad) {
-        // loses Rad: echter Zylinder entlang der Radachse
+        // loses rad: echter zylinder entlang der radachse
         cd = R.ColliderDesc.cylinder(0.11, radRadius(p)).setTranslation(...lokal)
           .setRotation(matQuat(ORIENT[p.o])).setMass(def.masse).setFriction(1.0);
       } else {
@@ -189,7 +190,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
       veh.colliderSet.add(col.handle);
     }
 
-    // Raycast-Räder
+    // raycast-räder
     const radTeile = nurRaeder ? [] : b.parts.filter(i => TEILE[parts[i].t].rad);
     if (radTeile.length && !kin) {
       const vc = world.createVehicleController(rb);
@@ -201,15 +202,15 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
         let achse = teilAchse(p);
         achse = [achse[0], 0, achse[2]];
         if (!achse[0] && !achse[2]) achse = cross(vorwaerts, [0, 1, 0]);
-        // Rollrichtung = oben x Achse; so drehen, dass "Gas" nach vorne fährt
+        // rollrichtung = oben x achse; so drehen, dass "gas" nach vorne fährt
         if (dot(cross([0, 1, 0], achse), vorwaerts) < 0) achse = scale(achse, -1);
 
-        // Unbelastet hängt das Rad RAD_TIEFE tiefer, belastet steht es in der Zellmitte.
+        // unbelastet hängt das rad rad_tiefe tiefer, belastet steht es in der zellmitte.
         vc.addWheel(vec(add(mitte, [0, FEDER_WEG - RAD_TIEFE, 0])), { x: 0, y: -1, z: 0 }, vec(achse), FEDER_WEG, r);
         const w = vc.numWheels() - 1;
-        // Steifigkeit wirkt je Rad (pro Masse): bei vielen Rädern weicher, damit
-        // die Einfederung unabhängig von der Radzahl etwa RAD_TIEFE beträgt.
-        // Einkaufswagenräder haben fast keine Federung.
+        // steifigkeit wirkt je rad (pro masse): bei vielen rädern weicher, damit
+        // die einfederung unabhängig von der radzahl etwa rad_tiefe beträgt.
+        // einkaufswagenräder haben fast keine federung.
         const hart = p.t === "rad_bock" ? 3 : 1;
         vc.setWheelSuspensionStiffness(w, (hart * 9.81) / (RAD_TIEFE * radTeile.length));
         vc.setWheelSuspensionCompression(w, 2.6 * Math.sqrt(hart));
@@ -230,7 +231,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
           antrieb: p.t !== "rad_bock" && p.k.antrieb !== false,
           bock: p.t === "rad_bock",
           mitte, drehung: 0, schwenk: 0,
-          // Drehsinn der Grafik: Rad-Modell dreht um seine lokale Y-Achse
+          // drehsinn der grafik: rad-modell dreht um seine lokale y-achse
           achsVz: dot(achse, teilAchse(p)) < 0 ? -1 : 1
         });
       }
@@ -238,7 +239,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
     veh.bodies.push(body);
   }
 
-  // Gelenke
+  // gelenke
   if (!kin) {
     for (const g of ana.gelenke) {
       const A = veh.bodies[g.bodyA], B = veh.bodies[g.bodyB];
@@ -262,12 +263,12 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
     }
   }
 
-  // Schwere Fahrzeuge bekommen einen stärkeren Motor und stärkere Bremsen (ab ca. 450 kg, höchstens Faktor 3)
+  // schwere fahrzeuge bekommen einen stärkeren motor und stärkere bremsen (ab ca. 450 kg, höchstens faktor 3)
   let gesamtMasse = 0;
   for (const b of veh.bodies) gesamtMasse += b.rb.mass();
   veh.motorFaktor = Math.max(1, Math.min(3, Math.sqrt(gesamtMasse / 450)));
 
-  // Treibstoff: jeder Tank startet voll; das System ist nur mit mindestens einem Tank aktiv
+  // treibstoff: jeder tank startet voll; das system ist nur mit mindestens einem tank aktiv
   for (let i = 0; i < parts.length; i++) {
     if (parts[i].t === "tank") veh.tank.menge.set(i, parts[i].k.kapazitaet ?? 60);
   }
@@ -278,7 +279,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
   return veh;
 }
 
-// Gruppen fest (über intakte Gelenke) verbundener Körper: jede Gruppe hat ihren eigenen Treibstoffvorrat
+// gruppen fest (über intakte gelenke) verbundener körper: jede gruppe hat ihren eigenen treibstoffvorrat
 function berechneGruppen(veh) {
   const n = veh.bodies.length;
   veh.gruppe = new Array(n).fill(-1);
@@ -302,8 +303,8 @@ function berechneGruppen(veh) {
   }
 }
 
-// Treibstoff entnehmen: liefert den Anteil (0..1) der gewünschten Menge, der tatsächlich da war.
-// Ohne Tanks oder bei abgeschaltetem Verbrauch ist immer genug da.
+// treibstoff entnehmen: liefert den anteil (0..1) der gewünschten menge, der tatsächlich da war.
+// ohne tanks oder bei abgeschaltetem verbrauch ist immer genug da.
 export function entnimm(veh, koerper, menge) {
   const t = veh.tank;
   if (!t.aktiv || !veh.verbrauch) return 1;
@@ -323,7 +324,7 @@ export function entnimm(veh, koerper, menge) {
   return nimm / menge;
 }
 
-// Füllstand der Gruppe eines Körpers
+// füllstand der gruppe eines körpers
 export function tankStand(veh, koerper) {
   let menge = 0, kap = 0;
   for (const [i, m] of veh.tank.menge) {
@@ -335,7 +336,7 @@ export function tankStand(veh, koerper) {
   return { menge, kap, aktiv: veh.tank.aktiv && veh.verbrauch };
 }
 
-// Welche Körper hängen (über intakte Gelenke) am Sitz? Nur deren Räder treibt der Motor an.
+// welche körper hängen (über intakte gelenke) am sitz? nur deren räder treibt der motor an.
 function aktualisiereAntrieb(veh) {
   veh.angetrieben.clear();
   const start = veh.ana.sitzBody;
@@ -363,7 +364,7 @@ export function entferneFahrzeug(world, veh) {
   veh.bodies = [];
 }
 
-// Geschwindigkeit eines Weltpunkts auf einem Körper
+// geschwindigkeit eines weltpunkts auf einem körper
 export function punktGeschw(rb, p) {
   const v = rb.linvel(), w = rb.angvel(), c = rb.translation();
   const r = [p[0] - c.x, p[1] - c.y, p[2] - c.z];
@@ -374,7 +375,7 @@ export function sitzKoerper(veh) {
   return veh.ana.sitzBody >= 0 ? veh.bodies[veh.ana.sitzBody] : veh.bodies[0];
 }
 
-// Tempo in Fahrtrichtung (m/s)
+// tempo in fahrtrichtung (m/s)
 export function tempo(veh) {
   const b = sitzKoerper(veh);
   if (!b) return 0;
@@ -383,10 +384,10 @@ export function tempo(veh) {
 }
 
 // ---------------------------------------------------------------------------
-// Steuerung pro Physikschritt
+// steuerung pro physikschritt
 // ---------------------------------------------------------------------------
-// eingabe: { gas: -1..1, lenk: -1..1, bremse: bool, tasten: Set }
-// "tasten" sind die gerade gedrückten Tasten (Kleinbuchstaben, " " = "space").
+// eingabe: { gas: -1..1, lenk: -1..1, bremse: bool, tasten: set }
+// "tasten" sind die gerade gedrückten tasten (kleinbuchstaben, " " = "space").
 export function steuere(world, veh, eingabe, dt) {
   const parts = veh.plan.parts;
   const tasten = eingabe.tasten || new Set();
@@ -394,7 +395,7 @@ export function steuere(world, veh, eingabe, dt) {
   veh.tasteVorher = new Set(tasten);
   veh.fx.clear();
 
-  // Höhe: Schwerkraft und Dämpfung (Luftreibung) je Körper anpassen
+  // höhe: schwerkraft und dämpfung (luftreibung) je körper anpassen
   for (const b of veh.bodies) {
     const h = b.rb.translation().y;
     const luft = dichte(h) / LUFT0;
@@ -407,10 +408,10 @@ export function steuere(world, veh, eingabe, dt) {
 
   const v = tempo(veh);
   let gas = veh.motorAn ? eingabe.gas : 0;
-  // Fahrmotor braucht Treibstoff (nur wenn das Fahrzeug Tanks hat und der Verbrauch an ist)
+  // fahrmotor braucht treibstoff (nur wenn das fahrzeug tanks hat und der verbrauch an ist)
   if (gas !== 0) gas *= entnimm(veh, Math.max(0, veh.ana.sitzBody), 0.15 * Math.abs(gas) * dt);
 
-  // Antriebskraft: begrenzt durch Kraft und Leistung
+  // antriebskraft: begrenzt durch kraft und leistung
   const mf = veh.motorFaktor || 1;
   let kraft = 0, bremsen = eingabe.bremse ? BREMSE * mf : 0;
   if (gas > 0) {
@@ -420,10 +421,10 @@ export function steuere(world, veh, eingabe, dt) {
     if (v > 0.8) bremsen = Math.max(bremsen, BREMSE * mf * -gas);
     else if (v > -9) kraft = MOTOR_KRAFT * mf * 0.45 * gas;
   } else if (!eingabe.bremse) {
-    bremsen = 1.2 * mf; // Rollwiderstand und Motorbremse
+    bremsen = 1.2 * mf; // rollwiderstand und motorbremse
   }
 
-  // Lenkung weich nachführen, bei hohem Tempo weniger Einschlag
+  // lenkung weich nachführen, bei hohem tempo weniger einschlag
   veh.lenkung += (eingabe.lenk - veh.lenkung) * Math.min(1, dt * 9);
   const lenkTempo = 1 / (1 + Math.abs(v) / 18);
 
@@ -440,12 +441,12 @@ export function steuere(world, veh, eingabe, dt) {
       const f = verbunden && r.antrieb && anzahlAntrieb ? kraft / anzahlAntrieb : 0;
       b.vc.setWheelEngineForce(r.w, f);
       b.vc.setWheelBrake(r.w, r.bock ? 0.02 : verbunden ? bremsen : 0.8);
-      // Rapier: positiver Einschlag lenkt nach links, "lenk" ist positiv nach rechts
+      // rapier: positiver einschlag lenkt nach links, "lenk" ist positiv nach rechts
       b.vc.setWheelSteering(r.w, verbunden ? -veh.lenkung * r.lenkFaktor * lenkTempo : 0);
     }
   }
 
-  // Anbauteile
+  // anbauteile
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
     const k = p.k || {};
@@ -468,7 +469,7 @@ export function steuere(world, veh, eingabe, dt) {
         }
         break;
       case "propeller": {
-        // Gashebel: bleibt eingestellt. Schub sinkt mit Tempo und Luftdichte (Vakuum = kein Schub).
+        // gashebel: bleibt eingestellt. schub sinkt mit der luftdichte (vakuum = kein schub), aber nicht mit dem tempo (kein limit).
         const richtung = (tasten.has(k.plus) ? 1 : 0) - (tasten.has(k.minus) ? 1 : 0);
         const h = Math.max(0, Math.min(1, (veh.hebel.get(i) ?? 0) + richtung * 0.7 * dt));
         veh.hebel.set(i, h);
@@ -480,9 +481,8 @@ export function steuere(world, veh, eingabe, dt) {
             const rot = b.rb.rotation();
             const dir = quatRot(rot, scale(teilAchse(p), -1));
             const punkt = add(arr(b.rb.translation()), quatRot(rot, sub(zellMitte(p), b.ursprung)));
-            const vax = dot(punktGeschw(b.rb, punkt), dir);
             const luft = dichte(punkt[1]) / LUFT0;
-            const n = (k.schub ?? 4) * 1000 * h * f * luft * Math.max(0, 1 - Math.max(0, vax) / Math.max(10, k.tempo ?? 80));
+            const n = (k.schub ?? 4) * 1000 * h * f * luft;
             b.rb.applyImpulseAtPoint(vec(scale(dir, n * dt)), vec(punkt), true);
             veh.fx.set(i, Math.max(0.05, h * f));
           }
@@ -516,20 +516,22 @@ export function steuere(world, veh, eingabe, dt) {
         break;
       case "steuerflaeche": {
         const max = Math.max(0.01, ((k.winkel ?? 25) * Math.PI) / 180);
-        const richtung = ((tasten.has(k.plus) ? 1 : 0) - (tasten.has(k.minus) ? 1 : 0)) * (k.gegenlauf ? -1 : 1);
+        // tasten (digital) plus joystick (stufenlos, nur nicken und rollen); positiv entspricht der "plus"-taste des teils
+        const analog = eingabe.achsen?.[k.kanal] ?? 0;
+        const richtung = Math.max(-1, Math.min(1, (tasten.has(k.plus) ? 1 : 0) - (tasten.has(k.minus) ? 1 : 0) + analog)) * (k.gegenlauf ? -1 : 1);
         let d = veh.ruder.get(i) ?? 0;
         const schritt = 3 * dt;
         d += Math.max(-schritt, Math.min(schritt, richtung * max - d));
         veh.ruder.set(i, d);
         aero(veh, i, k.flaeche ?? 1.5, d, dt);
-        veh.fx.set(i, 0.5 + (0.5 * d) / max); // für die Darstellung (0..1, 0,5 = neutral)
+        veh.fx.set(i, 0.5 + (0.5 * d) / max); // für die darstellung (0..1, 0,5 = neutral)
         break;
       }
       case "fallschirm": {
-        // Taste öffnet, nochmal drücken packt ihn wieder ein
+        // taste öffnet, nochmal drücken packt ihn wieder ein
         const st = veh.schirme.get(i) || { an: false, offen: 0 };
         if (neu.has(k.taste)) st.an = !st.an;
-        // Aufblasen dauert etwa eine halbe Sekunde, Einpacken geht schneller
+        // aufblasen dauert etwa eine halbe sekunde, einpacken geht schneller
         st.offen = st.an ? Math.min(1, st.offen + dt * 2) : Math.max(0, st.offen - dt * 4);
         if (st.offen > 0) {
           luftwiderstand(veh, i, (k.flaeche ?? 12) * st.offen, dt);
@@ -541,7 +543,7 @@ export function steuere(world, veh, eingabe, dt) {
     }
   }
 
-  // Gelenke: Stellmotoren und Sollbruchstellen
+  // gelenke: stellmotoren und sollbruchstellen
   let getrennt = false;
   for (const g of veh.gelenke) {
     if (!g.aktiv) continue;
@@ -567,10 +569,10 @@ export function steuere(world, veh, eingabe, dt) {
   if (getrennt) aktualisiereAntrieb(veh);
 }
 
-// Tragfläche / Steuerfläche: ebene Platte im Luftstrom.
-// Lokal: Spannweite = X, Flügeltiefe = Z (hinten = +Z), Plattennormale = Y.
-// delta kippt die Hinterkante nach oben (Ruderausschlag, positiv = Hinterkante hoch).
-// Auftrieb ~ CL(Anstellwinkel), Luftwiderstand ~ CD0 + k·sin²(Anstellwinkel); ab etwa 17° Strömungsabriss.
+// tragfläche / steuerfläche: ebene platte im luftstrom.
+// lokal: spannweite = x, flügeltiefe = z (hinten = +z), plattennormale = y.
+// delta kippt die hinterkante nach oben (ruderausschlag, positiv = hinterkante hoch).
+// auftrieb ~ cl(anstellwinkel), luftwiderstand ~ cd0 + k·sin²(anstellwinkel); ab etwa 17° strömungsabriss.
 const STALL = 0.3;
 function aero(veh, i, flaeche, delta, dt) {
   const b = veh.bodies[veh.ana.bodyOf[i]];
@@ -593,14 +595,14 @@ function aero(veh, i, flaeche, delta, dt) {
   let kraft = scale(vh, -q * cd);
   if (ql > 1e-4) kraft = add(kraft, scale(quer, (-Math.sign(vn) * q * cl) / ql));
   let impuls = scale(kraft, dt);
-  const grenze = b.rb.mass() * tempo * 0.4; // nie stärker, als der Körper Schwung hat
+  const grenze = b.rb.mass() * tempo * 0.4; // nie stärker, als der körper schwung hat
   const betrag = Math.hypot(...impuls);
   if (betrag > grenze) impuls = scale(impuls, grenze / betrag);
   b.rb.applyImpulseAtPoint(vec(impuls), vec(punkt), true);
 }
 
-// Fallschirm: Luftwiderstand F = 1/2 * rho * cw * A * v^2 gegen die Bewegung,
-// angreifend am Befestigungspunkt (dreht das Fahrzeug mit dem Schirm-Ende in den Wind).
+// fallschirm: luftwiderstand f = 1/2 * rho * cw * a * v^2 gegen die bewegung,
+// angreifend am befestigungspunkt (dreht das fahrzeug mit dem schirm-ende in den wind).
 const CW = 1.3;
 function luftwiderstand(veh, i, flaeche, dt) {
   const b = veh.bodies[veh.ana.bodyOf[i]];
@@ -612,7 +614,7 @@ function luftwiderstand(veh, i, flaeche, dt) {
   const tempo = Math.hypot(...v);
   if (tempo < 0.05) return;
   let impuls = 0.5 * dichte(punkt[1]) * CW * flaeche * tempo * tempo * dt;
-  // nie stärker bremsen, als der Körper Schwung hat (sonst schwingt es zurück)
+  // nie stärker bremsen, als der körper schwung hat (sonst schwingt es zurück)
   impuls = Math.min(impuls, b.rb.mass() * tempo * 0.5);
   b.rb.applyImpulseAtPoint(vec(scale(v, -impuls / tempo)), vec(punkt), true);
 }
@@ -632,7 +634,7 @@ export function trenne(world, veh, g) {
   g.aktiv = false;
   berechneGruppen(veh);
   world.removeImpulseJoint(g.j, true);
-  // kleiner Stoß auseinander, damit die Trennung sichtbar ist
+  // kleiner stoß auseinander, damit die trennung sichtbar ist
   const A = veh.bodies[g.bodyA], B = veh.bodies[g.bodyB];
   const dir = quatRot(A.rb.rotation(), g.dir);
   const m = Math.min(A.rb.mass(), B.rb.mass());
@@ -641,7 +643,7 @@ export function trenne(world, veh, g) {
   A.rb.applyImpulse(vec(scale(stoss, -1)), true);
 }
 
-// Räder nach dem Schritt aktualisieren (vor world.step aufrufen: updateVehicle)
+// räder nach dem schritt aktualisieren (vor world.step aufrufen: updatevehicle)
 export function aktualisiereRaeder(veh, dt, filter) {
   for (const b of veh.bodies) {
     if (!b.vc) continue;
@@ -649,7 +651,7 @@ export function aktualisiereRaeder(veh, dt, filter) {
   }
 }
 
-// Daten für die Darstellung der Räder (lokal zum Körper)
+// daten für die darstellung der räder (lokal zum körper)
 export function radZustand(veh, dt) {
   const out = [];
   for (const b of veh.bodies) {
@@ -659,12 +661,12 @@ export function radZustand(veh, dt) {
     for (const r of b.raeder) {
       const feder = (b.vc.wheelSuspensionLength(r.w) ?? FEDER_WEG) - RAD_TIEFE;
       if (r.bock) {
-        // Einkaufswagenrad dreht sich in die Bewegungsrichtung
+        // einkaufswagenrad dreht sich in die bewegungsrichtung
         const welt = add(arr(b.rb.translation()), quatRot(rot, r.mitte));
         const vw = punktGeschw(b.rb, welt);
         const vl = quatRot(inv, vw);
         const p = veh.plan.parts[r.teil];
-        const vt = matVec(transpose(ORIENT[p.o]), vl); // in Teilkoordinaten
+        const vt = matVec(transpose(ORIENT[p.o]), vl); // in teilkoordinaten
         const sp = Math.hypot(vt[0], vt[2]);
         if (sp > 0.15) {
           const ziel = Math.atan2(vt[0], vt[2]);
@@ -691,7 +693,7 @@ function transpose(m) {
   return [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]];
 }
 
-// Ein ganzer Physikschritt für das eigene Fahrzeug
+// ein ganzer physikschritt für das eigene fahrzeug
 export function schritt(world, veh, eingabe, dt) {
   steuere(world, veh, eingabe, dt);
   const filter = c => !veh.colliderSet.has(c.handle) && !c.isSensor() && !ignoriere.has(c.handle);

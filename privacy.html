@@ -21,10 +21,11 @@
     <p><a href="index.html">← Zurück zur Spielauswahl</a></p>
     <h1>Datenschutzerklärung</h1>
 
-    <p class="note"><b>Kurz gesagt:</b> Beim Aufruf der Startseite und beim Start von MultiplayerRoom
+    <p class="note"><b>Kurz gesagt:</b> Beim Aufruf der Startseite und beim Start von Bastelkarre
       wird anonym ein Besuch gezählt (GoatCounter). Es werden keine Cookies gesetzt, keine Nutzerprofile
-      angelegt und keine Daten zu Werbezwecken verwendet. Dein Spielstand bleibt in deinem Browser.
-      Nur beim Mehrspieler-Spiel MultiplayerRoom werden Name, Farbe, Position und Chatnachrichten an
+      angelegt und keine Daten zu Werbezwecken verwendet. Dein Spielstand bleibt in deinem Browser,
+      außer du legst freiwillig ein Konto an (siehe Abschnitt 6).
+      Nur beim Mehrspieler-Spiel Bastelkarre werden Name, Farbe, Position, dein Fahrzeug-Bauplan und Chatnachrichten an
       unseren Server übertragen, solange du im Raum bist.</p>
 
     <h2>1. Verantwortlicher</h2>
@@ -35,8 +36,7 @@
     <p>Wir nutzen <a href="https://www.goatcounter.com" rel="noopener">GoatCounter</a>
       (Instanz: kroxenstudios.goatcounter.com), um anonym zu zählen, wie oft die Startseite aufgerufen
       wird. Dazu wird beim Laden der Startseite ein einzelnes Zählpixel abgerufen. Dort wird kein Skript
-      von GoatCounter geladen. Beim Start von MultiplayerRoom wird dagegen das GoatCounter-Zählskript
-      geladen (siehe Abschnitt 5).</p>
+      von GoatCounter geladen. Beim Start von Bastelkarre wird dagegen ebenfalls nur ein Zählpixel abgerufen (siehe Abschnitt 5).</p>
     <p>Übermittelt wird nur der Seitenname (<code>/waiting-games</code>). Dein Browser sendet dabei
       technisch bedingt seine IP-Adresse und den User-Agent an GoatCounter; die IP-Adresse wird nicht
       gespeichert. Es werden keine Cookies gesetzt und kein Local Storage zur Wiedererkennung genutzt.
@@ -53,52 +53,115 @@
     <p>Asphalt Arkade, Mattenwurf und E-Scooter Klicker laufen komplett in deinem Browser. Eingaben,
       Guthaben und Spielfortschritt werden nicht an einen Server übertragen.</p>
 
-    <h2>5. MultiplayerRoom (Mehrspieler)</h2>
-    <p>MultiplayerRoom verbindet dich über eine WebSocket-Verbindung mit einem Server, den wir bei
+    <h2>5. Bastelkarre (Mehrspieler)</h2>
+    <p>Bastelkarre verbindet dich über eine WebSocket-Verbindung mit einem Server, den wir bei
       Cloudflare (Cloudflare Workers) betreiben. Damit andere Spieler dich sehen können, werden
       folgende Daten übertragen und an alle Spieler im Raum weitergegeben:</p>
     <ul>
-      <li>dein Spielername (max. 20 Zeichen) und deine Figurfarbe, beides aus deinen Einstellungen
-        auf der Charakterseite,</li>
-      <li>deine Position im Raum,</li>
-      <li>Chatnachrichten (max. 50 Zeichen). Sie sind für alle im Raum sichtbar und werden nach etwa
-        fünf Sekunden gelöscht.</li>
+      <li>dein Spielername (max. 20 Zeichen), deine Figurfarbe und dein Aussehen (Figur, Kleidung, Frisur, Mund, Haar- und Hautfarbe), alles aus
+        deinen Einstellungen (Konto-Seite),</li>
+      <li>deine Position und die Lage der Teile deines Fahrzeugs im Raum,</li>
+      <li>den Bauplan deines Fahrzeugs (welche Teile du wo gebaut hast),</li>
+      <li>Chatnachrichten (max. 100 Zeichen; Chatten geht nur mit Konto, dein Kontoname steht dabei). Sie sind für alle im Raum
+        sichtbar, werden nicht gespeichert und verblassen im Spiel nach kurzer Zeit.</li>
     </ul>
     <p>Diese Daten liegen nur im Arbeitsspeicher des Raums, solange du verbunden bist. Wir speichern sie
       weder dauerhaft noch in einer Datenbank. Bitte gib deshalb keinen echten Namen und keine
       persönlichen Daten in Namen oder Chat ein. Technisch bedingt verarbeitet Cloudflare als
       Dienstleister deine IP-Adresse, um die Verbindung herzustellen. Wir sehen diese Adresse nicht
-      und speichern sie nicht. Ein Admin kann Spieler aus dem Raum entfernen.</p>
+      und speichern sie nicht. Der Raum-Server erhält sie ebenfalls und merkt sie sich nur im Arbeitsspeicher, solange du verbunden
+      bist, um die gleichzeitigen Verbindungen je Adresse zu begrenzen (höchstens sechs je Raum); sie wird nicht gespeichert. Ein Admin kann Spieler aus dem Raum entfernen.</p>
     <p>Name und Farbe speichert dein Browser lokal (Local Storage, Eintrag <code>characterSettings</code>).
       Dieser Eintrag wird nur beim Beitritt zum Raum an den Server gesendet. Du kannst ihn jederzeit in
       den Browsereinstellungen löschen.</p>
-    <p>Beim Start von MultiplayerRoom wird das GoatCounter-Zählskript von gc.zgo.at geladen. Es zählt
-      anonym den Spielstart und übermittelt dafür technisch bedingt Seitenpfad, Referrer,
-      Bildschirmgröße, User-Agent und die IP-Adresse (nicht gespeichert). Es werden keine Cookies
-      gesetzt.</p>
+    <p>Beim Start von Bastelkarre wird ein einzelnes GoatCounter-Zählpixel abgerufen (ein Bild von
+      kroxenstudios.goatcounter.com, kein Skript). Es zählt anonym den Spielstart; übermittelt wird der Seitenname
+      (<code>/bastelkarre</code>) und, technisch bedingt, User-Agent und IP-Adresse (nicht gespeichert). Es werden keine
+      Cookies gesetzt, und im Spiel läuft kein Skript von Dritten: alle Bibliotheken (three.js, Rapier) liegen auf unserem Server.</p>
     <p>Rechtsgrundlage für die Übertragung der Spieldaten ist die Bereitstellung der von dir genutzten
       Spielfunktion (Art. 6 Abs. 1 lit. b DSGVO), für die Zählung unser berechtigtes Interesse
       (Art. 6 Abs. 1 lit. f DSGVO).</p>
 
-    <h2>6. Hosting</h2>
+    <h2>6. Freiwilliges Konto und Hangar (Bastelkarre)</h2>
+    <p>In Bastelkarre kannst du optional ein Konto anlegen, um Name, Farbe, Einstellungen und deine
+      Fahrzeuge auf mehreren Geräten zu nutzen und Fahrzeuge hochzuladen. Ohne Konto funktioniert
+      alles wie bisher, ohne dass Daten bei uns gespeichert werden. Das Konto läuft über einen
+      weiteren Server bei Cloudflare (Cloudflare Workers mit der Datenbank Cloudflare D1).</p>
+    <p><b>Was wir fürs Konto speichern:</b></p>
+    <ul>
+      <li>deinen Benutzernamen (bitte kein echter Name) und den Zeitpunkt der Erstellung,</li>
+      <li>dein Passwort nie im Klartext: dein Browser berechnet daraus einen Schlüssel, den wir auf dem
+        Server nochmals mit Zufallswert (Salt) verschlüsseln (Hash). Es gibt keine E-Mail-Adresse,
+        deshalb bekommst du einen Wiederherstellungscode, den wir ebenfalls nur als Hash speichern,</li>
+      <li>Anmelde-Sitzungen (nur als Hash, 60 Tage gültig),</li>
+      <li>dein Profil (Name, Farbe, Aussehen, Sprache, Einstellung zum Treibstoffverbrauch) und optional eine Bio (max. 200 Zeichen),</li>
+      <li>deine Freundesliste (wer mit wem befreundet ist oder eine Anfrage gesendet hat),</li>
+      <li>deine Sternebewertungen für Fahrzeuge (1–5 Sterne, je Fahrzeug eine),</li>
+      <li>deine Garage: bis zu 12 Fahrzeug-Baupläne, darunter das zuletzt bearbeitete Fahrzeug.</li>
+    </ul>
+    <p>Dein Browser speichert dafür lokal (Local Storage) die Einträge <code>krox-token</code>,
+      <code>krox-user</code>, <code>krox-sync</code>, <code>krox-plan-t</code> und <code>krox-admin</code>.
+      Sie dienen nur dem Anmelden und Abgleichen und werden beim Abmelden gelöscht.</p>
+    <p><b>Missbrauchsschutz:</b> Um Passwort-Raten und Massenregistrierungen zu verhindern, zählen wir
+      Fehlversuche und Registrierungen je Benutzername und je IP-Adresse (nach vier Fehlversuchen gibt es eine Pause von 15 Minuten).
+      Am Konto selbst wird außerdem vermerkt, wie viele Anmeldeversuche seit deiner letzten Anmeldung fehlgeschlagen sind und wann der
+      letzte war; das zeigen wir dir beim nächsten Anmelden an und setzen es dann zurück. Von der IP-Adresse speichern
+      wir dafür nur einen Hash (keine lesbare Adresse), der nach spätestens 24 Stunden gelöscht wird.</p>
+    <p><b>Hangar:</b> Du kannst ein Fahrzeug hochladen. Öffentlich sichtbar sind dann Titel,
+      Beschreibung, Bauplan, dein Benutzername, das Datum und die Zahl der Downloads. Jeder darf das
+      Fahrzeug laden und weiterverwenden. Vor der Veröffentlichung prüft der Betreiber den Upload;
+      abgelehnte Uploads werden gelöscht. Für die Download-Zahl merken wir uns, wer ein Fahrzeug schon
+      geladen hat, damit niemand mehrfach zählt: bei angemeldeten Nutzern über die Konto-Kennung,
+      bei nicht angemeldeten über einen Hash aus IP-Adresse, Datum und einem geheimen Wert. Dieser Hash
+      ist nicht rückrechenbar und wird nach ein bis zwei Tagen gelöscht.</p>
+    <p><b>Öffentliche Profilseite:</b> Jedes Konto hat eine Profilseite. Für alle sichtbar sind
+      Benutzername, Figurfarbe, Bio, Beitrittsdatum, deine veröffentlichten Fahrzeuge samt Durchschnittsbewertung
+      und Downloads. Deine Freundesliste und deine einzelnen Bewertungen sind <b>nicht</b> öffentlich; die Bewertung eines
+      Fahrzeugs wird nur als Durchschnitt und Anzahl angezeigt. Anfragen sehen nur die beiden Beteiligten.</p>
+    <p><b>Räume:</b> In Bastelkarre gibt es mehrere Räume (fünf öffentliche und private mit einem selbst gewählten Namen,
+      je bis zu 20 Spieler). Der Raumname wird beim Verbinden an den Server übertragen und kann in der Adresse
+      (<code>?raum=…</code>) stehen. Die zuletzt benutzte Raumwahl speichert dein Browser lokal (<code>krox-raum</code>).</p>
+    <p><b>Blockieren:</b> Du kannst Konten blockieren. Deine Sperrliste wird mit deinem Konto gespeichert (damit sie auf allen
+      Geräten gilt), ist nur für dich sichtbar und endet, wenn du die Blockierung aufhebst oder dein Konto löschst.</p>
+    <p><b>Melden und Moderation:</b> Du kannst Konten, Chatnachrichten, Fahrzeuge und Bios melden. Gespeichert werden dein
+      Konto als Melder, das gemeldete Konto, Grund, optional deine Notiz, ein von dir angegebener Textauszug und der Zeitpunkt.
+      Die Meldung sieht nur der Betreiber (Moderationskonto). Er kann Konten stummschalten oder sperren und Inhalte entfernen;
+      dafür werden Zeitpunkt, Art der Maßnahme und ein kurzer Grund im Moderationsprotokoll und am Konto gespeichert.
+      Erledigte Meldungen und das Protokoll werden nach 12 Monaten gelöscht. Stummschaltung und Sperre gelten für das Konto
+      und nicht nur für eine Sitzung. Rechtsgrundlage ist unser berechtigtes Interesse an einem sicheren Spielbetrieb
+      (Art. 6 Abs. 1 lit. f DSGVO).</p>
+    <p><b>Vorschaubild:</b> Beim Hochladen eines Fahrzeugs erzeugt dein Browser ein kleines Bild des Fahrzeugs und lädt es mit hoch.
+      Es ist wie das Fahrzeug öffentlich sichtbar und wird mit ihm gelöscht.</p>
+    <p><b>Konto im Spielraum:</b> Wenn du angemeldet bist, schickt dein Browser beim Beitritt zum Raum ein
+      kurzlebiges (2 Minuten), signiertes Ticket mit, das deinen Kontonamen bestätigt. Andere Spieler sehen dann,
+      dass du ein Konto hast, und können dein Profil anklicken. Dein Sitzungstoken wird dem Raum-Server nicht übergeben.
+      Spieler ohne Konto bleiben „Gast“ ohne Profil.</p>
+    <p><b>Löschen:</b> Unter „Konto“ kannst du dein Konto jederzeit selbst löschen. Dabei werden Profil,
+      Bio, Freundschaften, Bewertungen, Garage, Sitzungen und alle hochgeladenen Fahrzeuge gelöscht. Einzelne Uploads kannst du auch
+      jederzeit selbst entfernen.</p>
+    <p>Rechtsgrundlage ist die Bereitstellung der von dir gewählten Funktion (Art. 6 Abs. 1 lit. b DSGVO),
+      für den Missbrauchsschutz unser berechtigtes Interesse an der Sicherheit des Dienstes
+      (Art. 6 Abs. 1 lit. f DSGVO). Das Konto ist freiwillig.</p>
+
+    <h2>7. Hosting</h2>
     <p>Die Seiten werden über GitHub Pages ausgeliefert. Beim Aufruf verarbeitet der Hosting-Anbieter
       technisch notwendige Zugriffsdaten (z. B. IP-Adresse, Zeitpunkt) in Server-Logs, um die Seite
-      auszuliefern. Der Mehrspieler-Server von MultiplayerRoom läuft bei Cloudflare (siehe Abschnitt 5).</p>
+      auszuliefern. Die Seiten von Bastelkarre werden zusätzlich direkt über Cloudflare Workers ausgeliefert; der Mehrspieler-Server von Bastelkarre läuft ebenfalls bei Cloudflare (siehe Abschnitte 5 und 6).</p>
 
-    <h2>7. Deine Rechte</h2>
+    <h2>8. Deine Rechte</h2>
     <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung und Widerspruch. Schreib dazu einfach
-      an die oben genannte Adresse. Du kannst die Zählung auch mit einem Content-Blocker verhindern.</p>
+      an die oben genannte Adresse; dein Konto kannst du auch selbst im Spiel löschen. Du kannst die Zählung auch mit einem Content-Blocker verhindern.</p>
 
-    <p><small>Stand: November 2026</small></p>
+    <p><small>Stand: November 2026 (Konto, Profile, Freunde, Bewertungen, Räume, Blockieren, Melden, Fehlversuch-Hinweis, Zählpixel ergänzt)</small></p>
     </div>
     <div data-lang="en" hidden>
     <p><a href="index.html">← Back to the game selection</a></p>
     <h1>Privacy Policy</h1>
 
-    <p class="note"><b>In short:</b> When the start page is opened and when MultiplayerRoom starts, one
+    <p class="note"><b>In short:</b> When the start page is opened and when Bastelkarre starts, one
       visit is counted anonymously (GoatCounter). No cookies are set, no user profiles are created and
-      no data is used for advertising. Your game progress stays in your browser. Only in the
-      multiplayer game MultiplayerRoom are your name, colour, position and chat messages sent to our
+      no data is used for advertising. Your game progress stays in your browser unless you voluntarily create an account (see section 6). Only in the
+      multiplayer game Bastelkarre are your name, colour, position, your vehicle design and chat messages sent to our
       server while you are in the room.</p>
 
     <h2>1. Controller</h2>
@@ -109,8 +172,7 @@
     <p>We use <a href="https://www.goatcounter.com" rel="noopener">GoatCounter</a>
       (instance: kroxenstudios.goatcounter.com) to anonymously count how often the start page is
       opened. For this, a single counting pixel is requested when the start page loads. No script is
-      loaded from GoatCounter there. When MultiplayerRoom starts, however, the GoatCounter counting
-      script is loaded (see section 5).</p>
+      loaded from GoatCounter there. When Bastelkarre starts, however, only a counting pixel is requested as well (see section 5).</p>
     <p>Only the page name (<code>/waiting-games</code>) is sent. As is technically unavoidable, your
       browser transmits its IP address and user agent to GoatCounter; the IP address is not stored.
       No cookies are set and no local storage is used to recognise you. There is no tracking across
@@ -126,41 +188,103 @@
     <p>Asphalt Arkade, Mattenwurf and E-Scooter Klicker run entirely in your browser. Inputs, balance
       and game progress are not transmitted to a server.</p>
 
-    <h2>5. MultiplayerRoom (multiplayer)</h2>
-    <p>MultiplayerRoom connects you via a WebSocket connection to a server we run on Cloudflare
+    <h2>5. Bastelkarre (multiplayer)</h2>
+    <p>Bastelkarre connects you via a WebSocket connection to a server we run on Cloudflare
       (Cloudflare Workers). So that other players can see you, the following data is transmitted and
       passed on to all players in the room:</p>
     <ul>
-      <li>your player name (max. 20 characters) and figure colour, both from your settings on the
-        character page,</li>
-      <li>your position in the room,</li>
-      <li>chat messages (max. 50 characters). They are visible to everyone in the room and deleted
-        after about five seconds.</li>
+      <li>your player name (max. 20 characters), figure colour and look (figure, clothing, hairstyle, mouth, hair and skin colour), all from
+        your settings (account page),</li>
+      <li>your position and the position of your vehicle's parts in the room,</li>
+      <li>the design of your vehicle (which parts you built where),</li>
+      <li>chat messages (max. 100 characters; chatting needs an account, and your account name is shown with the message). They are
+        visible to everyone in the room, are not stored and fade out in the game after a short time.</li>
     </ul>
     <p>This data is held only in the room's memory while you are connected. We do not store it
       permanently or in a database. Please therefore do not enter a real name or personal data in
       the name or chat. As is technically unavoidable, Cloudflare, as a service provider, processes
-      your IP address to establish the connection. We do not see or store this address. An admin can
+      your IP address to establish the connection. We do not see or store this address. The room server also receives it and keeps it only in memory while you are connected, to limit the simultaneous connections per address (at most six per room); it is not stored. An admin can
       remove players from the room.</p>
     <p>Your browser stores name and colour locally (Local Storage, entry <code>characterSettings</code>).
       This entry is sent to the server only when you join the room. You can delete it at any time in
       your browser settings.</p>
-    <p>When MultiplayerRoom starts, the GoatCounter counting script from gc.zgo.at is loaded. It
-      anonymously counts the game start and, as is technically unavoidable, transmits page path,
-      referrer, screen size, user agent and the IP address (not stored). No cookies are set.</p>
+    <p>When Bastelkarre starts, a single GoatCounter counting pixel is requested (an image from
+      kroxenstudios.goatcounter.com, not a script). It anonymously counts the game start; the page name
+      (<code>/bastelkarre</code>) is sent and, as is technically unavoidable, user agent and IP address (not stored). No
+      cookies are set, and no third-party script runs in the game: all libraries (three.js, Rapier) are served from our own server.</p>
     <p>The legal basis for transmitting the game data is providing the game function you use
       (Art. 6(1)(b) GDPR), and for the counting our legitimate interest (Art. 6(1)(f) GDPR).</p>
 
-    <h2>6. Hosting</h2>
+    <h2>6. Optional account and hangar (Bastelkarre)</h2>
+    <p>In Bastelkarre you can optionally create an account to use your name, colour, settings and
+      vehicles on several devices and to upload vehicles. Without an account everything works as
+      before and no data is stored by us. The account runs on a further server at Cloudflare
+      (Cloudflare Workers with the Cloudflare D1 database).</p>
+    <p><b>What we store for the account:</b></p>
+    <ul>
+      <li>your username (please not your real name) and the time of creation,</li>
+      <li>your password never in plain text: your browser derives a key from it, which the server
+        hashes again with a random salt. There is no email address, so you get a recovery code, which
+        we also store only as a hash,</li>
+      <li>sign-in sessions (as a hash only, valid for 60 days),</li>
+      <li>your profile (name, colour, look, language, fuel-use setting) and optionally a bio (max. 200 characters),</li>
+      <li>your friends list (who is friends with whom or has sent a request),</li>
+      <li>your star ratings for vehicles (1–5 stars, one per vehicle),</li>
+      <li>your garage: up to 12 vehicle designs, including the vehicle you edited last.</li>
+    </ul>
+    <p>For this your browser stores the Local Storage entries <code>krox-token</code>,
+      <code>krox-user</code>, <code>krox-sync</code>, <code>krox-plan-t</code> and <code>krox-admin</code>.
+      They are used only for signing in and syncing and are removed when you sign out.</p>
+    <p><b>Abuse protection:</b> To prevent password guessing and mass registration we count failed
+      attempts and registrations per username and per IP address (after four failed attempts there is a 15-minute pause).
+      On the account itself we also record how many sign-in attempts have failed since your last sign-in and when the
+      latest was; we show you this the next time you sign in and then reset it. Of the IP address we store only a
+      hash (no readable address), deleted after 24 hours at the latest.</p>
+    <p><b>Hangar:</b> You can upload a vehicle. Publicly visible are then its title,
+      description, design, your username, the date and the number of downloads. Anyone may load and
+      reuse the vehicle. Before publication the operator reviews the upload; rejected uploads are
+      deleted. For the download count we remember who has already loaded a vehicle so nobody is
+      counted twice: for signed-in users via the account identifier, for others via a hash of IP
+      address, date and a secret value. This hash cannot be reversed and is deleted after one to two
+      days.</p>
+    <p><b>Public profile page:</b> Every account has a profile page. Visible to everyone are your
+      username, figure colour, bio, join date, your published vehicles with average rating and downloads.
+      Your friends list and your individual ratings are <b>not</b> public; a vehicle's rating is shown only as an
+      average and a count. Requests are visible only to the two people involved.</p>
+    <p><b>Rooms:</b> Bastelkarre has several rooms (five public ones and private ones with a name you choose, up to
+      20 players each). The room name is sent to the server when connecting and may appear in the address
+      (<code>?raum=…</code>). Your browser stores the last room choice locally (<code>krox-raum</code>).</p>
+    <p><b>Blocking:</b> You can block accounts. Your block list is stored with your account (so it applies on all
+      devices), is visible only to you and ends when you remove the block or delete your account.</p>
+    <p><b>Reporting and moderation:</b> You can report accounts, chat messages, vehicles and bios. Stored are your account as
+      reporter, the reported account, the reason, optionally your note, a text excerpt you state and the time. Only the
+      operator (moderation account) sees reports. They can mute or suspend accounts and remove content; for this the time,
+      the type of action and a short reason are stored in the moderation log and on the account. Handled reports and the
+      log are deleted after 12 months. Muting and suspension apply to the account and not just to one session. The legal
+      basis is our legitimate interest in safe operation (Art. 6(1)(f) GDPR).</p>
+    <p><b>Preview image:</b> When you upload a vehicle, your browser creates a small picture of it and uploads it too. It is
+      public like the vehicle and deleted with it.</p>
+    <p><b>Account in the game room:</b> When you are signed in, your browser sends a short-lived (2 minutes) signed
+      ticket when joining the room, which confirms your account name. Other players then see that you have an account
+      and can click your profile. Your session token is not passed to the room server. Players without an account
+      stay "Guest" without a profile.</p>
+    <p><b>Deletion:</b> Under "Account" you can delete your account yourself at any time. This deletes
+      your profile, bio, friendships, ratings, garage, sessions and all uploaded vehicles. You can also remove single uploads at
+      any time.</p>
+    <p>The legal basis is providing the function you chose (Art. 6(1)(b) GDPR), and for abuse
+      protection our legitimate interest in the security of the service (Art. 6(1)(f) GDPR). The
+      account is voluntary.</p>
+
+    <h2>7. Hosting</h2>
     <p>The pages are delivered via GitHub Pages. When the site is accessed, the hosting provider
       processes technically necessary access data (e.g. IP address, time) in server logs in order to
-      deliver the site. The multiplayer server of MultiplayerRoom runs on Cloudflare (see section 5).</p>
+      deliver the site. The pages of Bastelkarre are also delivered directly via Cloudflare Workers; the multiplayer server of Bastelkarre also runs on Cloudflare (see sections 5 and 6).</p>
 
-    <h2>7. Your rights</h2>
+    <h2>8. Your rights</h2>
     <p>You have the right to access, rectification, erasure and objection. Simply write to the
-      address above. You can also prevent the counting with a content blocker.</p>
+      address above; you can also delete your account yourself in the game. You can also prevent the counting with a content blocker.</p>
 
-    <p><small>As of: November 2026 (English version is a courtesy translation; the German text is authoritative.)</small></p>
+    <p><small>As of: November 2026 (account, profiles, friends, ratings, rooms, blocking, reporting, failed-attempt notice and counting pixel added; English version is a courtesy translation; the German text is authoritative.)</small></p>
     </div>
   </main>
   <script>

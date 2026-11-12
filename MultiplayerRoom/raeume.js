@@ -1,5 +1,3 @@
-// raumwahl: fünf öffentliche räume mit belegung und private räume per name (einladungslink).
-// das spiel (spiel.js) bleibt für die verbindung zuständig und bekommt nur den neuen raumnamen gemeldet.
 import { el } from "./profil.js";
 
 const L = (de, en) => (window.WG ? WG.L(de, en) : de);
@@ -7,14 +5,12 @@ const L = (de, en) => (window.WG ? WG.L(de, en) : de);
 export const OEFFENTLICH = ["r1", "r2", "r3", "r4", "r5"];
 export const raumTitel = id => (OEFFENTLICH.includes(id) ? `${L("Raum", "Room")} ${id.slice(1)}` : `🔒 ${id.slice(2)}`);
 
-// gültiger raumname (wie im server): öffentlich oder "p-" plus 3 bis 24 zeichen a-z, 0-9, -
 export function raumName(v) {
   const r = String(v || "").trim().toLowerCase();
   if (OEFFENTLICH.includes(r) || /^p-[a-z0-9-]{3,24}$/.test(r)) return r;
   return null;
 }
 
-// httpbasis: z. b. https://bastelkarre-online.kroxenstudios.workers.dev
 export function startRaeume({ httpBasis, aktuell, wechseln }) {
   const hud = document.getElementById("hud");
   if (!hud) return { aktualisiere() {} };
@@ -48,7 +44,7 @@ export function startRaeume({ httpBasis, aktuell, wechseln }) {
 
   async function wahl(id) {
     dialog.close();
-    await wechseln(id);   // prüft zuerst, ob der raum voll ist
+    await wechseln(id);
     beschriftung();
   }
 
@@ -74,7 +70,6 @@ export function startRaeume({ httpBasis, aktuell, wechseln }) {
     } }, privat, el("button", { type: "submit", textContent: L("Beitreten", "Join") }));
 
     const link = () => `${location.origin}${location.pathname}?raum=${encodeURIComponent(aktuell())}`;
-    // kurze nachricht mit link, die man direkt in einen chat einfügen kann
     const einladung = () => {
       const name = raumTitel(aktuell()).replace(/^🔒 /, "");
       return L(`🚗 Komm in meinen Bastelkarre-Raum „${name}“ und fahr mit! ${link()}`, `🚗 Join my Bastelkarre room "${name}" and drive with me! ${link()}`);

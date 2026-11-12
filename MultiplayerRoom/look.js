@@ -1,12 +1,10 @@
-// aussehen der spielfigur: kleidung, frisur, haar- und hautfarbe. die listen stehen auch in den servern
-// (krox-accounts und bastelkarre-online), dort wird nur nach dieser weißliste geprüft.
 
 export const KLEIDUNG = ["shirt", "hoodie", "jacke", "top", "overall", "kleid", "anzug", "raumanzug"];
 export const FRISUREN = ["kurz", "glatze", "lang", "zopf", "irokese", "afro", "dutt", "muetze"];
 export const HAARFARBEN = ["#3b2a22", "#111111", "#c9a15a", "#e6d27a", "#a5441f", "#d0d0d0", "#2f6fdb", "#e0479e"];
 export const HAUTFARBEN = ["#f6d5bd", "#f0c4a4", "#d9a07c", "#b97a56", "#8a5a3c", "#5e3b26"];
 
-export const KOERPER = ["neu", "og"];   // og = der alte körper mit fliegenden armen und punktaugen
+export const KOERPER = ["neu", "og"];
 export const MUND = ["laecheln", "grinsen", "neutral", "offen", "traurig", "keiner"];
 
 export const STANDARD_LOOK = { kleidung: "shirt", frisur: "kurz", haar: HAARFARBEN[0], haut: HAUTFARBEN[1], koerper: "neu", mund: "laecheln" };
@@ -22,7 +20,6 @@ export const NAMEN = {
 
 const farbe = v => (typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : null);
 
-// macht aus beliebigen eingaben ein gültiges aussehen (vorgaben für alles unbekannte).
 export function bereinigeLook(l) {
   const o = l && typeof l === "object" ? l : {};
   return {
@@ -35,5 +32,4 @@ export function bereinigeLook(l) {
   };
 }
 
-// aus gespeicherten charakter-einstellungen (name, color, kleidung, frisur, haar, haut, koerper, mund)
 export const lookAus = ch => bereinigeLook(ch);

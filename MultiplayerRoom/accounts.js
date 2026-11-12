@@ -1,8 +1,3 @@
-// freiwilliges kroxenstudios-konto: anmeldung, synchronisierung von charakter, einstellungen
-// und fahrzeugen (garage) über den worker "krox-accounts". ohne konto läuft alles wie bisher lokal.
-//
-// das passwort wird im browser mit pbkdf2 (310 000 runden) zu einem schlüssel verarbeitet;
-// nur dieser schlüssel wird gesendet. das sitzungstoken liegt im localstorage.
 
 import { KLEIDUNG, FRISUREN, HAARFARBEN, HAUTFARBEN, KOERPER, MUND, NAMEN, bereinigeLook } from "./look.js";
 
@@ -50,7 +45,6 @@ const minutenText = sek => {
   const min = Math.max(1, Math.ceil((Number(sek) || 900) / 60));
   return L(`${min} Minute${min === 1 ? "" : "n"}`, `${min} minute${min === 1 ? "" : "s"}`);
 };
-// daten: zusatzangaben des servers (retry = sekunden pause, left = verbleibende versuche)
 const fehlerText = (code, daten) => {
   if (code === "zu_viele_versuche") {
     return L(`Zu viele Fehlversuche. Aus Sicherheitsgründen ist die Anmeldung für ${minutenText(daten?.retry)} gesperrt (Request-Timeout).`,
@@ -65,7 +59,6 @@ const fehlerText = (code, daten) => {
   return e ? L(e[0], e[1]) : L("Der Server ist gerade nicht erreichbar.", "The server is not reachable right now.");
 };
 
-// warnung über fehlversuche: bleibt bis zum wegklicken erhalten (auch über ein neuladen der seite)
 const WARN_KEY = "krox-warnung";
 function warnungLesen() {
   try { return JSON.parse(sessionStorage.getItem(WARN_KEY) || "null"); } catch { return null; }
@@ -92,7 +85,7 @@ async function anfrage(method, pfad, body, token = store.get(TOKEN_KEY)) {
     if (res.status === 401 && token && pfad !== "/login" && pfad !== "/recover" && pfad !== "/password" && pfad !== "/delete") abmelden(false);
     const err = new Error(data.error || "fehler");
     err.status = res.status;
-    err.data = data;   // z. b. { retry: sekunden bis zur nächsten anmeldung, left: verbleibende versuche }
+    err.data = data;
     throw err;
   }
   return data;
@@ -107,16 +100,13 @@ async function schluessel(passwort, benutzer) {
   return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-// ---------------------------------------------------------------------------
-// profil (charakter + einstellungen) lokal lesen und schreiben
-// ---------------------------------------------------------------------------
 function lokalesProfil() {
   let ch = {};
   try { ch = JSON.parse(store.get("characterSettings") || "{}"); } catch {}
   const p = {};
   if (typeof ch.name === "string" && ch.name) p.name = ch.name.slice(0, 20);
   if (/^#[0-9a-f]{6}$/i.test(ch.color || "")) p.color = ch.color;
-  if (LOOK_FELDER.some(k => ch[k])) Object.assign(p, bereinigeLook(ch));   // kleidung, frisur, haar- und hautfarbe
+  if (LOOK_FELDER.some(k => ch[k])) Object.assign(p, bereinigeLook(ch));
   const settings = {};
   const lang = store.get("wg-lang");
   if (lang === "de" || lang === "en") settings.lang = lang;
@@ -126,7 +116,6 @@ function lokalesProfil() {
   return p;
 }
 
-// schreibt ein cloud-profil in den lokalen speicher. true = etwas hat sich geändert.
 function profilUebernehmen(p) {
   const vorher = JSON.stringify(lokalesProfil());
   if (p.name || p.color || LOOK_FELDER.some(k => p[k])) {
@@ -142,7 +131,6 @@ function profilUebernehmen(p) {
   return JSON.stringify(lokalesProfil()) !== vorher;
 }
 
-// fahrzeug als json-datei speichern (gleiches format wie "export" im baupanel, per "import" wieder ladbar)
 function dateiSpeichern(titel, jsonText) {
   const name = String(titel || "fahrzeug").toLowerCase().replace(/[^a-z0-9äöüß]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "fahrzeug";
   const link = document.createElement("a");
@@ -154,17 +142,14 @@ function dateiSpeichern(titel, jsonText) {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
-// ---------------------------------------------------------------------------
-// zustand
-// ---------------------------------------------------------------------------
 let hooks = { getPlan: () => null, setPlan: () => {} };
 let hud, knopf, dialog, inhalt;
 let garage = [];
-let seite = false;                 // true: konto läuft als eigene seite (konto.html) statt als dialog
+let seite = false;
 let meinProfil = { bio: "", created: 0 };
-let freundeSet = new Set();        // namen (klein) aller bestätigten freunde
+let freundeSet = new Set();
 
-let blockiertSet = new Set();        // namen (klein) aller von dir blockierten konten
+let blockiertSet = new Set();
 
 async function ladeBlockiert() {
   if (!angemeldet()) { blockiertSet = new Set(); return; }
@@ -206,7 +191,6 @@ function aktualisiereKnopf() {
   knopf.title = u ? L("Konto", "Account") : L("Anmelden – Fortschritt auf allen Geräten", "Sign in – use your builds on all devices");
 }
 
-// der spielername wird beim laden festgelegt: ohne eigenen namen muss nach der anmeldung neu geladen werden
 let neuLaden = false;
 const ohneName = () => { try { return !JSON.parse(store.get("characterSettings") || "{}").name; } catch { return true; } };
 
@@ -222,7 +206,6 @@ async function nachAnmeldung(daten, frisch) {
   return abgleichen(frisch);
 }
 
-// profil und auto-garage mit der cloud abgleichen. rückgabe: true, wenn die seite neu geladen wird.
 async function abgleichen(frisch = false) {
   let me;
   try {
@@ -238,7 +221,6 @@ async function abgleichen(frisch = false) {
   garage = me.garage.filter(g => g.slot !== "auto");
   aktualisiereKnopf();
 
-  // profil: bei neuer anmeldung gewinnt die cloud (sofern dort etwas steht); sonst gewinnt die jüngere seite
   const lokal = lokalesProfil();
   const hl = JSON.stringify(lokal);
   const letzter = store.get(SYNC_KEY);
@@ -254,7 +236,6 @@ async function abgleichen(frisch = false) {
     if (geaendert) { location.reload(); return true; }
   }
 
-  // zuletzt bearbeitetes fahrzeug (nur im spiel, nicht auf der konto-seite)
   if (seite) return false;
   if (me.garage.some(g => g.slot === "auto")) {
     try {
@@ -291,9 +272,6 @@ async function planSpeichernJetzt() {
   } catch {}
 }
 
-// ---------------------------------------------------------------------------
-// oberfläche
-// ---------------------------------------------------------------------------
 function el(tag, props = {}, ...kinder) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
@@ -305,15 +283,14 @@ function el(tag, props = {}, ...kinder) {
   return e;
 }
 
-let modus = "login";   // login | register | recover
+let modus = "login";
 let hinweis = "";
 let hinweisArt = "";
-let code = null;       // frisch erzeugter wiederherstellungscode
+let code = null;
 
 function zeige() {
   inhalt.replaceChildren();
   if (!seite) inhalt.append(el("button", { type: "button", class: "kontoZu", textContent: "✕", ariaLabel: L("Schließen", "Close"), onclick: () => dialog.close() }));
-  // rote warnung nach einer anmeldung, wenn es fehlversuche gab
   const warnung = angemeldet() ? warnungLesen() : null;
   if (warnung) {
     inhalt.append(el("div", { class: "kontoMeldung fehler kontoWarnung", role: "alert" },
@@ -338,8 +315,6 @@ function setzeHinweis(text, art = "fehler") {
   zeige();
 }
 
-// charakter-editor für konto.html: name, kleidung, frisur, farben. jede änderung geht sofort als
-// ereignis "krox-look" an die live-vorschau (vorschau.js) und wird erst mit "speichern" übernommen.
 function charakterEditor() {
   let ch = {};
   try { ch = JSON.parse(store.get("characterSettings") || "{}"); } catch {}
@@ -371,7 +346,6 @@ function charakterEditor() {
     return el("div", { class: "feld" }, el("span", { textContent: beschriftung }), reihe);
   };
 
-  // figur: der alte körper (og) hat von haus aus keinen mund; der mund lässt sich danach trotzdem frei wählen
   const koerperAuswahl = auswahl("koerper", KOERPER, L("Figur", "Body"));
   const mundAuswahl = auswahl("mund", MUND, L("Mund", "Mouth"));
   koerperAuswahl.sel.addEventListener("change", () => {
@@ -397,13 +371,12 @@ function charakterEditor() {
     farben("haar", HAARFARBEN, L("Haarfarbe", "Hair colour")),
     farben("haut", HAUTFARBEN, L("Hautfarbe", "Skin tone")),
     speichern);
-  setTimeout(melden, 0);   // vorschau mit den gespeicherten werten starten
+  setTimeout(melden, 0);
   return el("div", { class: "kontoBox", id: "charakter" },
     el("h3", { textContent: L("Charakter", "Character") }), form,
     el("p", { class: "kontoInfo", textContent: L("Name und Aussehen sehen alle im Raum. Ohne Namen wird dein Kontoname benutzt, sonst „Gast“.", "Everyone in the room sees your name and look. Without a name your account name is used, otherwise “Guest”.") }));
 }
 
-// im spiel-dialog gibt es keine eigene charakter-eingabe: name, aussehen und farben stellst du auf der konto-seite ein
 function charakterBox() {
   if (seite) return charakterEditor();
   return el("div", { class: "kontoBox" },
@@ -493,7 +466,6 @@ function zeigeCode() {
 
 const sterneText = (avg, n) => (n ? `★ ${avg.toFixed(1)} (${n})` : L("noch keine Bewertung", "no ratings yet"));
 
-// profil: bio bearbeiten und link zur öffentlichen seite
 function profilBox() {
   const name = store.get(USER_KEY) || "";
   const bio = el("textarea", { maxLength: 200, rows: 3, placeholder: L("Erzähl etwas über dich (max. 200 Zeichen) – sichtbar für alle", "Tell something about yourself (max. 200 characters) – visible to everyone"), value: meinProfil.bio || "" });
@@ -512,7 +484,6 @@ function profilBox() {
     form);
 }
 
-// freunde: anfragen, liste, hinzufügen
 function freundeBox() {
   const box = el("div", { class: "kontoBox" }, el("h3", { textContent: L("Freunde", "Friends") }));
   const innen = el("div", { class: "kontoBox" }, el("p", { class: "kontoInfo", textContent: L("Lade …", "Loading …") }));
@@ -558,7 +529,6 @@ function freundeBox() {
   return box;
 }
 
-// blockierte konten verwalten (gilt für dein konto auf allen geräten)
 function blockBox() {
   const liste = el("ul", { class: "kontoGarage" });
   const fuelle = async () => {
@@ -575,7 +545,6 @@ function blockBox() {
     el("p", { class: "kontoInfo", textContent: L("Von blockierten Konten siehst du keine Chatnachrichten und keine Fahrzeuge; sie können dir keine Freundschaftsanfragen schicken.", "You see no chat messages or vehicles from blocked accounts, and they cannot send you friend requests.") }));
 }
 
-// meine veröffentlichten und wartenden fahrzeuge mit bewertung
 function fahrzeugeBox() {
   const liste = el("ul", { class: "kontoGarage" }, el("li", { class: "leer", textContent: L("Lade …", "Loading …") }));
   anfrage("GET", "/models/mine").then(d => {
@@ -679,7 +648,6 @@ function baueOberflaeche() {
   aktualisiereKnopf();
 }
 
-// für konto.html: konto als eigene seite statt als dialog
 function einbetten(container) {
   seite = true;
   inhalt = container;
@@ -692,19 +660,16 @@ export const Konto = {
   einbetten,
   freunde: () => freundeSet,
   ladeFreunde,
-  // ticket für den raum-server: beweist ihm, wer du bist (läuft nach 2 minuten ab)
   async ticket() {
     if (!angemeldet()) return null;
     try { return (await anfrage("POST", "/ticket")).ticket; } catch { return null; }
   },
-  // hooks: { getplan(): bauplan-objekt, setplan(jsontext) }
   start(h) {
     hooks = h;
     baueOberflaeche();
     if (angemeldet()) abgleichen(false);
   },
   planGeaendert: planSpeichern,
-  // für modelle.js
   anfrage: (m, p, b) => anfrage(m, p, b),
   angemeldet,
   istAdmin: () => store.get("krox-admin") === "1",
@@ -712,7 +677,6 @@ export const Konto = {
   plan: () => hooks.getPlan(),
   planSetzen: t => hooks.setPlan(t),
   fehlerText,
-  // text der roten warnung (oder null), z. b. für eine meldung im spiel
   warnungText: () => { const w = angemeldet() ? warnungLesen() : null; return w ? "⚠ " + warnungText(w) : null; },
   basis: BASE,
   blockiert: () => blockiertSet,

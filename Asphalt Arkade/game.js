@@ -1,7 +1,6 @@
     const canvas = document.querySelector("#game");
     const ctx = canvas.getContext("2d");
 
-    // Zurück zur Spielauswahl (vorher ein Inline-onclick im HTML)
     document.querySelector("#settingsBack").addEventListener("click", () => {
       location.href = "../index.html";
     });
@@ -16,7 +15,6 @@
     const driftScoreDisplay = document.querySelector("#driftScore");
     const creditsDisplay = document.querySelector("#credits");
 
-    // maxSpeed in km/h, t100 = Sekunden von 0 auf 100 km/h (Serienzustand), turn/grip wie bisher, price in €
     const cars = [
       { name: t("Kleinwagen"),    color: "#57d6a1", maxSpeed: 190, t100: 13.0, turn: 0.047, grip: 0.91, price: 0 },
       { name: t("Limousine"),     color: "#68a8ff", maxSpeed: 230, t100: 10.0, turn: 0.040, grip: 0.93, price: 250 },
@@ -28,16 +26,14 @@
       { name: t("Rakete"),        color: "#4df0ff", maxSpeed: 480, t100: 2.0,  turn: 0.048, grip: 0.92, price: 50000 }
     ];
 
-    // Level-System
-    let currentLevel = "city"; // "city" oder "moon"
+    let currentLevel = "city";
     let moonLevelUnlocked = false;
     const levelInfo = document.querySelector("#levelInfo");
 
-    const world = { width: 91180, height: 17680 };   // = Knotenraster 201 x 51 (siehe PITCH)
+    const world = { width: 91180, height: 17680 };
     const coins = [];
     let started = false;
 
-    // Dev-Modus: Nur #dev aktiviert
     let devMode = window.location.hash === "#dev";
     const devOutput = [];
     function devLog(msg) {
@@ -59,9 +55,8 @@
     const touchInput = {
       left: false, right: false, gas: false, brake: false, drift: false, boost: false
     };
-    // Touch-Lenkrad: wheelValue -1..1 (proportional zum Drehwinkel), federt beim Loslassen zurück
     const wheelEl = document.querySelector("#wheel");
-    const WHEEL_MAX = 1.9;          // maximaler Drehwinkel in rad (ca. 110°)
+    const WHEEL_MAX = 1.9;
     let wheelValue = 0, wheelActive = false;
     const boostButton = document.querySelector("#boostButton");
     let boostHeld = false;
@@ -78,40 +73,38 @@
     let keyboardMode = false;
     let lastTrailPosition = null;
 
-    // Lenkung und Beschleunigung
-    // Einstellungen (im Menü änderbar, werden im Browser gespeichert)
     const DEFAULT_SETTINGS = {
-      steerRise: 0.06,       // Lenkeinschlag pro Frame beim Halten (0,06 = voller Einschlag in ca. 0,3 s)
-      steerReverse: 0.14,    // beim Gegenlenken schneller durch die Mitte
-      steerReturn: 0.12,     // Loslassen: Lenkrad zentriert zügig
-      steerCurve: 1.25,      // >1: kleine Einschläge wirken sanfter, 1 = linear
-      accel: 1,              // Beschleunigung relativ zum realistischen Wert (0-100 km/h-Zeit des Autos)
-      traffic: 110,          // Anzahl NPC-Autos in der Umgebung
-      zoomLevel: 0.7,        // Grundzoom der Kamera (kleiner = weiter heraus, 1 = nah)
-      policeSpeed: 0.5,      // Tempo der Verfolger relativ zu deinem Auto (Faktor, steigt mit der Zeit leicht an)
-      policeMistakes: 0.5,   // 0 = fehlerfrei, 1 = baut oft Mist (falsch abbiegen, Ausbrechen, Ablenkung)
-      shake: true,           // Bildschirmwackeln
-      zoom: true,            // Kamera zoomt bei Tempo heraus
-      rotateCamera: true,    // Kamera dreht sich mit dem Auto (Fahrtrichtung immer oben)
-      speedLines: true,      // Tempolinien am Bildrand
-      touchScale: 1,         // Größe der Touch-Buttons (Faktor)
-      chasers: true,         // Verfolger an/aus
-      fingerSteer: false,   // Lenken per Finger auf dem Spielfeld
-      touchMode: 0,         // Touch-Steuerung: 0 = automatisch, 1 = immer an, 2 = aus
-      wheelLimit: 0.55,     // maximaler Lenkeinschlag mit dem Touch-Lenkrad (1 = voll)
-      online: true,          // Online-Modus: andere Fahrer sehen und mit ihnen zusammenstoßen
-      showHitbox: false,     // Hitboxen der Fahrzeuge anzeigen
-      sound: true,           // Ton an/aus
-      volume: 0.5,           // Gesamtlautstärke
-      sv: 2                  // Version der Einstellungen (1.1.0: realistische Beschleunigung)
+      steerRise: 0.06,
+      steerReverse: 0.14,
+      steerReturn: 0.12,
+      steerCurve: 1.25,
+      accel: 1,
+      traffic: 110,
+      zoomLevel: 0.7,
+      policeSpeed: 0.5,
+      policeMistakes: 0.5,
+      shake: true,
+      zoom: true,
+      rotateCamera: true,
+      speedLines: true,
+      touchScale: 1,
+      chasers: true,
+      fingerSteer: false,
+      touchMode: 0,
+      wheelLimit: 0.55,
+      playerName: "",
+      online: true,
+      showHitbox: false,
+      sound: true,
+      volume: 0.5,
+      sv: 2
     };
     const settings = { ...DEFAULT_SETTINGS };
     try {
       const saved = JSON.parse(localStorage.getItem("asphaltSettings") || "{}");
-      if (saved.sv !== 2) delete saved.accel;     // alter Wert (0,5) gehörte zur früheren, viel zu starken Beschleunigung
+      if (saved.sv !== 2) delete saved.accel;
       Object.assign(settings, saved);
     } catch {}
-    // Sitzungs-Umschaltung Maus/Touch (inputMode) wird nicht dauerhaft gespeichert
     const saveSettings = () => { try { localStorage.setItem("asphaltSettings", JSON.stringify(inputMode ? { ...settings, ...baseDevice } : settings)); } catch {} };
     let steerValue = 0;
     let handbrakeOn = false;
@@ -119,19 +112,17 @@
     const tireMarks = [];
     const MAX_TIRE_MARKS = 1800;
 
-    // ---------- Verfolgungsjagd, Drift-Kombo und Fahr-Effekte ----------
-    // Zeiten hier in Sekunden; update() rechnet mit dt in Frames (1 = 1/60 s), siehe "sec".
     const surviveDisplay = document.querySelector("#surviveTime");
     const chasers = [];
     const particles = [];
     const popups = [];
     const MAX_PARTICLES = 700;
-    const LEVEL_AT = [0.7, 1.6, 3.0];                          // Sekunden Drift bis Turbo-Stufe 1-3
+    const LEVEL_AT = [0.7, 1.6, 3.0];
     const LEVEL_COLORS = ["#ffe9a8", "#59b6ff", "#ff9a2e", "#c45cff"];
     const BOOST_SECONDS = [0, 0.8, 1.3, 1.9];
-    const BOOST_CHARGE = [0, 0.2, 0.35, 0.5];     // Ladung je Drift-Stufe (1 = voll)
-    const BOOST_MAX_SECONDS = 2.4;                // Dauer bei voller Ladung
-    const BOOST_MIN_CHARGE = 0.2;                 // darunter lässt sich nicht zünden
+    const BOOST_CHARGE = [0, 0.2, 0.35, 0.5];
+    const BOOST_MAX_SECONDS = 2.4;
+    const BOOST_MIN_CHARGE = 0.2;
     const GRACE_SECONDS = 6;                                   
     const CATCH_DISTANCE = 30;
     const NEAR_MISS_DISTANCE = 85;
@@ -145,7 +136,7 @@
 
     const fmtTime = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
     const rnd = (a, b) => a + Math.random() * (b - a);
-    const laneCenter = i => 90 + i * 700;                      // Straßenmitte (Straßen: x = i*700, Breite 180)
+    const laneCenter = i => 90 + i * 700;
     const nearestLane = v => Math.round((v - 90) / 700);
     const sirenPhase = () => Math.floor(performance.now() / 130) % 2;
 
@@ -219,9 +210,8 @@
       const lvl = driftLevel();
       run.drifting = false;
       run.lastLevel = 0;
-      run.comboTimer = 2;        // Frist, in der ein weiterer Drift die Kombo fortsetzt
+      run.comboTimer = 2;
       if (lvl > 0) {
-        // Kein automatischer Schub mehr: der Drift lädt nur den Boost, ausgelöst wird er per Taste B / Boost-Knopf
         run.boostCharge = Math.min(1, run.boostCharge + BOOST_CHARGE[lvl]);
         sfx.level(lvl);
         popup(`BOOST ${Math.round(run.boostCharge * 100)}%`, LEVEL_COLORS[lvl], 22);
@@ -261,17 +251,15 @@
       }
     }
 
-    // ----- fährt auf dem Straßennetz (ignoriert Ampeln) und biegt Richtung Spieler ab -----
     function chooseEdgeFor(c, node, cameFrom) {
       const tx = player.x + player.vx * c.lead, ty = player.y + player.vy * c.lead;
       let best = null, bestScore = -Infinity;
       for (const e of node.out) {
         let score = -Math.hypot(e.to.x - tx, e.to.y - ty);
-        if (cameFrom && e.to === cameFrom) score -= 350;     // Wenden nur, wenn es sich wirklich lohnt
-        if (e.to.out.length < 2) score -= 500;               // keine Sackgassen
+        if (cameFrom && e.to === cameFrom) score -= 350;
+        if (e.to.out.length < 2) score -= 500;
         if (score > bestScore) { bestScore = score; best = e; }
       }
-      // Fehler: manchmal wird die falsche Abzweigung genommen (nie eine Sackgasse oder Wende)
       if (cameFrom && Math.random() < 0.5 * settings.policeMistakes) {
         const options = node.out.filter(e => e !== best && e.to !== cameFrom && e.to.out.length >= 2);
         if (options.length) best = options[Math.floor(Math.random() * options.length)];
@@ -292,7 +280,7 @@
         const n = nearestNode(player.x + Math.cos(ang) * r, player.y + Math.sin(ang) * r, 6);
         if (n && n.out.length >= 2 && Math.hypot(n.x - player.x, n.y - player.y) > 900) node = n;
       }
-      if (!node) return false;          // weit abseits der Straßen: kein Verfolger, später erneut versuchen
+      if (!node) return false;
       const c = { x: 0, y: 0, edge: null, s: 0, angle: 0, speed: 0, stun: 0, nearCd: 0, lead: 8 + chasers.length * 14, hunt: false, noHunt: 0, stuck: 0, distract: 0 };
       placeChaserAt(c, node, null);
       chasers.push(c);
@@ -308,17 +296,13 @@
       const car = ST;
       const dist = Math.hypot(player.x - c.x, player.y - c.y);
 
-      // Tempo: etwas langsamer als das gewählte Auto, wird mit der Zeit schneller; Gummiband bei großem Abstand
-      // Alle Verfolger fahren immer gleich schnell: festes Tempo (Standard 120 km/h), unabhängig von Auto, Spielzeit und Abstand
       let target = 18.4 * settings.policeSpeed;
-      if (c.edge && c.edge.type === "alley") target = Math.min(target, 6);       // Gassen sind eng
+      if (c.edge && c.edge.type === "alley") target = Math.min(target, 6);
 
-      // Fehler: kurze Unaufmerksamkeit (z. B. Blick aufs Funkgerät) lässt sie abbremsen
       c.distract -= sec;
       if (c.distract <= 0 && c.stun <= 0 && Math.random() < 0.05 * settings.policeMistakes * sec) c.distract = rnd(0.6, 1.5);
       if (c.distract > 0) target *= 0.35;
       if (c.stun > 0) { c.stun -= sec; target = 0; }
-      // realistische Beschleunigung eines Streifenwagens (0–100 km/h in ca. 7,5 s), Bremsen kräftiger
       const dv = target - c.speed;
       const pa = 0.02464 * Math.max(0.05, 1 - (c.speed / Math.max(target, 5)) ** 2);
       c.speed += clamp(dv, -0.06 * dt, pa * dt);
@@ -326,7 +310,6 @@
 
 
 
-      // Hängt sie an einer Wand fest, geht sie zurück auf die Straße und versucht es später erneut.
       c.noHunt = Math.max(0, c.noHunt - sec);
       const leaveHunt = () => {
         c.hunt = false; c.stuck = 0;
@@ -341,12 +324,10 @@
         c.angle += clamp(Math.atan2(Math.sin(want - c.angle), Math.cos(want - c.angle)), -0.03 * dt, 0.03 * dt);
         const stepX = Math.cos(c.angle) * c.speed * dt, stepY = Math.sin(c.angle) * c.speed * dt;
         const ox = c.x, oy = c.y;
-        // Gleiten an Hindernissen: erst beide Achsen, dann einzeln
         if (!chaserBlocked(c.x + stepX, c.y + stepY)) { c.x += stepX; c.y += stepY; }
         else if (!chaserBlocked(c.x + stepX, c.y)) c.x += stepX;
         else if (!chaserBlocked(c.x, c.y + stepY)) c.y += stepY;
         else {
-          // Fehler: voll gegen die Wand gefahren -> kurz benommen
           if (c.speed > 6 && c.stun <= 0 && Math.random() < settings.policeMistakes) { c.stun = rnd(1, 1.8); burst(c.x, c.y, 8, ["#cfcfcf", "#e8e8e8"], 3, false); }
           c.speed *= 0.5;
         }
@@ -358,13 +339,12 @@
           const old = c.edge, over = c.s - old.len;
           c.edge = chooseEdgeFor(c, old.to, old.from) || old.rev;
           c.s = over;
-          // Fehler: zu schnell in die Kurve -> bricht aus und rutscht in die Leitplanke/Bordstein
           const sharp = old.dx * c.edge.dx + old.dy * c.edge.dy < 0.5;
           if (sharp) {
             if (c.speed > 7 && Math.random() < settings.policeMistakes * 0.6 * Math.min(1, c.speed / 14)) {
-              c.stun = rnd(1.2, 2);        // zu schnell: bleibt kurz stehen
+              c.stun = rnd(1.2, 2);
               c.speed *= 0.3;
-            } else c.speed *= 0.55;        // normal: bremst in der Kurve stark ab
+            } else c.speed *= 0.55;
           }
         }
         const e = c.edge;
@@ -374,7 +354,6 @@
         c.angle += Math.atan2(Math.sin(want - c.angle), Math.cos(want - c.angle)) * Math.min(1, 0.08 * dt);
       }
 
-      // Staub
       if (c.speed > 3 && Math.random() < 0.5 * dt) {
         emit(c.x - Math.cos(c.angle) * 14, c.y - Math.sin(c.angle) * 14, rnd(-.5, .5), rnd(-.5, .5), 0.4, 3, "#cfcfcf", { grow: 0.2, alpha: 0.25 });
       }
@@ -392,7 +371,6 @@
       burst(c.x, c.y, 12, ["#cfcfcf", "#e8e8e8"], 4, false);
     }
 
-    // Weltrekord (höchster Punktestand aller Spieler) über den Cloudflare-Worker; keine Anti-Cheat-Prüfung
     const leaderboardUrl = "https://waitinggames-record.kroxenstudios.workers.dev";
     function showGlobalBest(best) {
       for (const el of document.querySelectorAll(".global-best")) {
@@ -422,7 +400,7 @@
       if (run.bustTimer > 0) return;
       const lost = Math.round(run.pending);
       const final = driftScore;
-      const isBest = final > run.best && !run.invalid;     // Dev-Modus oder ausgeschaltete Verfolger machen den Lauf ungültig
+      const isBest = final > run.best && !run.invalid;
       if (isBest) {
         run.best = final;
         try { localStorage.setItem("asphaltBest", String(final)); } catch {}
@@ -450,22 +428,19 @@
     function updateChase(dt) {
       const sec = dt / 60;
       run.time += sec;
-      if (devMode || !settings.chasers) run.invalid = true;     // zählt nicht für Rekorde
+      if (devMode || !settings.chasers) run.invalid = true;
       run.safe = Math.max(0, run.safe - sec);
       surviveDisplay.textContent = fmtTime(run.time);
 
-      // Je länger man durchhält, desto mehr Punkte pro Sekunde (Stufe alle 20 s)
       const tier = 1 + Math.floor(run.time / 20);
       if (tier !== run.tier) {
         run.tier = tier;
         popup(L(`ÜBERLEBT: x${tier} PUNKTE`, `SURVIVED: x${tier} POINTS`), "#65e6a5", 22);
       }
-      // In der Garage zu parken bringt keine Überlebens-Punkte
       const inGarage = garage && player.x > garage.x && player.x < garage.x + garage.w &&
         player.y > garage.y && player.y < garage.y + garage.h;
       if (!player.crashed && !inGarage) addPoints(50 * tier * sec);
 
-      // Wellen: erst nach der Schonfrist, danach alle 30 s ein Wagen mehr (max. 4)
       if (!settings.chasers) chasers.length = 0;
       const want = !settings.chasers || run.time < GRACE_SECONDS ? 0 : Math.min(4, 1 + Math.floor((run.time - GRACE_SECONDS) / 30));
       while (chasers.length < want) {
@@ -531,7 +506,6 @@
         }
       }
 
-      // Neben der Straße wirbelt man Staub auf
       if (!onRoad && speed > 3 && chance(0.7)) {
         emit(rearX + rnd(-5, 5), rearY + rnd(-5, 5), rnd(-.5, .5), rnd(-.5, .5), 0.6, 3, "#8c7c55", { grow: 0.22, alpha: 0.35 });
       }
@@ -547,32 +521,25 @@
 
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-    // ===================== Straßennetz, Stadt und Verkehr =====================
-    // Das Netz besteht aus Knoten im Raster (Abstand PITCH). Hauptstraßen liegen auf den geraden Rasterlinien,
-    // Gassen halbieren manche Häuserblöcke; die Autobahn (HWY_ROW) hat nur an Auffahrten Anschluss.
     const idle = fn => "requestIdleCallback" in window
       ? requestIdleCallback(fn, { timeout: 800 })
       : setTimeout(fn, 60);
     let mapInitialized = false;
 
-    // Knotenraster 261 x 51 (PITCH 350 px): die Karte ist ca. 91.000 x 17.700 px groß. Von der Garage im Westen bis zum Seebad im Osten
-    // sind es mit dem Startwagen rund 2-3 Minuten Fahrt. Zonen von West nach Ost: Vorstadt, Innenstadt, Industrie, Land/Wald, Berge, Dorf, Seebad.
     const PITCH = 350, OFFSET = 90, NA = 261, NB = 51;
     const nodeX = a => OFFSET + a * PITCH;
     const nodeY = b => OFFSET + b * PITCH;
     const nid = (a, b) => b * NA + a;
-    const BI = (NA - 1) / 2, BJ = (NB - 1) / 2;       // Häuserblöcke (2 x 2 Knoten)
-    // Autobahn A1: ganz im Süden quer über die Karte, ohne Straßen drumherum, nur über Auffahrten erreichbar
-    const LAKE_A = 212;                                 // der See beginnt ab dieser Spalte, südlich der A1
+    const BI = (NA - 1) / 2, BJ = (NB - 1) / 2;
+    const LAKE_A = 212;
     const ROAD = {
-      alley:   { width: 60,  limit: 2.8, rank: 1 },     // Geschwindigkeiten in px/Frame (x13 = km/h)
+      alley:   { width: 60,  limit: 2.8, rank: 1 },
       main:    { width: 110, limit: 4.4, rank: 2 },
       country: { width: 90,  limit: 6.2, rank: 1.8 },
       ramp:    { width: 80,  limit: 3.6, rank: 1.5 },
       hwy:     { width: 220, limit: 9.2, rank: 3 }
     };
 
-    // Städte (Rasterlinien, jeweils gerade Zahlen): bekommen ein Straßenraster mit Häuserblöcken
     const TOWNS = [
       { id: "suburb",   name: L("VORSTADT", "SUBURB"),     a0: 0,   a1: 36,  b0: 10, b1: 36, alley: 0.25, bonus: 0 },
       { id: "downtown", name: L("INNENSTADT", "DOWNTOWN"), a0: 36,  a1: 68,  b0: 8,  b1: 36, alley: 0.6,  bonus: 250 },
@@ -598,12 +565,10 @@
       return RURAL[biomeOf(Math.round(a), Math.round(b))];
     }
 
-    // ----- Geschwungene Straßen: A1, Auffahrten und Landstraßen sind Splines und laufen frei über die Karte -----
     const HWY_X0 = nodeX(8), HWY_X1 = nodeX(258);
     const hwyY = x => 14250 + 560 * Math.sin(x / 9000 * 6.2832 + 0.6) + 240 * Math.sin(x / 3700 * 6.2832 + 2.1);
     const hwySlope = x => (hwyY(x + 10) - hwyY(x - 10)) / 20;
-    const TUNNEL = { x0: nodeX(168), x1: nodeX(178) };           // Tunnel durch die Berge
-    // Ausfahrten der A1: x-Position an der A1, Zielknoten im Raster (Stadtrand) und Beschilderung
+    const TUNNEL = { x0: nodeX(168), x1: nodeX(178) };
     const EXIT_DEFS = [
       { x: nodeX(8),   to: [8, 36],   de: "VORSTADT", en: "SUBURB" },
       { x: nodeX(30),  to: [30, 36],  de: "VORSTADT", en: "SUBURB" },
@@ -616,27 +581,26 @@
       { x: nodeX(250), to: [250, 36], de: "SEEBAD", en: "SEASIDE" },
       { x: nodeX(258), to: [258, 36], de: "SEEBAD", en: "SEASIDE" }
     ];
-    const REST_X = [nodeX(104), nodeX(156)];        // Raststätten (Schleife neben der A1)
-    const FARM_X = nodeX(96);                       // Zufahrt zum Bauernhof südlich der A1
+    const REST_X = [nodeX(104), nodeX(156)];
+    const FARM_X = nodeX(96);
     const GRIDN = (a, b) => net.nodes[nid(a, b)];
-    const GARAGE_BLOCK = { i: 3, j: 17 };       // Startblock am Südrand der Vorstadt
+    const GARAGE_BLOCK = { i: 3, j: 17 };
     const START = { x: 360, y: 315 };
 
     const net = { nodes: [], edges: [], marks: [] };
     const stopLines = [];
     const lightNodes = [];
-    const decor = [];                 // reine Dekoration ohne Kollision
-    const props = [];                 // kleine feste Objekte (geparkte Autos, Container, Zapfsäulen …)
-    const lots = [];                  // Bodenflächen (Parkplatz, Park, Platz, Feld, Wald, See …)
-    const rocks = [];                 // Felsen in den Bergen
-    const solids = new Map();         // Kollisionsraster
+    const decor = [];
+    const props = [];
+    const lots = [];
+    const rocks = [];
+    const solids = new Map();
     const roadGrid = new Map();
     const CELL = 400;
     let simTime = 0;
     let minimapCache = null;
     let blocks = [];
 
-    // Feste Zufallsfolge, damit die Welt bei jedem Laden gleich aussieht
     let rngState = 1337;
     const sr = () => {
       rngState = (rngState + 0x6D2B79F5) | 0;
@@ -674,7 +638,6 @@
             forest: "#2f5238", meadow: "#59814f", rockground: "#6d6a62", water: "#3f7fb2", sand: "#d8c58e", rock: ["#6b6a66", "#8f8c84"] };
     }
 
-    // ----- Kollisionsraster -----
     function addSolid(item, x0, y0, x1, y1) {
       for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) {
         for (let cy = Math.floor(y0 / CELL); cy <= Math.floor(y1 / CELL); cy++) {
@@ -706,7 +669,6 @@
       return false;
     }
 
-    // ----- Straßen -----
     function addRoadRect(x, y, w, h, type) {
       const r = { x, y, w, h, type };
       roads.push(r);
@@ -720,7 +682,6 @@
       }
     }
 
-    // Gerades Stück einer geschwungenen Straße (Mittellinie, halbe Breite)
     function addRoadSeg(x1, y1, x2, y2, hw, type) {
       const r = { seg: true, x1, y1, x2, y2, hw, type };
       for (let cx = Math.floor((Math.min(x1, x2) - hw) / CELL); cx <= Math.floor((Math.max(x1, x2) + hw) / CELL); cx++) {
@@ -748,7 +709,6 @@
       return false;
     }
 
-    // Straße innerhalb von pad Pixeln um (px, py)? (für Bäume, Felsen, Bauernhöfe)
     function roadNear(px, py, pad) {
       for (let cx = Math.floor((px - pad) / CELL); cx <= Math.floor((px + pad) / CELL); cx++) {
         for (let cy = Math.floor((py - pad) / CELL); cy <= Math.floor((py + pad) / CELL); cy++) {
@@ -771,7 +731,6 @@
       return 15;
     }
 
-    // ----- Geschwungene Straßen erzeugen -----
     const curveRoads = [], curveChunks = [], tunnelSegs = [], restLots = [], noFill = [], hwyNodes = [], customNodes = new Map();
     let farmSite = null, exitSigns = [], tunnelBox = null;
 
@@ -784,7 +743,6 @@
       return n;
     }
 
-    // Catmull-Rom-Spline durch die Kontrollpunkte, danach nach Bogenlänge im Abstand step neu abgetastet
     function splinePts(ctrl, step) {
       const dense = [];
       for (let i = 0; i < ctrl.length - 1; i++) {
@@ -809,7 +767,6 @@
       return out;
     }
 
-    // Zwischenpunkte seitlich versetzen: die Straße schlängelt sich zwischen den Eckpunkten
     function windingCtrl(points, step, amp) {
       const out = [points[0]];
       for (let i = 0; i < points.length - 1; i++) {
@@ -824,7 +781,6 @@
       return out;
     }
 
-    // Straße als Kette kurzer Abschnitte; Start-/Endknoten dürfen vorhandene Knoten sein. typeFn(u, v) liefert den Typ je Abschnitt.
     function addCurve(links, ctrl, startNode, endNode, typeFn) {
       const pts = splinePts(ctrl, 120);
       const ns = pts.map((pt, i) => i === 0 && startNode ? startNode : i === pts.length - 1 && endNode ? endNode : addCustomNode(pt[0], pt[1]));
@@ -846,27 +802,23 @@
       for (const n of hwyNodes) { const d = Math.abs(n.x - x); if (d < bd) { bd = d; best = n; } }
       return best;
     };
-    // Nahe der A1 sind die Straßen Auffahrten, weiter weg Landstraßen
     const rampNear = H => (u, v) => Math.hypot(u.x - H.x, u.y - H.y) < 700 || Math.hypot(v.x - H.x, v.y - H.y) < 700 ? "ramp" : "country";
 
     function buildCurvedRoads(links) {
       curveRoads.length = 0; tunnelSegs.length = 0; restLots.length = 0; noFill.length = 0; hwyNodes.length = 0; customNodes.clear();
       exitSigns = []; farmSite = null;
 
-      // Autobahn A1 quer über die ganze Karte
       const hc = [];
       for (let x = HWY_X0; x < HWY_X1; x += 600) hc.push([x, hwyY(x)]);
       hc.push([HWY_X1, hwyY(HWY_X1)]);
       hwyNodes.push(...addCurve(links, hc, null, null, () => "hwy"));
 
-      // Ausfahrten zu den Orten
       for (const d of EXIT_DEFS) {
         const H = hwyNodeAt(d.x), T = GRIDN(d.to[0], d.to[1]);
         addCurve(links, windingCtrl([[H.x, H.y], [H.x + 120, H.y - 190], [T.x, T.y]], 1400, 230), H, T, rampNear(H));
         exitSigns.push({ node: hwyNodeAt(d.x - 400), de: d.de, en: d.en });
       }
 
-      // Raststätten: Schleife neben der A1 an einer möglichst geraden Stelle, Tankstelle dahinter
       for (const xt of REST_X) {
         let best = xt, bs = 1e9;
         for (let x = xt - 1500; x <= xt + 1500; x += 100) {
@@ -894,7 +846,6 @@
         exitSigns.push({ node: hwyNodeAt(best - 400), de: "RASTHOF", en: "REST STOP" });
       }
 
-      // Zufahrt zum Bauernhof (Sackgasse südlich der A1)
       {
         const H = hwyNodeAt(FARM_X);
         const ns = addCurve(links, [[H.x, H.y], [H.x + 150, H.y + 260], [H.x + 380, H.y + 800], [H.x + 260, H.y + 1400]], H, null, rampNear(H));
@@ -904,16 +855,14 @@
         exitSigns.push({ node: hwyNodeAt(FARM_X - 400), de: "BAUERNHOF", en: "FARM" });
       }
 
-      // Landstraßen zwischen den Orten
-      const N1 = GRIDN(52, 8), V1 = GRIDN(184, 12);                      // Nordroute: Innenstadt -> Dorf
+      const N1 = GRIDN(52, 8), V1 = GRIDN(184, 12);
       addCurve(links, windingCtrl([[N1.x, N1.y], [19500, 1500], [30000, 1250], [42000, 1900], [50000, 3100], [57000, 3700], [V1.x, V1.y]], 2200, 350), N1, V1, () => "country");
-      const V2 = GRIDN(196, 12), R1 = GRIDN(236, 10);                    // Dorf -> Seebad
+      const V2 = GRIDN(196, 12), R1 = GRIDN(236, 10);
       addCurve(links, windingCtrl([[V2.x, V2.y], [73500, 2800], [78500, 2000], [R1.x, R1.y]], 2200, 300), V2, R1, () => "country");
-      const I1 = GRIDN(90, 24), H3 = hwyNodeAt(nodeX(112));              // Industrie -> A1
+      const I1 = GRIDN(90, 24), H3 = hwyNodeAt(nodeX(112));
       addCurve(links, windingCtrl([[I1.x, I1.y], [34000, 9800], [37500, 11200], [38800, 12600], [H3.x, H3.y]], 1800, 300), I1, H3, rampNear(H3));
     }
 
-    // Zeichen-Abschnitte: je 8 Straßenstücke als ein Pfad, inklusive vorberechneter Fahrbahnmarkierungen
     function makeChunk(type, ns) {
       const pts = ns.map(n => [n.x, n.y]);
       const nrm = pts.map((pt, i) => {
@@ -952,12 +901,10 @@
         links.push({ u, v, type });
       };
 
-      // Städte: Hauptstraßen auf allen geraden Rasterlinien
       for (const T of TOWNS) {
         for (let b = T.b0; b <= T.b1; b += 2) for (let a = T.a0; a < T.a1; a++) link(a, b, a + 1, b, "main");
         for (let a = T.a0; a <= T.a1; a += 2) for (let b = T.b0; b < T.b1; b++) link(a, b, a, b + 1, "main");
       }
-      // Gassen halbieren manche Blöcke (der Startblock an der Garage bleibt frei)
       blocks = [];
       for (let i = 0; i < BI; i++) {
         blocks[i] = [];
@@ -999,7 +946,6 @@
         else addRoadRect(A.x - w / 2, Math.min(A.y, B.y), w, len, l.type);
       }
 
-      // Kreuzungsquadrate füllen Ecken und Enden
       for (const n of nodes) {
         if (!n.out.length || n.custom) continue;
         n.clear = n.maxW / 2 + 6;
@@ -1010,16 +956,14 @@
         const hasHwy = n.out.some(e => e.type === "hwy");
         if (!hasHwy && mainX > 0 && mainY > 0) {
           n.ctrl = "light";
-          // "Grüne Welle" Richtung Osten/Süden: Versatz = Fahrzeit zwischen zwei Kreuzungen (ca. 2,65 s)
           n.phase = ((-(n.a + n.b) * 1.325) % 18 + 18) % 18;
           lightNodes.push(n);
         }
       }
 
-      // Vorfahrtsregeln je Zufahrt + Haltelinien
       for (const e of edges) {
         const n = e.to;
-        if (n.out.length < 3 || e.custom) continue;         // keine Kreuzung, nur Kurve/Durchfahrt (Landstraßen und Auffahrten ohne Vorfahrtsregeln)
+        if (n.out.length < 3 || e.custom) continue;
         let y = null;
         if (n.ctrl === "light" && e.rank === 2) y = "light";
         else if (e.rank < n.maxRank) y = "sign";
@@ -1032,7 +976,6 @@
         }
       }
 
-      // Fahrbahnmarkierungen (Enden vor Kreuzungen gekürzt)
       for (let i = 0; i < edges.length; i += 2) {
         const e = edges[i];
         if (e.custom) continue;
@@ -1054,7 +997,6 @@
       }
     }
 
-    // ----- A*-Routensuche -----
     function findPath(start, goal, avoid) {
       const g = new Map([[start.id, 0]]), from = new Map(), closed = new Set();
       const heap = [[0, start]];
@@ -1071,7 +1013,7 @@
         if (closed.has(n.id)) continue;
         closed.add(n.id);
         for (const e of n.out) {
-          if (avoid && n === start && e.to === avoid) continue;      // keine Wende direkt am Start
+          if (avoid && n === start && e.to === avoid) continue;
           const cost = g.get(n.id) + e.len / e.limit;
           if (cost < (g.get(e.to.id) ?? Infinity)) {
             g.set(e.to.id, cost); from.set(e.to.id, n);
@@ -1110,7 +1052,6 @@
       return best;
     }
 
-    // ----- Bebauung: Blöcke, Läden, Parks, Tankstellen, Deko -----
     function overlaps(x, y, w, h, r) { return r && x < r.x + r.w && x + w > r.x && y < r.y + r.h && y + h > r.y; }
 
     function addBuilding(x, y, w, h, color, kind, label, front, awning, ht) {
@@ -1127,7 +1068,6 @@
       const m = Math.min(dW, dE, dN, dS);
       const front = m === dN ? "n" : m === dS ? "s" : m === dW ? "w" : "e";
       const r = sr(), id = T.id;
-      // Läden gibt es nur an den Straßenfronten, in der Innenstadt und im Seebad häufiger, in der Industrie kaum
       const shopP = id === "downtown" ? (cbd ? 0.25 : 0.4) : id === "resort" ? 0.55 : id === "industry" ? 0.05 : 0.2;
       if (m < 8 && r < shopP && w >= 70 && h >= 60) {
         addBuilding(x, y, w, h, pick(pal.build), "shop", pick(SHOP_SETS[id] || SHOP_SETS.downtown), front, pick(AWNINGS));
@@ -1183,7 +1123,6 @@
       }
     }
 
-    // Wohngrundstücke mit Rasen, Haus, Bäumen, Auto in der Einfahrt und manchmal Pool
     function fillPlots(T, x, y, w, h, reserved) {
       const pal = palette();
       const size = T.id === "village" ? 190 : 165;
@@ -1232,7 +1171,7 @@
         splitLeaves(x, y, w, h, leaves, 0);
         for (const [lx, ly, lw, lh] of leaves) {
           if (overlaps(lx, ly, lw, lh, reserved)) continue;
-          if (sr() < (T.id === "downtown" ? 0.06 : 0.12)) {   // Hinterhof mit Baum und Bank
+          if (sr() < (T.id === "downtown" ? 0.06 : 0.12)) {
             addTree(lx + lw / 2, ly + lh / 2, 18);
             decor.push({ k: "bench", x: lx + lw / 2 + 24, y: ly + lh / 2 });
             continue;
@@ -1338,7 +1277,6 @@
       }
     }
 
-    // Land außerhalb der Städte: Felder, Wiesen, Wald, Felsen. Nahe der Straßen dichter, weiter weg etwas lichter.
     function fillRural(i, j) {
       const x = nodeX(2 * i), y = nodeY(2 * j), w = 2 * PITCH, h = 2 * PITCH;
       const cxm = x + w / 2, cym = y + h / 2;
@@ -1364,7 +1302,7 @@
       const scatter = (n, pine, rmin, rvar) => { for (let k = 0; k < n; k++) { const p = spot(60, rmin + rvar); if (p) addTree(p[0], p[1], rmin + sr() * rvar, pine ? 1 : 0); } };
       if (kind === "forest") {
         scatter(Math.round(52 * dens), bio === "mountain", 15, 10);
-        if (sr() < 0.05 && !roadNear(cxm, cym, 200)) {          // einsame Hütte im Wald
+        if (sr() < 0.05 && !roadNear(cxm, cym, 200)) {
           addBuilding(cxm - 30, cym - 24, 60, 48, pick(palette().roof), "house", null, "s", null);
         }
       } else if (kind === "rock") {
@@ -1379,7 +1317,7 @@
           addBuilding(cxm + 50, cym - 50, 54, 46, pick(palette().roof), "house", null, "s", null);
           decor.push({ k: "tank", x: cxm + 60, y: cym + 50, r: 22 });
           addSolidCircle(cxm + 60, cym + 50, 22);
-        } else scatter(Math.round(7 * dens), false, 11, 6);     // Hecken und Feldbäume
+        } else scatter(Math.round(7 * dens), false, 11, 6);
       } else {
         scatter(Math.round(14 * dens), false, 12, 10);
         if (sr() < 0.07 && !roadNear(cxm, cym, 260)) decor.push({ k: "pond", x: cxm, y: cym, rx: 70 + sr() * 60, ry: 45 + sr() * 30 });
@@ -1388,8 +1326,7 @@
     }
 
     function generateWorld() {
-      const lv = 55, gap = 20;       // halbe Breite einer Hauptstraße + Gehweg/Abstand zu den Gebäuden
-      // Der Startblock lässt Garage und Ausfahrt frei
+      const lv = 55, gap = 20;
       const gx0 = nodeX(2 * GARAGE_BLOCK.i) + lv + gap, gy0 = nodeY(2 * GARAGE_BLOCK.j) + lv + gap;
       garage = { x: gx0 + 60, y: gy0 + 60, w: 240, h: 170, color: "#4a4a4a", label: "GARAGE" };
       START.x = garage.x + 130; START.y = garage.y + 85;
@@ -1410,7 +1347,6 @@
         }
       }
 
-      // Raststätten und Bauernhof (liegen über dem Bodenbelag des Landes)
       for (const l of restLots) fillGas(l.x, l.y, l.w, l.h, t("RASTHOF"));
       if (farmSite) {
         const f = farmSite;
@@ -1421,7 +1357,6 @@
         addSolidCircle(f.x + 90, f.y + 60, 22);
       }
 
-      // Tunnel: Mauern (Kollision) links und rechts der A1 im Gebirge
       tunnelSegs.length = 0;
       for (let i = 0; i < net.edges.length; i += 2) {
         const e = net.edges[i];
@@ -1434,19 +1369,17 @@
 
       tunnelBox = tunnelSegs.length ? [TUNNEL.x0 - 200, Math.min(...tunnelSegs.map(g => Math.min(g.y1, g.y2))) - 200, TUNNEL.x1 - TUNNEL.x0 + 400, Math.max(...tunnelSegs.map(g => Math.max(g.y1, g.y2))) - Math.min(...tunnelSegs.map(g => Math.min(g.y1, g.y2))) + 400] : null;
 
-      // See im Südosten, unterhalb der A1
       const lakeX = nodeX(LAKE_A), lakeY = nodeY(45);
       lots.push({ x: lakeX, y: lakeY - 170, w: world.width - lakeX, h: 170, kind: "sand" });
       lots.push({ x: lakeX, y: lakeY, w: world.width - lakeX, h: world.height - lakeY, kind: "water" });
       addSolidRect(lakeX, lakeY, world.width - lakeX, world.height - lakeY);
 
-      // Straßenmöbel: Laternen, Straßenbäume, Haltestellen, Leitplanken an der Autobahn
       for (let i = 0; i < net.edges.length; i += 2) {
         const e = net.edges[i];
         const w = ROAD[e.type].width;
         const nx = -e.dy, ny = e.dx;
         if (e.type === "hwy") {
-          if (Math.min(e.from.x, e.to.x) >= TUNNEL.x0 && Math.max(e.from.x, e.to.x) <= TUNNEL.x1) continue;     // im Tunnel keine Leitplanken
+          if (Math.min(e.from.x, e.to.x) >= TUNNEL.x0 && Math.max(e.from.x, e.to.x) <= TUNNEL.x1) continue;
           for (const side of [-1, 1]) {
             const blocked = n => n.out.some(o => o.type !== "hwy" && (o.dx * nx + o.dy * ny) * side > 0.5);
             if (blocked(e.from) || blocked(e.to)) continue;
@@ -1474,13 +1407,11 @@
         }
       }
 
-      // Hinweisschilder vor den Ausfahrten der A1
       for (const sg of exitSigns) {
         const sl = hwySlope(sg.node.x), l = Math.hypot(sl, 1);
         decor.push({ k: "sign", x: sg.node.x + sl / l * 150, y: sg.node.y - 150 / l, text: L(sg.de, sg.en) });
       }
 
-      // Garage am Start; die Westseite ist die offene Ausfahrt
       const wall = 16;
       for (const [gx, gy, gw, gh] of [[garage.x, garage.y, garage.w, wall], [garage.x, garage.y + garage.h - wall, garage.w, wall], [garage.x + garage.w - wall, garage.y, wall, garage.h]]) {
         buildings.push([gx, gy, gw, gh, garage.color, "wall", null, null, null, 0]);
@@ -1516,7 +1447,6 @@
       const moon = currentLevel === "moon";
       m.fillStyle = moon ? "#14141f" : "#2f4a35";
       m.fillRect(0, 0, w, h);
-      // Landschaft grob andeuten: Wald, Berge, See
       m.fillStyle = moon ? "#191925" : "#28402e"; m.fillRect(nodeX(92) * sx, 0, (nodeX(140) - nodeX(92)) * sx, h);
       m.fillStyle = moon ? "#262633" : "#47493f"; m.fillRect(nodeX(140) * sx, 0, (nodeX(200) - nodeX(140)) * sx, h);
       m.fillStyle = moon ? "#0d0d18" : "#2e5f86"; m.fillRect(nodeX(LAKE_A) * sx, nodeY(45) * sy, w - nodeX(LAKE_A) * sx, h - nodeY(45) * sy);
@@ -1540,7 +1470,6 @@
       minimapCache = cv;
     }
 
-    // Räumlicher Index für das Zeichnen: nur Objekte in Bildnähe werden durchlaufen (die Welt ist riesig)
     const IDX = 1024;
     const IX = {};
     function buildIndex(list, bounds, maxSize) {
@@ -1555,7 +1484,7 @@
       return { cells, always, pad: maxSize };
     }
     function queryIndex(ix) {
-      if (!ix) return [];               // Karte noch nicht erzeugt
+      if (!ix) return [];
       const out = ix.always.slice();
       const x0 = Math.floor((viewX - ix.pad) / IDX), x1 = Math.floor((viewX + viewW) / IDX);
       const y0 = Math.floor((viewY - ix.pad) / IDX), y1 = Math.floor((viewY + viewH) / IDX);
@@ -1567,7 +1496,6 @@
       }
       return out;
     }
-    // Umrisse der Dekorationsobjekte (links oben, Breite, Höhe)
     function decorBox(d) {
       if (d.k === "rail") return [Math.min(d.x1, d.x2) - 6, Math.min(d.y1, d.y2) - 6, Math.abs(d.x2 - d.x1) + 12, Math.abs(d.y2 - d.y1) + 12];
       if (d.rx) return [d.x - d.rx - 4, d.y - d.ry - 4, d.rx * 2 + 8, d.ry * 2 + 8];
@@ -1598,7 +1526,6 @@
       spawnCoins();
       buildIndexes();
       buildMinimapCache();
-      // Start in der Garage, Verkehr rund um den Start
       player.x = START.x; player.y = START.y; player.angle = Math.PI; player.vx = 0; player.vy = 0;
       for (let i = 0; i < 50; i++) trySpawnNpc(500, 3200);
     }
@@ -1608,12 +1535,10 @@
       generateMap();
     }
 
-    // ===================== NPC-Verkehr =====================
     const NPC_COLORS = ["#ffc857", "#d68cff", "#ff986b", "#9be564", "#5ec8ff", "#e8e8e8", "#c0392b", "#2d7dd2"];
     const NPC_MOON_COLORS = ["#c0c0c0", "#b0c4de", "#dcdcdc", "#f0f8ff", "#e6e6fa"];
     const VEHICLE_LENGTH = { car: 32, van: 38, truck: 58, bus: 68 };
 
-    // Ampelzyklus 18 s: 8 s Ost-West grün, 1 s Rot für alle, 8 s Nord-Süd grün, 1 s Rot für alle
     function lightIsGreen(n, axis) {
       const t = (simTime + n.phase) % 18;
       return axis === "x" ? t < 8 : (t >= 9 && t < 17);
@@ -1633,14 +1558,13 @@
       e.cars.push(c);
       c.lane = Math.min(c.lane, e.lanes - 1);
       c.cleared = false; c.signOK = false; c.wait = 0;
-      // Abbiegen: nächste Kante und Richtung (für Blinker und Tempo)
       c.nextEdge = null; c.turn = 0;
       const nextNode = c.path[c.pi + 1];
       if (nextNode) {
         c.nextEdge = e.to.out.find(o => o.to === nextNode) || null;
         if (c.nextEdge) {
           const cross = e.dx * c.nextEdge.dy - e.dy * c.nextEdge.dx, dot = e.dx * c.nextEdge.dx + e.dy * c.nextEdge.dy;
-          c.turn = dot < -0.5 ? 2 : Math.abs(cross) > 0.5 ? Math.sign(cross) : 0;   // 1 = rechts, -1 = links
+          c.turn = dot < -0.5 ? 2 : Math.abs(cross) > 0.5 ? Math.sign(cross) : 0;
         }
       }
     }
@@ -1664,7 +1588,6 @@
       const e = n.out[Math.floor(Math.random() * n.out.length)];
       if (!e || e.len < 80) return false;
       const s = 20 + Math.random() * (e.len - 100);
-      // Neue Autos erscheinen nur außerhalb des sichtbaren Bereichs, direkt auf ihrer Fahrspur (kein Springen zwischen den Spuren)
       const seen = Math.hypot(canvas.width, canvas.height) / Math.max(0.3, run.zoom) / 2 + 200;
       minDist = Math.max(minDist, seen); maxDist = Math.max(maxDist, minDist + 1800);
       const lane0 = e.type === "hwy" ? (Math.random() < 0.5 ? 0 : 1) : 0;
@@ -1687,7 +1610,7 @@
         path: null, pi: 0, dest: null, nextEdge: null, turn: 0, cleared: false, signOK: false, wait: 0, idle: 0, braking: false
       };
       if (!newDestination(c, e.to, e.from)) return false;
-      c.path.unshift(e.from);            // c.path[0] = Ziel der aktuellen Kante wird über pi geführt
+      c.path.unshift(e.from);
       c.pi = 1;
       setNpcEdge(c, e);
       npcs.push(c);
@@ -1708,7 +1631,6 @@
       if (dp > 4200) return false;
 
       if (c.pushed) {
-        // frei rutschendes Auto: reibt aus, prallt an Hindernissen ab, fährt nach kurzer Ruhe wieder los
         c.x += c.vx * dt; c.y += c.vy * dt; c.angle += c.va * dt;
         const f = Math.pow(0.94, dt);
         c.vx *= f; c.vy *= f; c.va *= Math.pow(0.9, dt);
@@ -1722,11 +1644,9 @@
       let vt = e.limit * c.mult;
       if (c.turn !== 0 && e.len - c.s < 150) vt = Math.min(vt, c.turn === 2 ? 1.2 : 2.3);
 
-      // Abstand zum Vordermann (gleiche Spur, auch auf der nächsten Kante) und zum Spieler
       let gap = Infinity, leadSpeed = 0;
       for (const o of e.cars) {
         if (o === c || o.s <= c.s) continue;
-        // andere Spur zählt nur, wenn beide gleich in dieselbe Abzweigung einbiegen (Spuren laufen dort zusammen)
         if (o.lane !== c.lane && !(c.nextEdge && o.nextEdge === c.nextEdge && e.len - c.s < 220)) continue;
         const g = o.s - c.s - (o.length + c.length) / 2 - 6;
         if (g < gap) { gap = g; leadSpeed = o.speed; }
@@ -1747,17 +1667,16 @@
           if (g < gap) { gap = g; leadSpeed = 0; }
         }
       }
-      // alle anderen Autos (auch auf kreuzenden Straßen oder anderen Spuren) nach ihrer echten Position beachten
       for (const o of npcs) {
         if (o === c) continue;
         const ox = o.x - c.x, oy = o.y - c.y;
         const a = ox * e.dx + oy * e.dy;
-        if (a <= 0 || a > Math.min(320, 110 + c.speed * 30)) continue;      // schneller = weiter vorausschauen
+        if (a <= 0 || a > Math.min(320, 110 + c.speed * 30)) continue;
         if (Math.abs(-ox * e.dy + oy * e.dx) > 20 + a * 0.04) continue;
         const g = a - (o.length + c.length) / 2 - 6;
         if (g < gap) { gap = g; leadSpeed = o.pushed ? 0 : Math.max(0, o.speed * Math.cos(o.angle - c.angle)); }
       }
-      for (const an of trafficAnchors) {          // Spieler (auch die anderen Online-Fahrer) vor dem Auto beachten
+      for (const an of trafficAnchors) {
         const rx = an.x - c.x, ry = an.y - c.y;
         const ahead = rx * e.dx + ry * e.dy, lat = Math.abs(-rx * e.dy + ry * e.dx);
         if (ahead > 0 && ahead < 110 && lat < 24) {
@@ -1767,7 +1686,6 @@
       }
       if (gap < Infinity) vt = Math.min(vt, gap < 4 ? leadSpeed * 0.5 : leadSpeed * 0.9 + Math.sqrt(2 * 0.04 * (gap - 4)));
 
-      // Haltelinie: rote Ampel, Stoppschild/Vorfahrt achten
       if (e.yield && !c.cleared) {
         const d = e.len - e.to.clear - c.length / 2 - c.s;
         if (d < 0.5 && (e.yield === "light" ? lightIsGreen(e.to, e.axis) : c.signOK)) c.cleared = true;
@@ -1785,7 +1703,7 @@
       }
 
       c.braking = vt < c.speed - 0.05;
-      c.speed = Math.max(0, c.speed + clamp(vt - c.speed, -(gap < 8 ? 0.25 : 0.08) * dt, 0.0105 * dt));   // Notbremsung bei sehr kleinem Abstand   // ca. 8 km/h pro Sekunde, wie ein normaler Pkw
+      c.speed = Math.max(0, c.speed + clamp(vt - c.speed, -(gap < 8 ? 0.25 : 0.08) * dt, 0.0105 * dt));
       c.s += c.speed * dt;
       c.idle = c.speed < 0.05 ? c.idle + sec : 0;
       if (c.idle > 45 && dp > 700) return false;
@@ -1794,7 +1712,6 @@
         const node = e.to;
         let next = null;
         if (node === c.dest) {
-          // Ziel erreicht: sichtbare Wagen fahren zum nächsten Ziel weiter, unsichtbare verschwinden
           if (dp < 700 && newDestination(c, node, e.from)) next = node.out.find(o => o.to === c.path[1]);
           else return false;
         } else next = c.nextEdge;
@@ -1803,7 +1720,6 @@
         c.s -= e.len;
         c.pi++;
         setNpcEdge(c, next);
-        // Sprung zwischen den Spuren glätten (jx/jy klingen ab)
         const off2 = laneOffset(next, c.lane);
         c.jx = oldX - (next.from.x + next.dx * c.s - next.dy * off2);
         c.jy = oldY - (next.from.y + next.dy * c.s + next.dx * off2);
@@ -1818,7 +1734,6 @@
       return true;
     }
 
-    // Weggeschobenes Auto wieder in den Verkehr einreihen: nächste passende Fahrspur suchen
     function rejoinNetwork(c) {
       const n = nearestNode(c.x, c.y);
       if (!n) return false;
@@ -1887,13 +1802,11 @@
       if (!car) return;
 
       if (!ownedCars.has(index)) {
-        // Dev-Modus: Auto kostenlos freigeschaltet (wird dann nicht gespeichert)
         if (!devMode && credits < car.price) return;
         if (!devMode) credits -= car.price; else devUsed = true;
         ownedCars.add(index);
 
 
-        // Rakete (Index 7) schaltet Moon-Level frei
         if (index === 7 || devMode) {
           moonLevelUnlocked = true;
           if (index === 7 && !devMode) devLog("🌙 Moon-Level entsperrt!");
@@ -1910,14 +1823,11 @@
       if (workshopOpen) renderWorkshop();
     }
 
-    // Anzeige oben rechts: aktuelle Zone (Vorstadt, Innenstadt, Autobahn …) bzw. Mond
     let currentZone = null;
     function setLevelLabel() {
       levelInfo.textContent = currentLevel === "moon" ? L("🌙 MOND", "🌙 MOON") : (currentZone ? currentZone.name : TOWNS[0].name);
     }
 
-    // ---------- Tuning (Werkstatt) ----------
-    // Jede Stufe verbessert das Auto, die Kosten steigen mit Stufe und Fahrzeugpreis.
     const UPGRADES = [
       { key: "engine", max: 5, mult: 1.0, name: L("Motor", "Engine"),
         desc: L("Mehr Leistung: schnellere Beschleunigung", "More power: quicker acceleration") },
@@ -1930,17 +1840,15 @@
       { key: "weight", max: 3, mult: 1.2, name: L("Leichtbau", "Weight reduction"),
         desc: L("Weniger Gewicht: Beschleunigung und Wendigkeit", "Less weight: acceleration and agility") }
     ];
-    const upgrades = {};            // Auto-Index -> { engine: 0..5, turbo: 0..3, ... }
+    const upgrades = {};
     const upgradesOf = i => upgrades[i] || (upgrades[i] = { engine: 0, turbo: 0, tires: 0, brakes: 0, weight: 0 });
     const upgradeTotal = i => { const u = upgrades[i]; return u ? Object.values(u).reduce((a, b) => a + b, 0) : 0; };
     const upgradeCost = (i, up) => Math.round((250 + cars[i].price * 0.18) * up.mult * (1 + upgradesOf(i)[up.key] * 0.85) / 10) * 10;
 
-    // Fahrwerte eines Autos inkl. Tuning. a0 und brake in px/Frame² (1 km/h pro Sekunde = 1/780 px/Frame²)
     function carStats(i) {
       const c = cars[i], u = upgradesOf(i);
       const t100 = c.t100 * (1 - 0.055 * u.engine) * (1 - 0.04 * u.turbo) * (1 - 0.03 * u.weight);
       const maxSpeed = c.maxSpeed * (1 + 0.035 * u.turbo + 0.01 * u.weight);
-      // Schub nimmt zur Höchstgeschwindigkeit hin ab: v(t) = vmax * tanh(a0*t/vmax)  ->  0-100 km/h in genau t100 Sekunden
       const a0kmhps = maxSpeed * Math.atanh(Math.min(0.9, 100 / maxSpeed)) / t100;
       const brakeKmhps = (32 + 2.5 * i) * (1 + 0.15 * u.brakes);
       return {
@@ -1950,7 +1858,7 @@
         boostMul: 1 + 0.15 * u.turbo, turbo: u.turbo
       };
     }
-    let ST = carStats(0);           // Werte des gewählten Autos
+    let ST = carStats(0);
 
     function buyUpgrade(key) {
       const up = UPGRADES.find(x => x.key === key), u = upgradesOf(selectedCar);
@@ -1964,8 +1872,6 @@
       sfx.level(Math.min(3, u[key]));
     }
 
-    // ---------- Speichern (localStorage: Geld, Autos, Tuning, entdeckte Orte) ----------
-    // Auf GitHub Pages gibt es keinen Server: der Spielstand liegt im Browser (pro Gerät/Browser), bis die Websitedaten gelöscht werden.
     const SAVE_KEY = "asphaltSave";
     const discovered = new Set();
     let devUsed = false, wiping = false, lastSaved = "";
@@ -1992,7 +1898,7 @@
     }
     function saveGame() {
       if (devMode) devUsed = true;
-      if (devUsed || wiping) return;            // Dev-Modus verfälscht nichts im Spielstand
+      if (devUsed || wiping) return;
       const json = JSON.stringify(snapshot());
       if (json === lastSaved) return;
       try { localStorage.setItem(SAVE_KEY, json); lastSaved = json; } catch {}
@@ -2002,7 +1908,6 @@
     setInterval(saveGame, 3000);
     addEventListener("pagehide", saveGame);
     document.addEventListener("visibilitychange", () => { if (document.hidden) saveGame(); });
-    // Speicher als "dauerhaft" anfragen, damit der Browser den Spielstand nicht von selbst aufräumt
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
 
     function exportSave() {
@@ -2029,7 +1934,6 @@
     document.querySelector("#saveImport").addEventListener("click", importSave);
     document.querySelector("#saveWipe").addEventListener("click", wipeSave);
 
-    // Werkstatt-Fenster
     const workshopPage = document.querySelector("#workshopPage");
     let workshopOpen = false;
     function renderWorkshop() {
@@ -2077,8 +1981,6 @@
     });
     selectCar(selectedCar);
 
-    // Handhelds (Steam Deck, ROG Ally …) senden Tasten UND haben einen Touchscreen:
-    // Touch-Steuerung deshalb nie dauerhaft ausblenden, sobald Touch möglich ist oder benutzt wurde.
     let touchSeen = false;
     function setKeyboardMode() {
       if (settings.touchMode === 1) return;
@@ -2099,7 +2001,13 @@
     addEventListener("keydown", event => {
       const key = event.key.toLowerCase();
 
-      if (key === "escape" && !started && !settingsOpen) { location.href = "../index.html"; return; }   // Startseite: zurück zur Spielauswahl
+      const tgt = event.target;
+      if (tgt && tgt.tagName === "INPUT" && tgt.type === "text") {
+        if (key === "escape") tgt.blur();
+        return;
+      }
+
+      if (key === "escape" && !started && !settingsOpen) { location.href = "../index.html"; return; }
       if (workshopOpen) {
         if (key === "escape" || key === "t") toggleWorkshop();
         return;
@@ -2109,9 +2017,8 @@
         if (started || settingsOpen) toggleSettings();
         return;
       }
-      if (settingsOpen) return;     // im Menü keine Spieleingaben
+      if (settingsOpen) return;
 
-      // Dev-Modus: F12 oder ` (backtick)
       if (key === "f12" || key === "`") {
         event.preventDefault();
         devMode = !devMode;
@@ -2119,7 +2026,6 @@
         return;
       }
 
-      // Dev-Commands
       if (devMode && key === "m") {
         currentLevel = currentLevel === "city" ? "moon" : "city";
         devLog(`Level: ${currentLevel.toUpperCase()}`);
@@ -2185,7 +2091,6 @@
       button.addEventListener("lostpointercapture", release);
     });
 
-    // Zusätzliche Richtungssteuerung per Finger: Position links/rechts der Bildmitte lenkt (Einstellung "fingerSteer")
     let fingerSteer = null;
     {
       let fpid = null;
@@ -2209,7 +2114,6 @@
       let startAngle = 0, startValue = 0, pid = null;
       const angleAt = e => {
         const r = wheelEl.getBoundingClientRect();
-        // das gedrehte Quadrat hat dasselbe Zentrum wie das ungedrehte
         return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2));
       };
       wheelEl.addEventListener("pointerdown", e => {
@@ -2232,7 +2136,6 @@
     }
 
     const startPage = document.querySelector("#startPage");
-    // Anonyme Zählung des Spielstarts mit GoatCounter (Zählpixel: kein Skript, keine Cookies; nicht auf localhost)
     let startCounted = false;
     function countStart() {
       if (startCounted) return;
@@ -2248,16 +2151,13 @@
       startPage.classList.add("hidden");
       resetRun();
       initializeMapLazy();
-      // Handy: beim Start gleich ins echte Vollbild (braucht eine Berührung/Klick, daher hier)
       if (matchMedia("(pointer: coarse)").matches && !document.fullscreenElement && !document.webkitFullscreenElement && !fakeFullscreen) toggleFullscreen();
     }
-    // Eingabemodus aus dem Start-Klick ableiten (nur für diese Sitzung, wird nicht gespeichert)
     let lastPointerType = "";
-    let inputMode = null;   // "touch" | "mouse"
+    let inputMode = null;
     const baseDevice = { touchMode: settings.touchMode, fingerSteer: settings.fingerSteer };
     let lastTouchAt = -1e9;
     addEventListener("pointerdown", e => { lastPointerType = e.pointerType; }, true);
-    // iOS Safari meldet pointerType am Klick teils falsch/leer -> touchstart zusätzlich auswerten
     addEventListener("touchstart", () => { lastTouchAt = performance.now(); lastPointerType = "touch"; }, { capture: true, passive: true });
     function setInputMode(mode) {
       inputMode = mode;
@@ -2301,20 +2201,18 @@
       return dx * dx + dy * dy < radius * radius;
     }
 
-    let hitInfo = null;      // Kontakt mit einem NPC-Auto (Normale, Kontaktpunkt) oder null
+    let hitInfo = null;
 
-    // ===================== Online-Modus: Hitboxen der Fahrzeuge =====================
-    // Jedes Auto hat dieselbe Hitbox: ein gedrehtes Rechteck (30 x 16).
     const CAR_HL = 15, CAR_HW = 8;
-    const HIT_MARGIN = 2;    // kleiner Rand: beide Spieler bemerken den Kontakt sicher, auch bei Netzwerkverzögerung
-    let remoteCars = [];     // andere Fahrer, die gerade kollidieren und gezeichnet werden
-    let remoteChasers = [];  // Verfolger anderer Fahrer (feste Hindernisse für mich)
-    let remoteObstacles = [];// Fahrer + Verfolger: alles, womit ich zusammenstoßen kann
-    let netNpcList = [];     // Verkehr des Hosts (nur wenn ich nicht Host bin)
-    let trafficHost = true;  // simuliere ich den Verkehr? (immer, solange ich allein/offline bin)
-    let trafficAnchors = [player];   // alle Fahrer, um die herum Verkehr entsteht
+    const HIT_MARGIN = 2;
+    let remoteCars = [];
+    let remoteChasers = [];
+    let remoteObstacles = [];
+    let netNpcList = [];
+    let trafficHost = true;
+    let trafficAnchors = [player];
     let nextNpcId = 1;
-    const npcHitOut = new Map();     // Verkehrsauto-ID -> Stoß, der an den Host gemeldet werden muss
+    const npcHitOut = new Map();
     function nearestAnchorDist(x, y) {
       let best = Infinity;
       for (const an of trafficAnchors) {
@@ -2323,13 +2221,12 @@
       }
       return best;
     }
-    const hitOut = new Map();        // Fahrer-ID -> Impuls, der noch an ihn gesendet werden muss
-    const lastOwnHit = new Map();    // Fahrer-ID -> Zeit, zu der ich einen Stoß mit ihm berechnet habe
-    const lastGotHit = new Map();    // Fahrer-ID -> Zeit, zu der er mir einen Stoß gemeldet hat
+    const hitOut = new Map();
+    const lastOwnHit = new Map();
+    const lastGotHit = new Map();
     const incomingHit = { x: 0, y: 0 };
     let lastHitFlush = 0;
 
-    // Überlappung zweier gedrehter Rechtecke (SAT). Die Normale zeigt von B nach A.
     function obbHit(ax, ay, aa, ahl, ahw, bx, by, ba, bhl, bhw) {
       const axes = [
         [Math.cos(aa), Math.sin(aa)], [-Math.sin(aa), Math.cos(aa)],
@@ -2345,10 +2242,10 @@
                    bhw * Math.abs(-nx * Math.sin(ba) + ny * Math.cos(ba));
         const d = dx * nx + dy * ny;
         const overlap = ra + rb - Math.abs(d);
-        if (overlap <= 0) return null;            // trennende Achse gefunden
+        if (overlap <= 0) return null;
         if (overlap < best) {
           best = overlap;
-          const sign = d > 0 ? -1 : 1;           // Normale von B nach A
+          const sign = d > 0 ? -1 : 1;
           bnx = nx * sign; bny = ny * sign;
         }
       }
@@ -2360,7 +2257,6 @@
       const radius = 12;
       if (solidHit(player.x, player.y, radius)) return true;
 
-      // NPC-Autos: genaue Hitbox = gedrehtes Rechteck in Fahrzeuggröße; das Spielerauto zählt als drei kleine Kreise
       const pc = Math.cos(player.angle), ps = Math.sin(player.angle);
       for (const npc of (trafficHost ? npcs : netNpcList)) {
         if (Math.hypot(player.x - npc.x, player.y - npc.y) > npc.length / 2 + 24) continue;
@@ -2369,11 +2265,10 @@
         for (const off of [-9, 0, 9]) {
           const sx = player.x + pc * off, sy = player.y + ps * off;
           const dx = sx - npc.x, dy = sy - npc.y;
-          const lx = dx * nc + dy * ns, ly = -dx * ns + dy * nc;      // in Fahrzeugkoordinaten
+          const lx = dx * nc + dy * ns, ly = -dx * ns + dy * nc;
           const ex = lx - clamp(lx, -hl, hl), ey = ly - clamp(ly, -hw, hw);
           const d2 = ex * ex + ey * ey;
           if (d2 < 7 * 7) {
-            // Normale (vom NPC zum Spieler) in Weltkoordinaten
             let lnx = ex, lny = ey;
             const lm = Math.sqrt(d2);
             if (lm > 0.01) { lnx /= lm; lny /= lm; }
@@ -2385,7 +2280,6 @@
         }
       }
 
-      // Andere Fahrer (Online-Modus): Rechteck gegen Rechteck
       if (remoteObstacles.length && !player.crashed && selectedCar !== 7) {
         for (const r of remoteObstacles) {
           if (Math.abs(player.x - r.x) > 40 || Math.abs(player.y - r.y) > 40) continue;
@@ -2401,15 +2295,13 @@
         player.x > world.width - 15 || player.y > world.height - 15;
     }
 
-    // Anstoßen: Impuls wird zwischen Spieler und NPC aufgeteilt, schwere Fahrzeuge bewegen sich weniger
     const NPC_MASS = { car: 1, van: 1.4, truck: 3, bus: 4 };
     const RESTITUTION = 0.15;
 
     function pushNpc(h) {
       const npc = h.npc, mn = NPC_MASS[npc.kind] || 1;
-      const pnx = -h.nx, pny = -h.ny;                      // Richtung Spieler -> NPC
+      const pnx = -h.nx, pny = -h.ny;
       if (npc.net) {
-        // Auto des Verkehrs-Hosts: nur mein Anteil wirkt hier, der Rest geht als Stoß an den Host
         const vnNet = (player.vx - npc.vx) * pnx + (player.vy - npc.vy) * pny;
         if (vnNet < 0.08) return 0;
         const JN = (1 + RESTITUTION) * vnNet / (1 + 1 / mn);
@@ -2423,20 +2315,19 @@
       }
       const nvx = npc.pushed ? npc.vx : (npc.edge ? npc.edge.dx * npc.speed : 0);
       const nvy = npc.pushed ? npc.vy : (npc.edge ? npc.edge.dy * npc.speed : 0);
-      const vn = (player.vx - nvx) * pnx + (player.vy - nvy) * pny;     // Annäherungsgeschwindigkeit
-      if (vn < 0.08) return 0;                              // nur echte Stöße schieben
+      const vn = (player.vx - nvx) * pnx + (player.vy - nvy) * pny;
+      if (vn < 0.08) return 0;
       const J = (1 + RESTITUTION) * vn / (1 + 1 / mn);
       player.vx -= pnx * J; player.vy -= pny * J;
 
       if (!npc.pushed) {
-        // aus dem Straßenverkehr lösen: ab jetzt frei beweglich
         if (npc.edge) { const i = npc.edge.cars.indexOf(npc); if (i >= 0) npc.edge.cars.splice(i, 1); }
         npc.pushed = true; npc.vx = nvx; npc.vy = nvy; npc.va = 0; npc.restT = 0;
         npc.turn = 0; npc.braking = false;
       }
       const dvx = pnx * J / mn, dvy = pny * J / mn;
       npc.vx += dvx; npc.vy += dvy;
-      npc.va += ((h.cx - npc.x) * dvy - (h.cy - npc.y) * dvx) / (mn * 2500);   // seitlicher Stoß dreht das Auto
+      npc.va += ((h.cx - npc.x) * dvy - (h.cy - npc.y) * dvx) / (mn * 2500);
       npc.va = clamp(npc.va, -0.12, 0.12);
       return vn;
     }
@@ -2448,7 +2339,6 @@
       run.flash = 0.5; run.flashColor = "255,120,40";
       burst(player.x, player.y, 40, ["#ff9a2e", "#ffd166", "#ff4b24", "#ffffff"], 9);
 
-      // Rakete: Fliegt zum Mond!
       if (selectedCar === 7) {
         player.crashed = true;
         player.vx = 0;
@@ -2461,7 +2351,6 @@
         return;
       }
 
-      // Normaler Crash
       player.crashed = true;
       player.vx = 0;
       player.vy = 0;
@@ -2472,7 +2361,6 @@
     }
 
     function respawn() {
-      // Rakete: Zum Mond teleportiert!
       if (selectedCar === 7) {
         currentLevel = "moon";
         moonLevelUnlocked = true;
@@ -2481,7 +2369,6 @@
         devLog("🌙 Angekommen auf dem Mond!");
       }
 
-      // Respawn in der Garage
       player.x = START.x;
       player.y = START.y;
       player.angle = Math.PI;
@@ -2523,8 +2410,6 @@
       lastTrailPosition = { left, right };
     }
 
-    // ---------- Sound ----------
-    // Alles wird live per WebAudio erzeugt (keine Audiodateien, keine Lizenzfragen - frei nutzbar, CC0).
     const sfx = (() => {
       let ac = null, master, engOsc, engOsc2, engGain, ignGain, ignLfo, ignOut, skidGain, sirenOsc, sirenGain, noiseBuf;
       const ok = () => ac && settings.sound;
@@ -2535,18 +2420,15 @@
         if (!AC) return;
         ac = new AC();
         master = ac.createGain(); master.connect(ac.destination);
-        // Rauschen für Zündung, Reifenquietschen und Aufprall
         noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
         const d = noiseBuf.getChannelData(0);
         for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-        // Motor, tiefer Teil: Sägezahn (Grundbrummen) + Sinus eine Oktave darunter, durch Tiefpass
         const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 420;
         engGain = ac.createGain(); engGain.gain.value = 0;
         engOsc = ac.createOscillator(); engOsc.type = "sawtooth";
         engOsc2 = ac.createOscillator(); engOsc2.type = "sine";
         engOsc.connect(lp); engOsc2.connect(lp); lp.connect(engGain); engGain.connect(master);
         engOsc.start(); engOsc2.start();
-        // Zündung: mittelhohes Rauschen, im Takt der Zündungen ein- und ausgeblendet (knatternd)
         const ign = ac.createBufferSource(); ign.buffer = noiseBuf; ign.loop = true;
         const ibp = ac.createBiquadFilter(); ibp.type = "bandpass"; ibp.frequency.value = 1400; ibp.Q.value = 1.2;
         ignGain = ac.createGain(); ignGain.gain.value = 0.5;
@@ -2560,27 +2442,24 @@
         const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1800; bp.Q.value = 3;
         skidGain = ac.createGain(); skidGain.gain.value = 0;
         skid.connect(bp); bp.connect(skidGain); skidGain.connect(master); skid.start();
-        // Sirene
         sirenOsc = ac.createOscillator(); sirenOsc.type = "triangle";
         sirenGain = ac.createGain(); sirenGain.gain.value = 0;
         sirenOsc.connect(sirenGain); sirenGain.connect(master); sirenOsc.start();
       }
 
-      // pro Frame: Motor, Quietschen, Sirene
       function update(speedRatio, sliding, siren, rpm = speedRatio) {
         if (!ac) return;
         const t = ac.currentTime, on = settings.sound;
         master.gain.setTargetAtTime(on ? settings.volume : 0, t, 0.05);
         const r = clamp(rpm, 0, 1.3);
-        const f = 38 + r * 80;                      // tiefes Brummen
-        const fire = 9 + r * 30;                    // Zündungen pro Sekunde
+        const f = 38 + r * 80;
+        const fire = 9 + r * 30;
         engOsc.frequency.setTargetAtTime(f, t, 0.08);
         engOsc2.frequency.setTargetAtTime(f * 0.5, t, 0.08);
         ignLfo.frequency.setTargetAtTime(fire, t, 0.08);
         engGain.gain.setTargetAtTime(started ? 0.22 + r * 0.14 : 0, t, 0.1);
         ignOut.gain.setTargetAtTime(started ? 0.05 + r * 0.07 : 0, t, 0.1);
         skidGain.gain.setTargetAtTime(sliding > 0 ? Math.min(0.2, sliding * 0.25) : 0, t, 0.06);
-        // Sirene: Hi-Lo-Ton, Lautstärke nach Abstand des nächsten Verfolgers
         if (siren > 0) {
           sirenOsc.frequency.setTargetAtTime(Math.floor(t * 1.6) % 2 ? 640 : 860, t, 0.02);
           sirenGain.gain.setTargetAtTime(siren * 0.07, t, 0.1);
@@ -2615,17 +2494,14 @@
         blowoff() { noise(0.22, 0.12, 5000); tone(1800, 0.2, "sine", 0.03, 900); }
       };
     })();
-    // Browser erlauben Ton erst nach einer Berührung/Taste
     for (const ev of ["pointerdown", "keydown", "touchstart"]) addEventListener(ev, () => sfx.init(), { passive: true });
 
-    // Simulierte Gangschaltung (6 Gänge): die Drehzahl steigt in jedem Gang und fällt beim Hochschalten
     let turboGas = false;
     function rpmFraction(speedRatio) {
       if (speedRatio < 0.01) return 0.1;
       return 0.2 + 0.8 * ((speedRatio * 6) % 1);
     }
 
-    // Zone unter dem Auto bestimmen; neue Orte bringen einmalig Geld (wird gespeichert)
     let zoneTimer = 0;
     function updateZone(dt) {
       zoneTimer -= dt;
@@ -2655,7 +2531,6 @@
         : 1);
       run.zoom += (zoomTarget - run.zoom) * Math.min(1, 0.06 * dt);
 
-      // Erwischt: kurzer Bildschirm, danach Neustart des Laufs in der Garage
       if (run.bustTimer > 0) {
         run.bustTimer -= dt / 60;
         if (run.bustTimer <= 0) {
@@ -2669,7 +2544,7 @@
         return;
       }
 
-      if (trafficHost) updateTraffic(dt);        // im Online-Modus simuliert nur der Verkehrs-Host
+      if (trafficHost) updateTraffic(dt);
       updateChase(dt);
       if (run.bustTimer > 0) return;
 
@@ -2693,27 +2568,24 @@
       const forwardY = Math.sin(player.angle);
       const speed = Math.hypot(player.vx, player.vy);
       const forwardSpeed = player.vx * forwardX + player.vy * forwardY;
-      // Querkomponente zu Beginn des Frames: Gas und Bremse zählen nicht als "Querschlupf", sonst würde der Grip einen Teil des Schubs auffressen
       const preSideX = player.vx - forwardX * forwardSpeed, preSideY = player.vy - forwardY * forwardSpeed;
 
       const rawSteer =
         (pressed("left", "a", "arrowleft") ? -1 : 0) +
         (pressed("right", "d", "arrowright") ? 1 : 0);
 
-      // Progressive Lenkung: ein kurzer Tipp bewirkt nur einen winzigen Einschlag,
-      // je länger man hält, desto weiter schlägt das Lenkrad ein. Loslassen zentriert zügig.
-      if (!wheelActive && wheelValue !== 0) {          // Lenkrad federt zurück
+      if (!wheelActive && wheelValue !== 0) {
         wheelValue -= Math.sign(wheelValue) * Math.min(Math.abs(wheelValue), 0.09 * dt);
         wheelEl.style.transform = `rotate(${wheelValue * WHEEL_MAX}rad)`;
       }
       if (wheelActive || wheelValue !== 0) {
-        steerValue = wheelValue * settings.wheelLimit;   // Lenkrad: Einschlag = Drehwinkel, begrenzt
+        steerValue = wheelValue * settings.wheelLimit;
       } else if (fingerSteer !== null) {
         steerValue += (fingerSteer * settings.wheelLimit - steerValue) * Math.min(1, 0.25 * dt);
       } else if (rawSteer === 0) {
         steerValue -= Math.sign(steerValue) * Math.min(Math.abs(steerValue), settings.steerReturn * dt);
       } else if (Math.sign(steerValue) === -rawSteer) {
-        steerValue += rawSteer * settings.steerReverse * dt;          // Gegenlenken geht schneller
+        steerValue += rawSteer * settings.steerReverse * dt;
       } else {
         steerValue += rawSteer * settings.steerRise * dt;
       }
@@ -2721,7 +2593,6 @@
       const steering = Math.sign(steerValue) * Math.pow(Math.abs(steerValue), settings.steerCurve);
       player.steerValue = steerValue;
 
-      // Realistische Beschleunigung: der Schub fällt zur Höchstgeschwindigkeit hin ab (0-100 km/h-Zeit siehe cars/Tuning)
       const gasOn = pressed("gas", "w", "arrowup");
       const vmaxPx = car.maxSpeed / 13 * (run.boost > 0 ? 1.3 : 1);
       const thrustLeft = Math.max(0, 1 - (speed / vmaxPx) ** 2);
@@ -2730,11 +2601,9 @@
         player.vx += forwardX * thrust * dt;
         player.vy += forwardY * thrust * dt;
       }
-      // Turbolader: beim Gaswegnehmen zischt das Schubumluftventil
       if (car.turbo > 0 && turboGas && !gasOn && speed > 4) sfx.blowoff();
       turboGas = gasOn;
 
-      // Boost: lädt sich beim Driften, B / Boost-Knopf zündet ihn (verbraucht die ganze Ladung)
       if (run.drifting) run.boostCharge = Math.min(1, run.boostCharge + dt / 60 * 0.1);
       const boostKey = pressed("boost", "b");
       if (boostKey && !boostHeld && run.boost <= 0 && run.boostCharge >= BOOST_MIN_CHARGE) {
@@ -2759,24 +2628,21 @@
       }
 
       if (pressed("brake", "s", "arrowdown")) {
-        if (forwardSpeed > 0.4) {                      // Bremsen: feste Verzögerung (ca. 32-45 km/h pro Sekunde)
+        if (forwardSpeed > 0.4) {
           const d = Math.min(car.brake * dt, forwardSpeed);
           player.vx -= forwardX * d;
           player.vy -= forwardY * d;
-        } else if (forwardSpeed > -2.2) {              // Rückwärts: langsam, höchstens ca. 28 km/h
+        } else if (forwardSpeed > -2.2) {
           const rev = Math.max(car.a0, 0.008) * 0.7 * dt;
           player.vx -= forwardX * rev;
           player.vy -= forwardY * rev;
         }
       }
 
-      // Drift ist immer aktiv; die Leertaste ist die Handbremse (Hinterräder blockieren: bremst und bricht das Heck aus)
       const handbrake = pressed("drift", " ");
       handbrakeOn = handbrake && speed > 1.2;
       const drifting = speed > 1.2;
 
-      // Das Auto dreht sich nur moderat ein, damit ein kontrollierter Slide
-      // (Querwinkel ca. 30-45 Grad) entsteht statt einer Pirouette
       if (steering && speed > 0.15) {
         const direction = forwardSpeed >= 0 ? 1 : -1;
         const highSpeedDamping = 1 - 0.3 * Math.min(1, speed / (car.maxSpeed / 13));
@@ -2786,10 +2652,8 @@
 
       const sideX = preSideX;
       const sideY = preSideY;
-      // Driftgrip wächst mit dem Querwinkel, so bleibt der Slide beherrschbar
       const driftSlip = speed > 0.5 ? Math.atan2(Math.hypot(sideX, sideY), Math.abs(forwardSpeed)) : 0;
       driftAmount += ((driftSlip > 0.2 || handbrakeOn ? 1 : 0) - driftAmount) * 0.08 * dt;
-      // Bei niedrigem Tempo greift der normale Grip, mit Tempo nimmt der Drift-Grip überhand
       const slideGrip = 0.95 - 0.1 * clamp((driftSlip - 0.4) / 0.5, 0, 1);
       const grip = handbrake
         ? 0.975
@@ -2797,7 +2661,6 @@
       player.vx -= sideX * (1 - grip) * dt;
       player.vy -= sideY * (1 - grip) * dt;
 
-      // Rollwiderstand/Motorbremse nur ohne Gas; abseits der Straße bremsen Gras und Sand zusätzlich
       if (!gasOn) { const roll = Math.pow(0.9993, dt); player.vx *= roll; player.vy *= roll; }
       if (!isOnRoad(player.x, player.y)) { const off = Math.pow(0.9982, dt); player.vx *= off; player.vy *= off; }
       if (handbrake) {
@@ -2819,7 +2682,6 @@
         const kmhAtImpact = Math.hypot(player.vx, player.vy) * 13;
 
         if (hitInfo && hitInfo.npc && selectedCar !== 7) {
-          // andere Autos werden weggeschoben
           const closing = pushNpc(hitInfo) * 13;
           if (closing > 35) {
             sfx.hit(Math.min(1, closing / 120));
@@ -2831,18 +2693,15 @@
           player.y = oldY;
           lastTrailPosition = null;
         } else if (hitInfo && hitInfo.remote) {
-          // anderer Fahrer: jeder Spieler berechnet seinen eigenen Anteil des Stoßes (gleiche Masse)
           const r = hitInfo.remote;
           const closing = -((player.vx - r.vx) * hitInfo.nx + (player.vy - r.vy) * hitInfo.ny);
           const nowMs = performance.now();
-          // Hat der andere Fahrer diesen Stoß schon gemeldet, nicht doppelt anwenden
           if (closing > 0.01 && nowMs - (lastGotHit.get(r.id) || 0) > 250) {
             const J = (1 + RESTITUTION) * closing / 2;
             player.vx += hitInfo.nx * J;
             player.vy += hitInfo.ny * J;
             if (!r.chaser) {
               lastOwnHit.set(r.id, nowMs);
-              // Gegenanteil geht an den anderen Fahrer (wird gebündelt gesendet)
               const out = hitOut.get(r.id) || { jx: 0, jy: 0 };
               out.jx -= hitInfo.nx * J;
               out.jy -= hitInfo.ny * J;
@@ -2855,19 +2714,17 @@
               burst(hitInfo.cx, hitInfo.cy, 8, ["#ffd166", "#ffffff"], 5, true);
             }
           }
-          // Auseinanderschieben, damit sich die Autos nicht ineinander verhaken
           const push = hitInfo.depth * 0.5 + 0.1;
           player.x += hitInfo.nx * push;
           player.y += hitInfo.ny * push;
           if (solidHit(player.x, player.y, 12)) { player.x = oldX; player.y = oldY; }
           lastTrailPosition = null;
         } else if (kmhAtImpact >= 15 && selectedCar === 7) {
-          // Keine Explosion mehr: das Auto bleibt einfach stehen (nur die Rakete startet weiterhin zum Mond)
           startCrash();
         } else {
           if (kmhAtImpact >= 15) {
             sfx.hit(Math.min(1, kmhAtImpact / 120));
-            loseCombo();                 // harter Aufprall unterbricht die Drift-Kombo
+            loseCombo();
             run.shake = Math.max(run.shake, 0.35);
             burst(player.x, player.y, 8, ["#cfcfcf", "#8c7c55"], 3, false);
           }
@@ -2881,8 +2738,6 @@
         const activelyDrifting =
           drifting && Math.abs(steerValue) > 0.2;
 
-        // Drift-Kombo: Punkte (und Geld) werden erst eingelöst, wenn man ~2 s nicht driftet,
-        // ohne zu crashen oder erwischt zu werden. Weitere Drifts davor verlängern die Kombo.
         const slip = speed > 0.5 ? Math.atan2(Math.hypot(sideX, sideY), Math.abs(forwardSpeed)) : 0;
         updateDriftCombo(dt, activelyDrifting, speed, slip);
         driveEffects(dt, Math.hypot(player.vx, player.vy));
@@ -2907,9 +2762,9 @@
       rpmDisplay.textContent = Math.round(850 + rpmFraction(kmh / car.maxSpeed) * 5700);
     }
 
-    let uiScale = 1;     // >1 auf kleinen Bildschirmen: Anzeigen im Canvas werden vergrößert
+    let uiScale = 1;
     let viewX = 0, viewY = 0, viewW = canvas.width, viewH = canvas.height;
-    let camCx = 0, camCy = 0, camRot = 0;     // Kamerazentrum (Welt) und Drehung (rad)
+    let camCx = 0, camCy = 0, camRot = 0;
     const visible = (x, y, w, h) =>
       x + w > viewX && x < viewX + viewW &&
       y + h > viewY && y < viewY + viewH;
@@ -2928,7 +2783,6 @@
         }
       }
 
-      // Bodenflächen (Rasen, Felder, Wald, Parks, Parkplätze, Tankstellen, Plätze, Industrie, See)
       for (const l of queryIndex(IX.lots)) {
         if (!visible(l.x, l.y, l.w, l.h)) continue;
         const k = l.kind;
@@ -2963,7 +2817,6 @@
         }
       }
 
-      // Gehwege (nur in Städten), dann Fahrbahnen (Autobahn dunkler)
       const nearRoads = queryIndex(IX.roads);
       ctx.fillStyle = pal.side;
       for (const r of nearRoads) {
@@ -2978,7 +2831,6 @@
         }
         ctx.fillRect(r.x, r.y, r.w, r.h);
       }
-      // Geschwungene Straßen (A1, Auffahrten, Landstraßen)
       const nearCurves = queryIndex(IX.curves);
       ctx.lineCap = "round"; ctx.lineJoin = "round";
       for (const ch of nearCurves) {
@@ -2990,7 +2842,6 @@
         ctx.stroke();
       }
 
-      // Markierungen
       const seg = (m, o) => {
         ctx.beginPath();
         ctx.moveTo(m.x1 + m.nx * o, m.y1 + m.ny * o);
@@ -3036,7 +2887,6 @@
       }
       ctx.setLineDash([]);
 
-      // Haltelinien und Zebrastreifen an Ampeln
       ctx.strokeStyle = "#f2f2f2"; ctx.lineWidth = 4;
       for (const l of queryIndex(IX.stops)) {
         if (!visible(Math.min(l.x1, l.x2) - 4, Math.min(l.y1, l.y2) - 4, Math.abs(l.x2 - l.x1) + 8, Math.abs(l.y2 - l.y1) + 8)) continue;
@@ -3080,7 +2930,6 @@
         ctx.fillText("€", coin.x, coin.y + 4);
       }
 
-      // Garage
       if (garage) {
         ctx.fillStyle = "#55595e";
         ctx.fillRect(garage.x, garage.y, garage.w, garage.h);
@@ -3090,7 +2939,6 @@
         ctx.fillText("GARAGE", garage.x + garage.w / 2, garage.y + garage.h / 2 + 10);
       }
 
-      // Dekoration am Boden
       const nearDecor = queryIndex(IX.decor);
       for (const d of nearDecor) {
         if (d.k === "rail") {
@@ -3185,7 +3033,6 @@
         ctx.fillRect(x, y, w, h);
 
         if (kind === "house") {
-          // Satteldach: Firstlinie und dunklere Hälfte
           ctx.fillStyle = "rgba(0,0,0,0.16)";
           if (w >= h) ctx.fillRect(x, y + h / 2, w, h / 2); else ctx.fillRect(x + w / 2, y, w / 2, h);
           ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 3;
@@ -3201,7 +3048,6 @@
           for (let yy = y + 8; yy < y + h - 8; yy += 22) { ctx.moveTo(x + 8, yy); ctx.lineTo(x + w - 8, yy); }
           ctx.stroke();
         } else if (kind === "tower") {
-          // Hochhaus: Glasfassade, abgesetzter Dachaufbau, oft mit Hubschrauberlandeplatz
           ctx.fillStyle = "rgba(255,255,255,0.16)";
           ctx.fillRect(x + 6, y + 6, w - 12, h - 12);
           ctx.strokeStyle = "rgba(10,30,50,0.35)"; ctx.lineWidth = 1;
@@ -3249,7 +3095,6 @@
         }
 
         if (kind === "shop" && awning) {
-          // Markise über dem Gehweg und Schild
           const stripe = 14;
           const horizontal = front === "n" || front === "s";
           const len = horizontal ? w : h;
@@ -3284,7 +3129,6 @@
         ctx.strokeRect(x, y, w, h);
       }
 
-      // Laternen und Straßenbäume stehen am Gehwegrand; Tanks, Silos und Kühltürme ragen hoch
       for (const d of nearDecor) {
         if (d.k === "tank" || d.k === "cooling") {
           if (!visible(d.x - d.r - 8, d.y - d.r - 8, d.r * 2 + 16, d.r * 2 + 16)) continue;
@@ -3306,7 +3150,6 @@
       }
     }
 
-    // Wagen des Verkehrs: Pkw, Transporter, Lkw, Bus; mit Bremslicht und Blinker
     function drawNpc(c) {
       if (!visible(c.x - 50, c.y - 50, 100, 100)) return;
       const W = c.kind === "bus" ? 20 : c.kind === "truck" ? 19 : 16;
@@ -3353,7 +3196,7 @@
         }
         if (blinking) {
           ctx.fillStyle = "#ffb000";
-          const sy = c.turn === -1 ? -W / 2 - 1 : W / 2 - 2;       // rechts = +y, links = -y
+          const sy = c.turn === -1 ? -W / 2 - 1 : W / 2 - 2;
           if (c.turn === 2) { ctx.fillRect(L / 2 - 3, W / 2 - 2, 4, 3); }
           else { ctx.fillRect(L / 2 - 3, sy, 4, 3); ctx.fillRect(-L / 2 - 1, sy, 4, 3); }
         }
@@ -3361,9 +3204,7 @@
       }
     }
 
-    // Alles, was über den Autos liegt: Tankstellendächer, Ampeln
     function drawOverlay() {
-      // Tunnel: Mauern und halbtransparentes Dach (ein durchgehender Pfad, damit sich das Dach nicht doppelt abdunkelt)
       if (tunnelSegs.length && tunnelBox && visible(tunnelBox[0], tunnelBox[1], tunnelBox[2], tunnelBox[3])) {
         ctx.lineCap = "butt"; ctx.lineJoin = "round";
         ctx.strokeStyle = "rgba(24,26,31,0.66)";
@@ -3376,7 +3217,6 @@
           px = sg.x2; py = sg.y2;
         }
         ctx.stroke();
-        // Mauern links und rechts des Dachs
         ctx.strokeStyle = "#6a6f75"; ctx.lineWidth = 20;
         ctx.beginPath();
         for (const sg of tunnelSegs) {
@@ -3414,8 +3254,8 @@
         if (!visible(n.x - 90, n.y - 90, 180, 180)) continue;
         const g = n.clear + 6;
         const lamps = [
-          [-g, g, "x"], [g, -g, "x"],     // Ost-/West-Verkehr
-          [g, g, "y"], [-g, -g, "y"]      // Süd-/Nord-Verkehr
+          [-g, g, "x"], [g, -g, "x"],
+          [g, g, "y"], [-g, -g, "y"]
         ];
         for (const [ox, oy, axis] of lamps) {
           ctx.fillStyle = "#1c1f24";
@@ -3431,16 +3271,13 @@
       ctx.translate(x, y);
       ctx.rotate(angle);
 
-      // Schatten
       ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
       ctx.fillRect(-15, -6, 30, 14);
       ctx.translate(1, 1);
 
       const carIndex = isPlayer ? selectedCar : modelIndex;
 
-      // RAKETE (Index 7) - spezielles Raketendesign
       if (carIndex === 7) {
-        // Raketenkorper (spitz zulaufend)
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.moveTo(-12, -5);
@@ -3451,12 +3288,10 @@
         ctx.closePath();
         ctx.fill();
 
-        // Triebwerke
         ctx.fillStyle = "#1a1a2e";
         ctx.fillRect(-12, -4, 4, 2);
         ctx.fillRect(-12, 2, 4, 2);
 
-        // Flammen-Effekt beim Driften
         if (isPlayer && driftAmount > 0.1) {
           ctx.fillStyle = `rgba(255, 100, 30, ${driftAmount * 0.6})`;
           ctx.fillRect(-13, -2, 2 + driftAmount * 4, 4);
@@ -3464,11 +3299,9 @@
           ctx.fillRect(-13, -1, 1 + driftAmount * 2, 2);
         }
 
-        // Fenster
         ctx.fillStyle = "#e0f2ff";
         ctx.fillRect(2, -2, 4, 4);
 
-        // Lichter
         ctx.fillStyle = "#fff1a8";
         ctx.fillRect(12, -3, 2, 2);
         ctx.fillRect(12, 1, 2, 2);
@@ -3477,7 +3310,6 @@
         return;
       }
 
-      // KLEINWAGEN (Index 0) - kurz und rund
       if (carIndex === 0 || color === "#57d6a1") {
         ctx.fillStyle = "#17191d";
         ctx.fillRect(-8, -9, 5, 3);
@@ -3497,7 +3329,6 @@
         ctx.fillRect(-5, -3, 3, 3);
         ctx.fillRect(2, -3, 3, 3);
       }
-      // LIMOUSINE (Index 1) - lang und elegant
       else if (carIndex === 1 || color === "#68a8ff") {
         ctx.fillStyle = "#17191d";
         ctx.fillRect(-10, -10, 6, 4);
@@ -3516,7 +3347,6 @@
         ctx.fillRect(-3, -3, 4, 3);
         ctx.fillRect(4, -3, 4, 3);
       }
-      // SPORTWAGEN (Index 2) - flach und aggressiv
       else if (carIndex === 2 || color === "#ff6868") {
         ctx.fillStyle = "#17191d";
         ctx.fillRect(-10, -8, 6, 3);
@@ -3541,7 +3371,6 @@
         ctx.fillRect(-7, -2, 3, 3);
         ctx.fillRect(-1, -2, 3, 3);
       }
-      // MUSCLE CAR (Index 3) - groß und kantig
       else if (carIndex === 3 || color === "#ff9d3c") {
         ctx.fillStyle = "#17191d";
         ctx.fillRect(-11, -10, 6, 4);
@@ -3562,7 +3391,6 @@
         ctx.fillRect(-9, -2, 4, 3);
         ctx.fillRect(3, -2, 4, 3);
       }
-      // RALLYE-AUTO (Index 4) - robust und eckig
       else if (carIndex === 4 || color === "#f2f5f8") {
         ctx.fillStyle = "#17191d";
         ctx.fillRect(-10, -10, 6, 3);
@@ -3581,7 +3409,6 @@
         ctx.fillRect(1, -2, 3, 3);
         ctx.fillRect(8, -2, 3, 3);
       }
-      // SUPERSPORTLER (Index 5) - niedrig und futuristisch
       else if (carIndex === 5 || color === "#d68cff") {
         ctx.fillStyle = "#17191d";
         ctx.fillRect(-10, -8, 6, 3);
@@ -3606,7 +3433,6 @@
         ctx.fillRect(-6, -1, 3, 2);
         ctx.fillRect(1, -1, 3, 2);
       }
-      // HYPERCAR (Index 6) - extrem niedrig und breites Design
       else if (carIndex === 6 || color === "#ffe14d") {
         ctx.fillStyle = "#17191d";
         ctx.fillRect(-11, -8, 6, 3);
@@ -3636,7 +3462,6 @@
         ctx.fillRect(2, -1, 3, 2);
       }
       else {
-        // Fallback
         ctx.fillStyle = "#17191d";
         ctx.fillRect(-10, -10, 8, 4);
         ctx.fillRect(5, -10, 8, 4);
@@ -3687,12 +3512,11 @@
       ctx.translate(c.x, c.y);
       ctx.rotate(c.angle);
       ctx.fillStyle = "#f2f5f8";
-      ctx.fillRect(-9, -7, 2, 14);                      // weißer Streifen
+      ctx.fillRect(-9, -7, 2, 14);
       ctx.fillStyle = on ? "#ff3b3b" : "#3b4a66";
       ctx.fillRect(-3, -6, 4, 5);
       ctx.fillStyle = on ? "#3b4a66" : "#3b7bff";
       ctx.fillRect(-3, 1, 4, 5);
-      // Blaulicht-Schein
       ctx.globalCompositeOperation = "lighter";
       const g = ctx.createRadialGradient(0, on ? -3 : 3, 0, 0, on ? -3 : 3, 46);
       g.addColorStop(0, on ? "rgba(255,60,60,0.55)" : "rgba(60,120,255,0.55)");
@@ -3718,7 +3542,6 @@
       ctx.save();
       ctx.scale(ui, ui);
 
-      // Tempo-Linien am Bildrand
       const maxV = ST.maxSpeed / 13;
       const sp = Math.hypot(player.vx, player.vy) / maxV;
       if (settings.speedLines && !player.crashed && (sp > 0.6 || run.boost > 0)) {
@@ -3737,7 +3560,6 @@
         ctx.globalAlpha = 1;
       }
 
-      // Farb-Blitz (Crash, Turbo, Erwischt)
       if (run.flash > 0) {
         ctx.fillStyle = `rgba(${run.flashColor},${Math.min(0.5, run.flash * 0.5)})`;
         ctx.fillRect(0, 0, W, H);
@@ -3755,7 +3577,6 @@
         ctx.fillRect(0, 0, W, H);
       }
 
-      // Pfeile zu Verfolgern außerhalb des Bildes
       for (const c of chasers) {
         const dx = c.x - camCx, dy = c.y - camCy, cr = Math.cos(camRot), sr = Math.sin(camRot);
         const sx = W / 2 + (dx * cr - dy * sr) * run.zoom / ui, sy = H / 2 + (dx * sr + dy * cr) * run.zoom / ui;
@@ -3779,7 +3600,6 @@
 
       ctx.textAlign = "center";
 
-      // Schonfrist
       if (run.bustTimer <= 0 && run.time < GRACE_SECONDS) {
         ctx.fillStyle = "#fff";
         ctx.font = "bold 18px system-ui";
@@ -3788,7 +3608,6 @@
         ctx.shadowBlur = 0;
       }
 
-      // Drift-Kombo: Multiplikator, Punkte, Turbo-Ladung bzw. Einlöse-Frist
       if (run.pending > 0 || run.chain > 0) {
         const mult = Math.max(1, run.chain + (run.drifting ? Math.floor(run.driftTime / 1.5) : 0));
         const w = 280, h = 74, x = W / 2 - w / 2, y = H - h - 40;
@@ -3823,7 +3642,6 @@
         }
       }
 
-      // Boost-Ladeanzeige (oben Mitte); B zündet
       {
         const bw = 150, bx = W / 2 - bw / 2, by = 12;
         ctx.fillStyle = "rgba(10,14,20,0.7)";
@@ -3836,7 +3654,6 @@
         ctx.fillText(run.boost > 0 ? "BOOST" : run.boostCharge >= BOOST_MIN_CHARGE ? L("BOOST bereit – B", "BOOST ready – B") : L("BOOST lädt beim Driften", "BOOST charges while drifting"), W / 2, by + 24);
       }
 
-      // Pop-up-Meldungen
       let py = H * 0.34;
       for (let i = popups.length - 1; i >= 0; i--) {
         const p = popups[i];
@@ -3879,7 +3696,6 @@
     function drawFireball() {
       if (!player.crashed || !crashPosition) return;
 
-      // Rakete: Spezielle Animation
       if (selectedCar === 7) {
         const maxTimer = 1.5;
         const progress = 1 - crashTimer / maxTimer;
@@ -3887,7 +3703,6 @@
 
         ctx.save();
 
-        // Raketen-Flammen nach unten
         const flameLength = progress * 200;
         ctx.fillStyle = `rgba(255, 100, 30, ${(1 - progress) * 0.8})`;
         ctx.fillRect(crashPosition.x - 8, crashPosition.y + 15, 16, flameLength);
@@ -3895,12 +3710,10 @@
         ctx.fillStyle = `rgba(255, 200, 0, ${(1 - progress) * 0.8})`;
         ctx.fillRect(crashPosition.x - 5, crashPosition.y + 15, 10, flameLength * 0.7);
 
-        // Rakete fliegt hoch und verblasst
         ctx.globalAlpha = Math.max(0, 1 - progress);
         ctx.fillStyle = "#4df0ff";
         ctx.fillRect(crashPosition.x - 15, rocketY - 7, 30, 14);
 
-        // Glanz
         ctx.fillStyle = `rgba(200, 200, 255, ${(1 - progress) * 0.3})`;
         ctx.fillRect(crashPosition.x - 13, rocketY - 6, 26, 5);
 
@@ -3908,7 +3721,6 @@
         return;
       }
 
-      // Normaler Crash
       const progress = 1 - crashTimer / 1.15;
       const radius = 18 + progress * 55;
 
@@ -3934,12 +3746,10 @@
     }
 
     function render() {
-      // Beim schnellen Fahren zoomt die Kamera etwas heraus (run.zoom < 1)
       const zoom = run.zoom;
       viewW = canvas.width / zoom;
       viewH = canvas.height / zoom;
 
-      // Kamera dreht sich mit dem Auto (Fahrtrichtung zeigt immer nach oben); weiches Nachführen
       const camTarget = settings.rotateCamera && !player.crashed ? -Math.PI / 2 - player.angle : 0;
       if (settings.rotateCamera || Math.abs(camRot) > 0.001) {
         const diff = Math.atan2(Math.sin(camTarget - camRot), Math.cos(camTarget - camRot));
@@ -3952,7 +3762,6 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
       if (rotated) {
-        // Sichtbereich = Hüllrechteck des gedrehten Bildes, zentriert auf dem Auto
         camCx = player.x; camCy = player.y;
         const hw = viewW / 2, hh = viewH / 2, c = Math.abs(Math.cos(camRot)), s = Math.abs(Math.sin(camRot));
         const ex = c * hw + s * hh, ey = s * hw + c * hh;
@@ -3992,7 +3801,6 @@
       drawMinimap();
       drawBustScreen();
 
-      // Dev-Info
       if (devMode) {
         ctx.fillStyle = "#00ff00";
         ctx.font = "10px monospace";
@@ -4004,7 +3812,6 @@
       }
     }
 
-    // Andere Fahrer: Auto in der Farbe seines Modells, dazu ein dezenter Ring zur Unterscheidung vom Verkehr
     function drawRemoteCar(r) {
       if (!visible(r.x - 50, r.y - 50, 100, 100)) return;
       const color = (cars[r.car] || cars[0]).color;
@@ -4016,6 +3823,27 @@
       ctx.beginPath();
       ctx.arc(r.x, r.y, 24, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
+
+      const label = r.name || L("Fahrer", "Driver") + " " + r.id;
+      const z = Math.max(0.3, run.zoom);
+      const fs = Math.round(12 / z);
+      ctx.save();
+      ctx.translate(r.x, r.y);
+      ctx.rotate(-camRot);
+      ctx.font = `600 ${fs}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const w = ctx.measureText(label).width + 10 / z, h = fs + 6 / z, y0 = -28 - h;
+      ctx.fillStyle = "rgba(10, 18, 30, 0.75)";
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5 / z;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(-w / 2, y0, w, h, 5 / z); else ctx.rect(-w / 2, y0, w, h);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.fillText(label, 0, y0 + h / 2 + 0.5 / z);
       ctx.restore();
     }
 
@@ -4046,7 +3874,7 @@
       if (minimapCache) ctx.drawImage(minimapCache, x0, y0, w, h);
       else { ctx.fillStyle = "#2f4a35"; ctx.fillRect(x0, y0, w, h); }
       ctx.fillStyle = "#ffd166";
-      for (const c of coins) {      // nur Münzen in der Nähe, sonst ist die Karte voller gelber Punkte
+      for (const c of coins) {
         if (c.respawn <= 0 && Math.abs(c.x - player.x) < 5000 && Math.abs(c.y - player.y) < 5000) ctx.fillRect(x0 + c.x * sx - 1, y0 + c.y * sy - 1, 2, 2);
       }
       ctx.globalAlpha = 1;
@@ -4075,9 +3903,6 @@
       ctx.restore();
     }
 
-    // Spielfläche passend ins Fenster einpassen (ganze Seite sichtbar) und Vollbild.
-    // Echtes Vollbild per Fullscreen-API; wo es fehlt (z. B. iPhone-Safari) gibt es ein Ersatz-Vollbild,
-    // das die ganze sichtbare Fläche nutzt.
     const screenEl = document.querySelector(".screen");
     const headerEl = document.querySelector("header");
     let fakeFullscreen = false;
@@ -4087,13 +3912,11 @@
       const vv = window.visualViewport;
       const vw = vv ? vv.width : innerWidth, vh = vv ? vv.height : innerHeight;
       const headerH = headerEl && headerEl.offsetParent !== null ? headerEl.offsetHeight + 8 : 0;
-      // Randlos: Vollbild oder Handy im Querformat -> Spielfeld füllt den ganzen Bildschirm von Rand zu Rand
       const edge = vw > vh && (fs || vh <= 520);
       document.body.classList.toggle("edge", edge);
       let w, h = null;
       if (edge) {
         w = Math.floor(vw); h = Math.floor(vh);
-        // Auflösung ans Seitenverhältnis anpassen (mehr Karte seitlich statt Balken oder Verzerrung)
         const cw = Math.round(clamp(canvas.height * vw / vh, 960, 1500));
         if (canvas.width !== cw) canvas.width = cw;
       } else {
@@ -4105,7 +3928,7 @@
       }
       screenEl.style.width = w + "px";
       screenEl.style.height = h ? h + "px" : "";
-      uiScale = clamp(0.75 * canvas.width / w, 1, 2.2);       // kleine Bildschirme: Anzeigen im Spiel größer zeichnen
+      uiScale = clamp(0.75 * canvas.width / w, 1, 2.2);
     }
     function hintHeight() {
       const hint = document.querySelector(".rotate-hint");
@@ -4126,7 +3949,6 @@
         const result = request.call(de);
         if (result && result.then) {
           result.then(() => {
-            // Handy: nach Möglichkeit Querformat erzwingen
             if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(() => {});
           }).catch(fallback);
         }
@@ -4140,7 +3962,6 @@
     document.addEventListener("webkitfullscreenchange", fitScreen);
     fitScreen();
 
-    // ---------- Einstellungsseite ----------
     const settingsPage = document.querySelector("#settingsPage");
     document.documentElement.style.setProperty("--ts", settings.touchScale);
     let settingsOpen = false;
@@ -4181,7 +4002,8 @@
 
     settingsPage.querySelectorAll("[data-key]").forEach(input => {
       input.addEventListener("input", () => {
-        settings[input.dataset.key] = input.type === "checkbox" ? input.checked : Number(input.value);
+        settings[input.dataset.key] = input.type === "checkbox" ? input.checked
+          : input.type === "text" ? input.value.replace(/[<>]/g, "").slice(0, 16) : Number(input.value);
         if (input.dataset.key === "touchMode") keyboardMode = false;
         if (input.dataset.key in baseDevice) baseDevice[input.dataset.key] = settings[input.dataset.key];
         saveSettings();
@@ -4198,23 +4020,20 @@
 
     applyTouchMode();
 
-    // ===================== Online-Modus: Anbindung =====================
     const online = window.AsphaltOnline;
     const onlineBadge = document.querySelector("#onlineBadge");
     const startOnline = document.querySelector("#startOnline");
 
-    // Stoß eines anderen Fahrers: wird im nächsten Bild auf mein Auto angewendet
     if (online) {
       online.onHit = (from, jx, jy) => {
         const nowMs = performance.now();
-        if (nowMs - (lastOwnHit.get(from) || 0) < 250) return;   // diesen Kontakt habe ich selbst schon berechnet
+        if (nowMs - (lastOwnHit.get(from) || 0) < 250) return;
         lastGotHit.set(from, nowMs);
         incomingHit.x += jx;
         incomingHit.y += jy;
       };
     }
 
-    // Stoß gegen ein Verkehrsauto, das ich als Host simuliere (gemeldet von einem anderen Fahrer)
     if (online) {
       online.onNpcHit = (id, dvx, dvy, dva) => {
         if (!trafficHost) return;
@@ -4243,7 +4062,6 @@
     const KIND_IDX = { car: 0, van: 1, truck: 2, bus: 3 };
     let lastTrafficBuild = 0;
 
-    // Statusfenster: zeigt, ob man online ist (Klick schaltet den Online-Modus an/aus)
     const onlineStateEl = document.querySelector("#onlineState");
     const onlineInfoEl = document.querySelector("#onlineInfo");
     let badgeKey = "";
@@ -4303,15 +4121,14 @@
       }
 
       online.update(now);
+      online.setName((settings.playerName || "").trim());
 
       const level = currentLevel === "moon" ? 1 : 0;
 
-      // Wer simuliert den Verkehr? Der Host des Raums; auf dem Mond (eigene Karte) jeder selbst.
       const wasHost = trafficHost;
       trafficHost = level === 1 || online.isHost;
       if (wasHost && !trafficHost) clearLocalTraffic();
 
-      // Andere Fahrer, deren Verfolger und die Anker für den Verkehr
       remoteCars = []; remoteChasers = [];
       const anchors = [player];
       for (const r of online.remotes.values()) {
@@ -4323,7 +4140,6 @@
       trafficAnchors = anchors;
       remoteObstacles = remoteChasers.length ? remoteCars.concat(remoteChasers) : remoteCars;
 
-      // Verkehr: der Host sendet ihn, alle anderen zeigen ihn nur an
       netNpcList = [];
       if (!trafficHost) {
         for (const n of online.netNpcs.values()) {
@@ -4354,7 +4170,6 @@
         online.sendTraffic(rows);
       }
 
-      // Empfangene Stöße anwenden
       if (incomingHit.x || incomingHit.y) {
         if (!player.crashed && selectedCar !== 7 && !settingsOpen && !workshopOpen) {
           player.vx += incomingHit.x;
@@ -4369,7 +4184,6 @@
         incomingHit.x = incomingHit.y = 0;
       }
 
-      // Gesammelte Stöße höchstens alle 50 ms senden
       if ((hitOut.size || npcHitOut.size) && now - lastHitFlush >= 50) {
         lastHitFlush = now;
         for (const [id, o] of hitOut) online.sendHit(id, o.jx, o.jy);
@@ -4378,7 +4192,6 @@
         npcHitOut.clear();
       }
 
-      // Eigenen Zustand senden (pausiert, solange Einstellungen oder Werkstatt offen sind)
       if (!settingsOpen && !workshopOpen) {
         online.send({
           x: player.x, y: player.y, a: player.angle, vx: player.vx, vy: player.vy,
@@ -4408,7 +4221,6 @@
       requestAnimationFrame(frame);
     }
 
-    // Instant First Paint: render sofort (leere Welt)
     function renderEmpty() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = currentLevel === "moon" ? "#0a0a1a" : "#49694d";

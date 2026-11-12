@@ -1,20 +1,18 @@
 "use strict";
 const L = WG.L;
-// ================= Konfiguration =================
 const W = 960, H = 540;
-const BASE = 500;            // Bildschirm-y für z=0,h=0
-const ZK = 0.55;             // Tiefen-Projektion
-const G = 900;               // Schwerkraft (nur Höhe)
-const ANGLE = Math.PI / 4;   // fester Wurfwinkel
+const BASE = 500;
+const ZK = 0.55;
+const G = 900;
+const ANGLE = Math.PI / 4;
 const P_MAX = 560;
-const WIND = 0.22, SWING = 0.08, FOLLOW = 0.22, LEAD = 0.05;   // Wurfanimation (Sekunden)
+const WIND = 0.22, SWING = 0.08, FOLLOW = 0.22, LEAD = 0.05;
 const PLAYER_Z = 10, PLAYER_SCREEN_X = 220;
-const RX = 22, H0 = 84;      // Abwurfpunkt der Hand relativ zum Fahrer (x, Hoehe)
+const RX = 22, H0 = 84;
 const SPEED = 150, SPACING = 420;
-const ZMAX = 250, MAT_HALF_X = 34;     // ZMAX: hinterster Rasenrand; jedes Haus hat eigene Wandtiefe zw
+const ZMAX = 250, MAT_HALF_X = 34;
 const HUD_H = 54;
 
-// Farben wie in Asphalt Arkade
 const PAL = {
   ground: '#49694d', side: '#a3a6a0', road: '#5b5f64', line: '#e8dcae',
   build: ['#947b6a', '#758397', '#9a846c', '#778b76', '#a68a7a', '#7d8aa0'],
@@ -27,29 +25,26 @@ const PAL = {
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const sy = (z, h) => BASE - z * ZK - h;
 
-// ================= Speicherstand =================
 let stored = {};
 try { stored = JSON.parse(localStorage.getItem('mattenwurf') || '{}'); } catch (e) {}
 const save = Object.assign({ coins: 0, bag: 0, aim: 0, best: 0 }, stored);
 const persist = () => { try { localStorage.setItem('mattenwurf', JSON.stringify(save)); } catch (e) {} };
 const bagSize = () => 10 + 3 * save.bag;
 const AIM_MAX = 4;
-const jitter = () => 0.02 / (1 + 0.5 * save.aim);   // zufaellige Tempo-Abweichung des Wurfs
+const jitter = () => 0.02 / (1 + 0.5 * save.aim);
 const costBag = () => 20 + 20 * save.bag;
 const costAim = () => 15 + 25 * save.aim;
 
-// ================= Zufall =================
 function rng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
 const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
 
-// ================= Häuser =================
 const houses = new Map();
 function house(i) {
   if (houses.has(i)) return houses.get(i);
   const r = rng(i * 7919 + 13);
   const cx = 700 + i * SPACING;
   const garage = r() < 0.4 ? (r() < 0.5 ? -1 : 1) : 0;
-  const zw = 185 + Math.floor(r() * 65);          // Einrueckung: Abstand der Hauswand zur Strasse
+  const zw = 185 + Math.floor(r() * 65);
   const hs = {
     i, cx, zw, mz0: zw - 35, mz1: zw - 5, w: 240, h: 130 + Math.floor(r() * 30), delivered: false, landX: 0, landZ: 0,
     kind: pick(r, ['gable', 'gable', 'flat']),
@@ -58,7 +53,6 @@ function house(i) {
     garage, chimney: r() < 0.6, fence: pick(r, [0, 0, 1, 2]), fenceCol: pick(r, ['#e8e4d8', '#c9b27c', '#8fa8b8']),
     number: 1 + Math.floor(r() * 60), curtain: pick(r, ['#c0584a', '#e8dcae', '#6fa0c8']),
     obstacles: [], flowers: [], tufts: [],
-    // Lücke zwischen den Häusern
     gapX: cx + SPACING / 2,
     tree: r() < 0.8, tree2: r() < 0.5, lamp: r() < 0.7, bench: r() < 0.25, hydrant: r() < 0.3, bin: r() < 0.4,
     parked: r() < 0.5 ? { col: pick(r, PAL.cars), dx: (r() - .5) * 120, kind: pick(r, ['car', 'van']) } : null,
@@ -84,12 +78,11 @@ function house(i) {
   return hs;
 }
 
-// ================= Spielzustand =================
 let state = 'menu', t = 0, shake = 0, camX = 0;
 let player = { x: 0 };
 let papers = [], popups = [], shards = [], parts = [], coinsFly = [], traffic = [];
 let left = 0, score = 0, streak = 0, coinsRound = 0, finishing = 0, trafficTimer = 0;
-let pending = null, hover = null, follow = 0, aimMsg = null, shout = null, voiceOn = false /* Sprachausgabe deaktiviert (Code bleibt erhalten) */, tickT = 0, birdT = 3, escT = 0;
+let pending = null, hover = null, follow = 0, aimMsg = null, shout = null, voiceOn = false , tickT = 0, birdT = 3, escT = 0;
 let hudCoinPulse = 0;
 
 function startRound() {
@@ -101,16 +94,13 @@ function startRound() {
   state = 'play'; sfx('start');
 }
 
-// ================= Wurf =================
-// Flugdauer und Reichweite (Hoehe H0 -> 0) bei Abwurfgeschwindigkeit P unter festem Winkel
 function flightT(P) { const vh = P * Math.sin(ANGLE); return (vh + Math.sqrt(vh * vh + 2 * G * H0)) / G; }
 function rangeZ(P) { return P * Math.cos(ANGLE) * flightT(P); }
-function solveP(dz) {                       // Bisektion: passende Abwurfgeschwindigkeit fuer Tiefe dz
+function solveP(dz) {
   let lo = 0, hi = 900;
   for (let k = 0; k < 30; k++) { const m = (lo + hi) / 2; if (rangeZ(m) < dz) lo = m; else hi = m; }
   return (lo + hi) / 2;
 }
-// Zielpunkt auf dem Boden (Bildschirm -> Welt) auswerten
 function evalTarget(mx, my) {
   const tx = mx + camX, tz = (BASE - my) / ZK;
   const r = { ok: false, tx, tz, msg: '' };
@@ -141,12 +131,11 @@ function evalTarget(mx, my) {
   r.P = solveP(tz - PLAYER_Z);
   if (r.P > P_MAX) { r.msg = L('Zu weit', 'Too far'); return r; }
   r.T = flightT(r.P);
-  r.xrel = tx - SPEED * r.T - RX;               // Fahrer-Position, an der geworfen wird
+  r.xrel = tx - SPEED * r.T - RX;
   if ((r.xrel - player.x) / SPEED < WIND + SWING + LEAD) { r.msg = L('Zu spät', 'Too late'); return r; }
   r.ok = true;
   return r;
 }
-// Zurufe des Zeitungsjungen: Sprechblase + (optional) Sprachausgabe
 const THROW_CALLS = L(['ZEEITUNG!', 'ZEIIITUNG!', 'ZEEEITUNG!!', 'Frische Zeitung!', 'Zeitung kommt!', 'Vorsicht, Papier!', 'Morgenpost!', 'Pappe im Anflug', 'Viel spass damit', 'FLIEEEG, Zeitung'],
   ['NEEEWSPAPER!', 'PAAAPER!', 'FRESH NEWS!', 'Fresh paper!', 'Paper coming in!', 'Heads up, paper!', 'Morning post!', 'Incoming paper', 'Enjoy the read', 'FLYYY, paper']);
 function say(text, big = false) {
@@ -163,14 +152,14 @@ function say(text, big = false) {
 }
 function aimAt(mx, my) {
   if (left <= 0) return;
-  if (pending && (pending.xrel - player.x) / SPEED < WIND + SWING + 0.1) return;   // Wurf laeuft schon
+  if (pending && (pending.xrel - player.x) / SPEED < WIND + SWING + 0.1) return;
   const r = evalTarget(mx, my);
   if (!r.ok) { if (r.msg) { aimMsg = { text: r.msg, x: mx, y: my, life: 0.9 }; sfx('deny'); } return; }
   pending = r;
   sfx('aim');
 }
 function releasePaper() {
-  const P = pending.P * (1 + (Math.random() * 2 - 1) * jitter());   // minimal variierendes Tempo
+  const P = pending.P * (1 + (Math.random() * 2 - 1) * jitter());
   const v = { vx: SPEED, vz: P * Math.cos(ANGLE), vh: P * Math.sin(ANGLE) };
   papers.push({ x: pending.xrel + RX, z: PLAYER_Z, h: H0, ...v, rot: 0, alive: true, trail: 0 });
   left--; pending = null; follow = FOLLOW;
@@ -252,7 +241,6 @@ function spawnShards(x, h, z) {
     shards.push({ x, h, z, vx: (Math.random() - .5) * 200, vh: Math.random() * 200, life: 1 });
 }
 
-// ================= Update =================
 function update(dt) {
   t += dt;
   if (shake > 0) shake = Math.max(0, shake - 30 * dt);
@@ -269,7 +257,6 @@ function update(dt) {
     if (pending && player.x >= pending.xrel) releasePaper();
     if (shout) { shout.age += dt; if ((shout.life -= dt) <= 0) shout = null; }
     if (aimMsg && (aimMsg.life -= dt) <= 0) aimMsg = null;
-    // Staub unter den Rädern
     if (Math.random() < 0.5) parts.push({ x: player.x - 30, z: PLAYER_Z, h: 3, vx: -40 - Math.random() * 40, vz: (Math.random() - .5) * 20, vh: 20 + Math.random() * 30, life: 0.5, col: 'rgba(210,200,170,0.55)', size: 3 + Math.random() * 2 });
   }
   trafficTimer -= dt;
@@ -303,7 +290,6 @@ function update(dt) {
   shards = shards.filter(s => s.life > 0 && s.h > 0);
   for (const q of parts) { q.x += q.vx * dt; q.z += q.vz * dt; q.h += q.vh * dt; q.vh -= G * 0.6 * dt; q.life -= dt; if (q.h < 0) { q.h = 0; q.vh = 0; q.vx *= 0.8; } }
   parts = parts.filter(q => q.life > 0);
-  // Münzen fliegen zur Anzeige
   for (const c of coinsFly) {
     c.t += dt * 1.6;
     if (c.t >= 1 && !c.done) { c.done = true; hudCoinPulse = 1; sfx('coin'); }
@@ -318,7 +304,6 @@ function endRound() {
   state = 'end'; sfx('end');
 }
 
-// ================= Zeichen-Helfer =================
 function rectO(x, y, w, h, col, lw = 3) {
   ctx.fillStyle = col; ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = PAL.outline; ctx.lineWidth = lw; ctx.strokeRect(x, y, w, h);
@@ -327,31 +312,25 @@ function circ(x, y, r, col) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y
 function shadowEll(x, y, rx, ry = rx * 0.35) { ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(x + 3, y + 2, rx, ry, 0, 0, 7); ctx.fill(); }
 function visibleX(x, m = 120) { return x > -m && x < W + m; }
 
-// ================= Hintergrund =================
 function drawSky() {
   const g = ctx.createLinearGradient(0, 0, 0, 340);
   g.addColorStop(0, '#7fa6bf'); g.addColorStop(1, '#cfdde3');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, 380);
-  // Sonne (flach)
   circ(790, 96, 32, '#fff3c0'); circ(790, 96, 22, '#ffe98a');
-  // Wolken (flache Blöcke, langsam)
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   for (let i = 0; i < 6; i++) {
     const cx = ((i * 260 - camX * 0.06 - t * 4) % (W + 300) + W + 300) % (W + 300) - 150, cy = 50 + (i * 53) % 110;
     ctx.fillRect(cx, cy, 90, 16); ctx.fillRect(cx + 14, cy - 10, 50, 12); ctx.fillRect(cx - 12, cy + 8, 60, 12);
   }
-  // Vögel
   ctx.strokeStyle = '#2b3138'; ctx.lineWidth = 2;
   for (let i = 0; i < 3; i++) {
     const bx = ((i * 400 + t * 40 - camX * 0.1) % (W + 200) + W + 200) % (W + 200) - 100, by = 70 + i * 35 + Math.sin(t * 2 + i) * 6;
     const f = Math.sin(t * 10 + i) * 4;
     ctx.beginPath(); ctx.moveTo(bx - 8, by + f); ctx.lineTo(bx, by); ctx.lineTo(bx + 8, by + f); ctx.stroke();
   }
-  // Ferne Hügel
   ctx.fillStyle = '#8fae9c'; ctx.beginPath(); ctx.moveTo(0, 380);
   for (let x = 0; x <= W; x += 20) ctx.lineTo(x, 300 - 25 * Math.sin((x + camX * 0.12) / 160) - 12 * Math.sin((x + camX * 0.12) / 53));
   ctx.lineTo(W, 380); ctx.fill();
-  // Ferne Häuser (Silhouetten) und Baumreihe
   const par = 0.3;
   for (let k = -2; k < 12; k++) {
     const wx = k * 130 - ((camX * par) % 130);
@@ -367,29 +346,24 @@ function drawSky() {
   }
 }
 function drawGround() {
-  // Vorgarten mit Rasenstreifen
   const gy0 = sy(ZMAX, 0), gy1 = sy(100, 0);
   ctx.fillStyle = PAL.ground; ctx.fillRect(0, gy0, W, gy1 - gy0);
   ctx.fillStyle = 'rgba(255,255,255,0.05)';
   for (let x = -((camX % 80) + 80); x < W; x += 80) ctx.fillRect(x, gy0, 40, gy1 - gy0);
-  // Gehweg
   const s0 = sy(100, 0), s1 = sy(60, 0);
   ctx.fillStyle = PAL.side; ctx.fillRect(0, s0, W, s1 - s0);
   ctx.strokeStyle = 'rgba(0,0,0,0.14)'; ctx.lineWidth = 2; ctx.beginPath();
   for (let x = -((camX % 70) + 70); x < W; x += 70) { ctx.moveTo(x, s0); ctx.lineTo(x, s1); }
   ctx.moveTo(0, (s0 + s1) / 2); ctx.lineTo(W, (s0 + s1) / 2); ctx.stroke();
-  // Bordstein
   ctx.fillStyle = '#c8cac4'; ctx.fillRect(0, s1 - 3, W, 5);
   ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(0, s1 + 2, W, 3);
-  // Straße
   const r0 = sy(60, 0), r1 = sy(0, 0);
   ctx.fillStyle = PAL.road; ctx.fillRect(0, r0 + 5, W, r1 - r0 - 5);
-  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(0, r0 + 9, W, 2);   // Randlinie
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(0, r0 + 9, W, 2);
   ctx.fillStyle = 'rgba(0,0,0,0.13)';
-  for (let x = -((camX * 1.0 % 190) + 190); x < W; x += 190) ctx.fillRect(x, r0 + 20, 120, 6);  // Flickstellen
+  for (let x = -((camX * 1.0 % 190) + 190); x < W; x += 190) ctx.fillRect(x, r0 + 20, 120, 6);
   ctx.fillStyle = PAL.line;
   for (let x = -((camX % 80) + 80); x < W; x += 80) ctx.fillRect(x, sy(30, 0) - 2, 38, 4);
-  // Gully & Zebra gelegentlich
   for (let k = 0; k < 4; k++) {
     const wx = Math.floor(camX / 600) * 600 + k * 600 + 250;
     const x = wx - camX;
@@ -397,19 +371,15 @@ function drawGround() {
     ctx.fillStyle = '#2f3236'; ctx.fillRect(x, r0 + 12, 18, 7);
     ctx.fillStyle = '#4a4e53'; for (let q = 0; q < 4; q++) ctx.fillRect(x + 2 + q * 4, r0 + 13, 2, 5);
   }
-  // unterer Rand (Straßenseite)
   ctx.fillStyle = '#3a3d42'; ctx.fillRect(0, r1, W, H - r1);
   ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(0, r1, W, 3);
 }
 
-// ================= Häuser & Objekte =================
 function drawHouseBack(hs) {
   const x = hs.cx - camX;
   if (x < -300 || x > W + 300) return;
   const top = sy(hs.zw, 0), wh = hs.h, hw = hs.w / 2;
-  // Boden-Schatten
   ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(x - hw + 6, top, hs.w + 14, 12);
-  // Garage
   if (hs.garage) {
     const gx = hs.garage < 0 ? x - hw - 70 : x + hw;
     rectO(gx, top - 92, 70, 92, hs.wall);
@@ -420,13 +390,11 @@ function drawHouseBack(hs) {
     ctx.stroke();
     ctx.fillStyle = hs.roof; ctx.fillRect(gx - 5, top - 100, 80, 10); ctx.strokeStyle = PAL.outline; ctx.strokeRect(gx - 5, top - 100, 80, 10);
   }
-  // Wand
   rectO(x - hw, top - wh, hs.w, wh, hs.wall, 4);
-  ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(x - hw + 2, top - 14, hs.w - 4, 12);              // Sockel
+  ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(x - hw + 2, top - 14, hs.w - 4, 12);
   ctx.strokeStyle = 'rgba(0,0,0,0.08)'; ctx.lineWidth = 2; ctx.beginPath();
   for (let yy = top - wh + 12; yy < top - 14; yy += 11) { ctx.moveTo(x - hw + 2, yy); ctx.lineTo(x + hw - 2, yy); }
   ctx.stroke();
-  // Dach
   if (hs.kind === 'gable') {
     ctx.fillStyle = hs.roof; ctx.beginPath();
     ctx.moveTo(x - hw - 14, top - wh); ctx.lineTo(x, top - wh - 62); ctx.lineTo(x + hw + 14, top - wh); ctx.closePath(); ctx.fill();
@@ -437,15 +405,12 @@ function drawHouseBack(hs) {
     ctx.stroke();
     ctx.strokeStyle = PAL.outline; ctx.lineWidth = 4; ctx.beginPath();
     ctx.moveTo(x - hw - 14, top - wh); ctx.lineTo(x, top - wh - 62); ctx.lineTo(x + hw + 14, top - wh); ctx.closePath(); ctx.stroke();
-    // Dachfenster
     rectO(x - 14, top - wh - 34, 28, 20, '#9fc4d8', 2);
   } else {
     rectO(x - hw - 8, top - wh - 16, hs.w + 16, 18, hs.roof, 4);
     ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(x - hw - 6, top - wh - 14, hs.w + 12, 4);
-    // Solarmodule
     for (let q = 0; q < 3; q++) rectO(x - 50 + q * 36, top - wh - 30, 30, 14, '#35506b', 2);
   }
-  // Schornstein + Rauch
   if (hs.chimney) {
     const chx = x + hw * 0.55;
     rectO(chx, top - wh - 56, 18, 34, '#8a6a58', 3);
@@ -456,7 +421,6 @@ function drawHouseBack(hs) {
       ctx.beginPath(); ctx.arc(chx + 9 + ph * 22 + Math.sin(ph * 6) * 4, top - wh - 70 - ph * 50, 5 + ph * 8, 0, 7); ctx.fill();
     }
   }
-  // Tür samt Vordach & Stufen
   rectO(x - 28, top - 108, 56, 8, hs.roof, 3);
   rectO(x - 20, top - 92, 40, 92, '#7a4a28', 3);
   ctx.fillStyle = '#9a6238'; ctx.fillRect(x - 15, top - 86, 30, 32); ctx.fillRect(x - 15, top - 48, 30, 40);
@@ -466,7 +430,6 @@ function drawHouseBack(hs) {
   ctx.fillStyle = '#2b3138'; ctx.font = 'bold 8px system-ui'; ctx.textAlign = 'center'; ctx.fillText(hs.number, x + 33, top - 72);
   circ(x - 28, top - 70, 4, '#ffe9a8');
   rectO(x - 26, top - 4, 52, 4, '#bfbfb8', 2);
-  // Zweites Fenster (ebenfalls einwerfbar)
   const w2 = hs.wins[1], ox = w2.x - camX;
   rectO(ox - 26, top - 112, 52, 46, '#e8e4d8', 3);
   if (!w2.broken) {
@@ -480,7 +443,6 @@ function drawHouseBack(hs) {
     ctx.moveTo(ox - 22, top - 108); ctx.lineTo(ox - 4, top - 90); ctx.lineTo(ox - 14, top - 70);
     ctx.moveTo(ox + 22, top - 108); ctx.lineTo(ox + 4, top - 86); ctx.lineTo(ox + 18, top - 70); ctx.stroke();
   }
-  // Hauptfenster (Fehlziel)
   const wx = hs.winX - camX;
   rectO(wx - 32, top - 124, 64, 56, '#e8e4d8', 3);
   if (!hs.wins[0].broken) {
@@ -497,9 +459,8 @@ function drawHouseBack(hs) {
     ctx.moveTo(wx + 28, top - 120); ctx.lineTo(wx + 6, top - 94); ctx.lineTo(wx + 24, top - 72);
     ctx.moveTo(wx - 8, top - 100); ctx.lineTo(wx + 6, top - 94); ctx.stroke();
   }
-  rectO(wx - 32, top - 66, 64, 8, '#a58a6a', 2);                       // Blumenkasten
+  rectO(wx - 32, top - 66, 64, 8, '#a58a6a', 2);
   for (let q = 0; q < 5; q++) circ(wx - 24 + q * 12, top - 70, 4, ['#ff6868', '#ffd166', '#e5508a'][q % 3]);
-  // Büsche vor der Wand
   for (const b of hs.bushes) {
     const bx = b.x - camX;
     if (Math.abs(bx - x) < 24) continue;
@@ -509,17 +470,14 @@ function drawHouseBack(hs) {
 function drawLawn(hs) {
   const x = hs.cx - camX;
   if (x < -300 || x > W + 300) return;
-  // Gras-Büschel
   ctx.strokeStyle = 'rgba(30,60,35,0.5)'; ctx.lineWidth = 2; ctx.beginPath();
   for (const g of hs.tufts) { const gx = g.x - camX, gy = sy(g.z, 0); ctx.moveTo(gx - 3, gy); ctx.lineTo(gx - 4, gy - 6); ctx.moveTo(gx, gy); ctx.lineTo(gx, gy - 8); ctx.moveTo(gx + 3, gy); ctx.lineTo(gx + 4, gy - 6); }
   ctx.stroke();
   for (const f of hs.flowers) { const fx = f.x - camX, fy = sy(f.z, 0); ctx.fillStyle = '#2f5a35'; ctx.fillRect(fx - 1, fy - 6, 2, 6); circ(fx, fy - 8, 3, f.c); }
-  // Gartenweg
   ctx.fillStyle = '#d6cdb4';
   ctx.beginPath(); ctx.moveTo(x - 18, sy(hs.mz0, 0)); ctx.lineTo(x + 18, sy(hs.mz0, 0)); ctx.lineTo(x + 30, sy(100, 0)); ctx.lineTo(x - 30, sy(100, 0)); ctx.fill();
   ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1;
   for (let z = 120; z < hs.mz0; z += 22) { const k = (z - 100) / (hs.mz0 - 100), hw = 30 - 12 * k; ctx.beginPath(); ctx.moveTo(x - hw, sy(z, 0)); ctx.lineTo(x + hw, sy(z, 0)); ctx.stroke(); }
-  // Fußmatte
   const my0 = sy(hs.mz1, 0), my1 = sy(hs.mz0, 0);
   ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x - MAT_HALF_X + 4, my0 + 4, MAT_HALF_X * 2, my1 - my0);
   ctx.fillStyle = hs.delivered ? '#3fa34d' : '#b8473a';
@@ -528,9 +486,7 @@ function drawLawn(hs) {
   ctx.strokeStyle = PAL.outline; ctx.lineWidth = 3; ctx.strokeRect(x - MAT_HALF_X, my0, MAT_HALF_X * 2, my1 - my0);
   ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = 'bold 8px system-ui'; ctx.textAlign = 'center'; ctx.fillText(hs.delivered ? L('DANKE', 'THANKS') : L('HIER', 'HERE'), x, (my0 + my1) / 2 + 3);
   if (hs.delivered) paperSprite(hs.landX - camX, sy(hs.landZ, 0) - 3, 0.2, 1);
-  // Hindernisse
   for (const o of hs.obstacles) drawObstacle(o);
-  // Zaun / Hecke
   drawFence(hs);
 }
 function drawObstacle(o) {
@@ -576,7 +532,6 @@ function drawFence(hs) {
     }
   }
 }
-// Objekte in der Lücke zwischen den Häusern: Gehwegseite
 function drawGapBack(hs) {
   const gx = hs.gapX - camX;
   if (gx < -200 || gx > W + 200) return;
@@ -625,7 +580,6 @@ function drawSidewalkProps(hs) {
   }
 }
 function drawVehicleSide(x, y, col, kind, dir) {
-  // dir = 1 nach rechts, -1 nach links; x,y = Mitte am Boden
   const w = kind === 'van' ? 84 : 70, hgt = kind === 'van' ? 34 : 24;
   ctx.save(); ctx.translate(x, y); ctx.scale(dir, 1);
   shadowEll(0, 0, w / 2 + 4, 6);
@@ -651,7 +605,6 @@ function drawParked(hs) {
   drawVehicleSide(x, sy(52, 0), hs.parked.col, hs.parked.kind, 1);
 }
 
-// ================= Spieler =================
 function armState() {
   const IDLE = 0.85, BACK = -2.6, REL = -0.5, END = 0.5;
   if (pending) {
@@ -668,44 +621,37 @@ function drawPlayer() {
   const x = PLAYER_SCREEN_X, y = sy(PLAYER_Z, 0);
   const bob = Math.sin(player.x * 0.06) * 1.5;
   shadowEll(x, y, 36, 7);
-  const ph = player.x * 0.07;  // Rad-/Kurbelwinkel
-  // Räder
+  const ph = player.x * 0.07;
   for (const wx of [x - 24, x + 24]) {
     circ(wx, y - 14, 14, '#17191d'); circ(wx, y - 14, 10, '#6b7078'); circ(wx, y - 14, 8, '#3a3d42');
     ctx.strokeStyle = '#c8cdd2'; ctx.lineWidth = 1.5; ctx.beginPath();
     for (let k = 0; k < 4; k++) { const a = ph + k * Math.PI / 2; ctx.moveTo(wx - Math.cos(a) * 8, y - 14 - Math.sin(a) * 8); ctx.lineTo(wx + Math.cos(a) * 8, y - 14 + Math.sin(a) * 8); }
     ctx.stroke();
   }
-  // Rahmen
   ctx.strokeStyle = '#d6453a'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath();
   ctx.moveTo(x - 24, y - 14); ctx.lineTo(x - 6, y - 36); ctx.lineTo(x + 16, y - 36); ctx.lineTo(x + 24, y - 14);
   ctx.moveTo(x - 6, y - 36); ctx.lineTo(x - 2, y - 14); ctx.lineTo(x + 16, y - 36); ctx.moveTo(x + 16, y - 36); ctx.lineTo(x + 14, y - 46); ctx.lineTo(x + 24, y - 47);
   ctx.stroke();
   ctx.strokeStyle = '#17191d'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x - 10, y - 38); ctx.lineTo(x - 4, y - 38); ctx.stroke();
-  // Beine (pedalieren)
   const px = x - 2 + Math.cos(ph * 1.2) * 8, py = y - 14 + Math.sin(ph * 1.2) * 8;
   ctx.strokeStyle = '#31475e'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x - 6, y - 46 + bob); ctx.lineTo(px + 6, py - 10); ctx.lineTo(px, py); ctx.stroke();
   rectO(px - 4, py - 2, 12, 5, '#2b2f34', 1);
-  // Körper
   const arm = armState();
   ctx.save(); ctx.translate(x - 6, y - 50 + bob); ctx.rotate(0.25 + (arm.th - 0.85) * 0.12);
   rectO(-8, -26, 16, 28, '#ff9d3c', 2);
-  rectO(-18, -24, 11, 22, '#7a5a3a', 2);                                     // Tasche
+  rectO(-18, -24, 11, 22, '#7a5a3a', 2);
   ctx.fillStyle = '#f4f1e8'; for (let k = 0; k < 3; k++) ctx.fillRect(-16 + k * 3, -30 + k, 5, 8);
   ctx.restore();
-  // Arm (Wurfanimation: ausholen, schwingen, nachschwingen)
   const sx0 = x - 4, sy0 = y - 70 + bob;
   const ex = sx0 + 15 * Math.cos(arm.th + 0.35), ey = sy0 + 15 * Math.sin(arm.th + 0.35);
   const hx = ex + 15 * Math.cos(arm.th - 0.25), hy = ey + 15 * Math.sin(arm.th - 0.25);
   ctx.strokeStyle = '#ff9d3c'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(sx0, sy0); ctx.lineTo(ex, ey); ctx.lineTo(hx, hy); ctx.stroke();
   circ(hx, hy, 3.5, '#f2c9a0');
   if (arm.hold) paperSprite(hx + 4, hy - 2, arm.th + 1.2, 0.9);
-  // Kopf + Kappe
   circ(x + 2, y - 86 + bob, 9, '#f2c9a0');
   ctx.fillStyle = '#d6453a'; ctx.beginPath(); ctx.arc(x + 2, y - 88 + bob, 9.5, Math.PI, 0); ctx.fill(); ctx.fillRect(x + 4, y - 89 + bob, 14, 3);
   ctx.fillStyle = '#2b2f34'; ctx.fillRect(x + 7, y - 85 + bob, 2, 2);
   ctx.strokeStyle = PAL.outline; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x + 2, y - 86 + bob, 9, 0, 7); ctx.stroke();
-  // Schal flattert
   ctx.strokeStyle = '#e8dcae'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x - 4, y - 76 + bob);
   ctx.lineTo(x - 16, y - 74 + bob + Math.sin(t * 14) * 3); ctx.lineTo(x - 26, y - 72 + bob + Math.sin(t * 14 + 1) * 4); ctx.stroke();
   ctx.lineCap = 'butt';
@@ -750,7 +696,6 @@ function drawParts() {
   for (const s of shards) { ctx.fillStyle = '#bfe6ff'; ctx.fillRect(s.x - camX, sy(s.z, s.h), 4, 4); }
 }
 function drawArc(r, alpha) {
-  // Simulation der Flugbahn ab dem Abwurfpunkt (ohne Streuung)
   let x = r.xrel + RX, z = PLAYER_Z, h = H0, vh = r.P * Math.sin(ANGLE), n = 0;
   const vz = r.P * Math.cos(ANGLE), dt = 0.03;
   ctx.globalAlpha = alpha;
@@ -770,13 +715,12 @@ function drawTarget(r, alpha, col) {
 }
 function drawAim() {
   if (state !== 'play') return;
-  // Zielbereich: links der Linie ist es fuer Ziele auf mittlerer Tiefe zu spaet
   const minX = player.x + RX + SPEED * (WIND + SWING + LEAD) + SPEED * flightT(solveP(200)) - camX;
   ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 2; ctx.setLineDash([6, 8]);
   ctx.beginPath(); ctx.moveTo(minX, sy(ZMAX, 0)); ctx.lineTo(minX, sy(45, 0)); ctx.stroke(); ctx.setLineDash([]);
   if (pending) {
     drawArc(pending, 0.9); drawTarget(pending, 1, PAL.accent);
-    const rx = pending.xrel + RX - camX, ry = sy(PLAYER_Z, 0);       // Abwurfmarke auf der Strasse
+    const rx = pending.xrel + RX - camX, ry = sy(PLAYER_Z, 0);
     ctx.strokeStyle = PAL.accent; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(rx, ry, 10, 5, 0, 0, 7); ctx.stroke();
     return;
   }
@@ -787,7 +731,6 @@ function drawAim() {
   }
 }
 
-// ================= HUD =================
 function readout(x, label, value, col, w) {
   ctx.textAlign = 'left';
   ctx.fillStyle = PAL.dim; ctx.font = '600 10px system-ui'; ctx.fillText(label, x, 18);
@@ -807,7 +750,6 @@ function drawHUD() {
   ctx.fillStyle = '#eceff2'; ctx.font = 'bold 22px system-ui'; ctx.fillText(String(save.best), W - 18, 42);
   text(L('Klick / Tippen auf den Boden = Ziel  ·  Wurf startet automatisch  ·  N Musik  ·  Esc Auswahl', 'Click / tap the ground = target  ·  Throw starts automatically  ·  N Music  ·  Esc Menu'), W / 2, H - 14, 12, PAL.dim);
   if (aimMsg) { ctx.globalAlpha = Math.min(1, aimMsg.life * 2); ctx.lineWidth = 4; ctx.strokeStyle = '#0a0a0a'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'center'; ctx.strokeText(aimMsg.text, aimMsg.x, aimMsg.y - 16); ctx.fillStyle = '#ff8a80'; ctx.fillText(aimMsg.text, aimMsg.x, aimMsg.y - 16); ctx.globalAlpha = 1; }
-  // Popups mit dunkler Kontur
   ctx.textAlign = 'center'; ctx.font = 'bold 20px system-ui'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
   for (const q of popups) {
     ctx.globalAlpha = Math.min(1, q.life);
@@ -815,7 +757,6 @@ function drawHUD() {
     ctx.fillStyle = q.good ? PAL.accent : q.bad ? '#ff6868' : '#eceff2'; ctx.fillText(q.text, q.x - camX, q.y);
   }
   ctx.globalAlpha = 1;
-  // Münzen fliegen zur Anzeige
   for (const c of coinsFly) {
     if (c.t < 0) continue;
     const k = Math.min(1, c.t), e = k * k;
@@ -825,8 +766,7 @@ function drawHUD() {
   }
 }
 
-// ================= Menü-Karten =================
-const buttons = [];   // {x,y,w,h,id}
+const buttons = [];
 function card(x, y, w, h) {
   ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#0a0a0a'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, h);
@@ -871,7 +811,6 @@ function drawEnd() {
   btn('start', L('NOCHMAL (Leertaste)', 'AGAIN (Space)'), 330, 370, 300, 44, true);
 }
 
-// ================= Gesamtbild =================
 function draw() {
   ctx.save();
   if (shake > 0) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
@@ -894,7 +833,6 @@ function draw() {
   ctx.restore();
 }
 
-// ================= Eingabe =================
 function press() {
   initAudio();
   if (state === 'menu' || state === 'end') startRound();
@@ -913,7 +851,6 @@ function toggleMusic() {
   aimMsg = { text: musicOn ? L('Musik an', 'Music on') : L('Musik aus', 'Music off'), x: W / 2, y: 120, life: 1 };
 }
 addEventListener('keydown', e => {
-  // if (e.code === 'KeyM') { toggleVoice(); return; }   // Sprachausgabe deaktiviert
   if (e.code === 'KeyN') { toggleMusic(); return; }
   if (e.code === 'KeyF') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); return; }
   if (e.repeat) return;
@@ -939,9 +876,8 @@ cv.addEventListener('pointerdown', e => {
 cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') hover = canvasPos(e); });
 cv.addEventListener('pointerleave', () => { hover = null; });
 
-// ================= Sound (alles per WebAudio erzeugt, keine Dateien) =================
 let ac = null, bus = null, musicBus = null, noiseBuf = null;
-let musicOn = save.music === true;   // Musik ist standardmäßig aus
+let musicOn = save.music === true;
 function initAudio() {
   if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
   try {
@@ -1001,7 +937,6 @@ const SFX = {
 };
 function sfx(name) { if (ac && SFX[name]) SFX[name](); }
 
-// Musik: kurzer Chiptune-Loop (C - G - Am - F), per Lookahead-Scheduler
 const BPM = 116, STEP = 60 / BPM / 2;
 const CHORDS = [[48, 52, 55], [55, 59, 62], [57, 60, 64], [53, 57, 60]];
 const PENT = [72, 74, 76, 79, 81, 84];
@@ -1028,7 +963,6 @@ function startMusic() {
   }, 100);
 }
 
-// ================= Hauptschleife =================
 if (location.hash === '#play') startRound();
 let last = performance.now();
 requestAnimationFrame(function loop(now) {

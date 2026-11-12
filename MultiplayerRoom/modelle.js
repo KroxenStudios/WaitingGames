@@ -1,5 +1,3 @@
-// hangar (früher fahrzeug-börse): fertige vorlagen, eigene fahrzeuge hochladen, fremde laden. neue uploads prüft zuerst der admin
-// (konto "kroxenstudios"). läuft über den worker "krox-accounts" (siehe accounts.js).
 import { Konto } from "./accounts.js";
 import { sterne, sterneText, oeffneMelden } from "./profil.js";
 import { modellbild } from "./modellbild.js";
@@ -33,7 +31,7 @@ function setzeHinweis(text, art = "fehler") {
   zeige();
 }
 
-let ladeLauf = 0;   // zählt die abrufe: nur die antwort des letzten abrufs wird angezeigt
+let ladeLauf = 0;
 async function ladeListe(neu = true) {
   const lauf = ++ladeLauf;
   if (neu) { seite = 0; daten = []; }
@@ -41,7 +39,7 @@ async function ladeListe(neu = true) {
   zeige();
   try {
     if (tab === "vorlagen") {
-      daten = [];   // die vorlagen kommen aus dem spiel selbst, kein abruf nötig
+      daten = [];
       mehr = false;
     } else if (tab === "neu" || tab === "top" || tab === "best") {
       const d = await Konto.anfrage("GET", `/models?sort=${tab === "top" ? "top" : tab === "best" ? "best" : "new"}&page=${seite}`);
@@ -90,7 +88,6 @@ async function alsDatei(m) {
   }
 }
 
-// vorschaubild für ein fahrzeug nachträglich erzeugen (besitzer oder admin)
 async function bildErzeugen(m) {
   try {
     const d = await Konto.anfrage("POST", `/models/${m.id}/download`);
@@ -145,7 +142,6 @@ function zeile(m) {
       el("small", {}, `${L("von", "by")} `, el("a", { href: `profil.html?u=${encodeURIComponent(m.uploader)}`, target: "_blank", rel: "noopener", textContent: m.uploader })),
       m.descr ? el("small", { class: "beschr", textContent: m.descr }) : "",
       m.status === "approved" ? el("small", {}, sterne(m.avg), ` ${sterneText(m.avg, m.n)}`) : "",
-      // bewerten: nur angemeldet, nur veröffentlichte fahrzeuge anderer
       (m.status === "approved" && Konto.angemeldet() && m.uploader.toLowerCase() !== String(Konto.benutzer()).toLowerCase())
         ? el("small", { class: "bewerten" }, `${m.my ? L("Deine Bewertung", "Your rating") : L("Bewerten", "Rate")}: `, sterne(m.my || 0, { onWahl: st => bewerte(m, st), titel: L("Sterne vergeben", "Give stars") }))
         : "",
@@ -153,7 +149,6 @@ function zeile(m) {
     el("div", { class: "modellKnoepfe" }, ...knoepfe));
 }
 
-// vorschaubilder der vorlagen: werden beim ersten öffnen gezeichnet und danach wiederverwendet
 const vorlagenBild = new Map();
 function vorlageBild(v) {
   if (!vorlagenBild.has(v.id)) {
@@ -199,11 +194,11 @@ function uploadFormular() {
     try {
       const planText = JSON.stringify(Konto.plan());
       let thumb;
-      try { thumb = modellbild(planText); } catch { thumb = undefined; }   // ohne vorschau geht es trotzdem
+      try { thumb = modellbild(planText); } catch { thumb = undefined; }
       const r = await Konto.anfrage("POST", "/models", { title: titel.value, descr: beschr.value, data: planText, ...(thumb ? { thumb } : {}) });
       hinweis = r.status === "approved"
         ? L("Veröffentlicht.", "Published.")
-        : L("Hochgeladen. Es erscheint für alle, sobald es geprüft wurde.", "Uploaded. It will appear for everyone once it has been reviewed.");
+        : L("Hochgeladen. Es ist jetzt für alle sichtbar.", "Uploaded. It is now visible to everyone.");
       hinweisArt = "ok";
       await ladeListe(true);
     } catch (err) {
@@ -211,7 +206,7 @@ function uploadFormular() {
       setzeHinweis(err.message === "netz" ? L("Der Server ist gerade nicht erreichbar.", "The server is not reachable right now.") : Konto.fehlerText(err.message));
     }
   } }, titel, beschr, knopf,
-  el("p", { class: "kontoInfo", textContent: L("Mit dem Hochladen wird dein Benutzername öffentlich beim Fahrzeug angezeigt, und jeder darf es laden und weiterverwenden. Vor der Veröffentlichung wird es geprüft.", "By uploading, your username is shown publicly with the vehicle and anyone may load and reuse it. It is reviewed before it is published.") }));
+  el("p", { class: "kontoInfo", textContent: L("Mit dem Hochladen wird dein Benutzername öffentlich beim Fahrzeug angezeigt, und jeder darf es laden und weiterverwenden. Es ist sofort sichtbar; unpassende Fahrzeuge kann man melden.", "By uploading, your username is shown publicly with the vehicle and anyone may load and reuse it. It is visible immediately; inappropriate vehicles can be reported.") }));
 }
 
 function zeige() {

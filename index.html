@@ -54,12 +54,14 @@
     </a>
   </main>
 
-  <footer>
-    © KroxenStudios · <a href="privacy.html" data-en="Privacy">Datenschutz</a>
-  </footer>
+<footer>
+  © KroxenStudios ·
+  <a href="info.html" data-en="About">Über das Projekt (EN)</a> ·
+  <a href="https://bastelkarre-online.kroxenstudios.workers.dev/konto.html" data-en="Account">Konto</a> ·
+  <a href="privacy.html" data-en="Privacy">Datenschutz</a>
+</footer>
 
   <script>
-    // Farbschema: Systemeinstellung als Vorgabe, Umschalter speichert die Wahl
     (() => {
       const root = document.documentElement, btn = document.getElementById('themeSwitch'), label = document.getElementById('themeLabel');
       const mq = matchMedia('(prefers-color-scheme: light)');
@@ -70,7 +72,6 @@
         label.textContent = light ? 'Beige' : WG.L('Dunkelblau', 'Dark blue');
         for (const m of document.querySelectorAll('meta[name=theme-color]')) m.content = light ? '#f1e8d6' : '#10151c';
       };
-      // Sprache: Texte mit data-en werden in der englischen Fassung ersetzt
       if (WG.lang === 'en') {
         for (const el of document.querySelectorAll('[data-en]')) el.textContent = el.dataset.en;
         document.querySelector('.switches [aria-label^="Sprache"]').setAttribute('aria-label', 'Switch language');
@@ -100,7 +101,6 @@
     #startBanner button { padding: 4px 14px; cursor: pointer; background: #ffd166; color: #14171a; border: 0; border-radius: 4px; font-weight: bold; }
   </style>
   <script>
-    // Startbanner (nur Hinweis, "OK" blendet ihn dauerhaft aus) und GoatCounter-Zählpixel für den Seitenaufruf
     (() => {
       const b = document.getElementById('startBanner');
       if (WG.lang === 'en') for (const el of b.querySelectorAll('[data-en]')) el.textContent = el.dataset.en;

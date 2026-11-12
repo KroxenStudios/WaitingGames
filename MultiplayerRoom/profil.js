@@ -1,5 +1,3 @@
-// öffentliche profile (bio, fahrzeuge, freund hinzufügen) und sterne-anzeige.
-// wird von profil.html und vom spieler-popup im spiel benutzt.
 import { Konto } from "./accounts.js";
 
 const L = (de, en) => (window.WG ? WG.L(de, en) : de);
@@ -17,7 +15,6 @@ export function el(tag, props = {}, ...kinder) {
 
 const datum = t => (t ? new Date(t).toLocaleDateString(WG?.lang === "en" ? "en-GB" : "de-DE") : "");
 
-// fünf sterne. mit onwahl anklickbar (eigene bewertung hervorgehoben), sonst nur anzeige des durchschnitts.
 export function sterne(wert, { onWahl = null, titel = "" } = {}) {
   const box = el("span", { class: "sterne" + (onWahl ? " klickbar" : ""), title: titel });
   const runde = Math.round(wert);
@@ -41,7 +38,6 @@ const GRUENDE = [
   ["sonstiges", "Sonstiges", "Other"]
 ];
 
-// melde-dialog. kind: "user" | "chat" | "model" | "bio". die meldung bleibt gespeichert, bis ein moderator sie bearbeitet.
 export function oeffneMelden({ kind, name, ref = "", context = "" }) {
   if (!Konto.angemeldet()) { alert(L("Zum Melden musst du angemeldet sein.", "You need to be signed in to report.")); return; }
   const dlg = el("dialog", { class: "meldeDialog" });
@@ -76,7 +72,6 @@ export function oeffneMelden({ kind, name, ref = "", context = "" }) {
   dlg.showModal();
 }
 
-// zeichnet das profil von "name" in den container. opts.onladen(modell): optionaler "laden"-knopf je fahrzeug.
 export async function zeigeProfil(container, name, opts = {}) {
   container.replaceChildren(el("p", { class: "kontoInfo", textContent: L("Lade …", "Loading …") }));
   let p;
@@ -106,7 +101,6 @@ export async function zeigeProfil(container, name, opts = {}) {
   else if (f === "pending_in") freund.push(el("button", { type: "button", class: "primaer", textContent: L("Anfrage annehmen", "Accept request"), onclick: () => tu("POST", "/friends/accept", { name: p.username }) }), el("button", { type: "button", textContent: L("Ablehnen", "Decline"), onclick: () => tu("POST", "/friends/decline", { name: p.username }) }));
   else if (f === "friends") freund.push(el("span", { class: "kontoInfo", textContent: "★ " + L("Befreundet", "Friends") }), el("button", { type: "button", textContent: L("Entfernen", "Remove"), onclick: () => { if (confirm(L("Freundschaft beenden?", "End the friendship?"))) tu("DELETE", `/friends/${encodeURIComponent(p.username)}`); } }));
 
-  // blockieren und melden (nicht beim eigenen profil, nur angemeldet)
   const sicherheit = [];
   if (f !== "self" && f !== null) {
     const blockiert = Konto.blockiert().has(p.username.toLowerCase());

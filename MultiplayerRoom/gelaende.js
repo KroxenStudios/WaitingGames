@@ -1,10 +1,5 @@
-// bastelkarre: große karte aus der fertig erzeugten datei welt.json (kein generieren zur laufzeit).
-// die datei kommt aus nicht veröffentlichen/weltgenerator/weltgenerator.mjs und ist für alle spieler gleich.
 import * as THREE from "three";
 
-// ---------------------------------------------------------------------------
-// laden
-// ---------------------------------------------------------------------------
 export async function ladeWeltDaten(url) {
   try {
     const antwort = await fetch(url);
@@ -22,11 +17,10 @@ export async function ladeWeltDaten(url) {
     d.z0 = d.mitte[1] - d.groesse / 2;
     return d;
   } catch {
-    return null; // ohne datei bleibt die flache arena
+    return null;
   }
 }
 
-// höhe des geländes an einer stelle (bilinear; index = x * n + z)
 export function hoeheBei(d, x, z) {
   const n = d.n;
   const gx = Math.min(Math.max((x - d.x0) / d.schritt, 0), n - 1.0001);
@@ -38,9 +32,6 @@ export function hoeheBei(d, x, z) {
   return a * (1 - fz) + b * fz;
 }
 
-// ---------------------------------------------------------------------------
-// texturen
-// ---------------------------------------------------------------------------
 function rauschTextur() {
   const s = 256;
   const c = document.createElement("canvas");
@@ -80,7 +71,7 @@ function wegTextur() {
   ctx.fillRect(w * 0.06, 0, 4, hh);
   ctx.fillRect(w * 0.94 - 4, 0, 4, hh);
   ctx.fillStyle = "#ffd43b";
-  ctx.fillRect(w / 2 - 2, 0, 4, hh / 2);        // gestrichelte mittellinie: 8 m strich, 8 m lücke
+  ctx.fillRect(w / 2 - 2, 0, 4, hh / 2);
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
@@ -88,16 +79,11 @@ function wegTextur() {
   return t;
 }
 
-// ---------------------------------------------------------------------------
-// aufbau
-// ---------------------------------------------------------------------------
 const HAUS_FARBEN = ["#d8cfc0", "#c9b79c", "#b8a58a", "#9fa8b3", "#c97b63", "#e0dacd", "#e5484d"];
 
-// rapier, world, scene, box(pos, halb, quat, farbe): hilfsfunktionen aus spiel.js
 export function baueGelaende({ d, RAPIER, world, scene, box }) {
   const n = d.n, s = d.schritt;
 
-  // --- gelände: mesh mit vertexfarben ---
   const pos = new Float32Array(n * n * 3), farben = new Float32Array(n * n * 3), uv = new Float32Array(n * n * 2);
   const f = new THREE.Color();
   const gras = new THREE.Color("#5f9f50"), wald = new THREE.Color("#3f7d44"), fels = new THREE.Color("#8d8a84"), schnee = new THREE.Color("#eef2f7"), trocken = new THREE.Color("#a6a86a");
@@ -110,7 +96,6 @@ export function baueGelaende({ d, RAPIER, world, scene, box }) {
       const hx = d.h[Math.min(n - 1, ix + 1) * n + iz] - d.h[Math.max(0, ix - 1) * n + iz];
       const hz = d.h[ix * n + Math.min(n - 1, iz + 1)] - d.h[ix * n + Math.max(0, iz - 1)];
       const neigung = Math.hypot(hx, hz) / (2 * s);
-      // grundfarbe nach höhe, dazu leichte schwankung pro punkt
       const wechsel = (Math.sin(ix * 12.9898 + iz * 78.233) * 43758.5453) % 1;
       f.copy(gras).lerp(wald, Math.min(1, Math.max(0, (y - 20) / 220))).lerp(trocken, 0.18 + 0.12 * wechsel);
       f.lerp(fels, Math.min(1, Math.max(0, (neigung - 0.28) / 0.25)));
@@ -139,13 +124,11 @@ export function baueGelaende({ d, RAPIER, world, scene, box }) {
   mesh.receiveShadow = true;
   scene.add(mesh);
 
-  // --- kollision: höhenfeld (index = x * n + z, mitte der karte im ursprung der verschiebung) ---
   world.createCollider(
     RAPIER.ColliderDesc.heightfield(n - 1, n - 1, d.h, { x: d.groesse, y: 1, z: d.groesse })
       .setTranslation(d.mitte[0], 0, d.mitte[1]).setFriction(0.95)
   );
 
-  // --- straßen: bänder auf dem gelände ---
   const wt = wegTextur();
   const wegMat = new THREE.MeshStandardMaterial({ map: wt, roughness: 0.92, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   for (const w of d.wege) {
@@ -174,7 +157,6 @@ export function baueGelaende({ d, RAPIER, world, scene, box }) {
     g.setAttribute("uv", new THREE.Float32BufferAttribute(feinUV, 2));
     g.setIndex(idx2);
     g.computeVertexNormals();
-    // die normalen zeigen je nach reihenfolge nach unten: dann index umdrehen
     if (g.attributes.normal.getY(0) < 0) {
       idx2.length = 0;
       for (let i = 0; i < pts.length - 1; i++) {
@@ -190,14 +172,12 @@ export function baueGelaende({ d, RAPIER, world, scene, box }) {
     scene.add(band);
   }
 
-  // --- gebäude (mit kollision) ---
   for (const [x, z, bw, bd, bh, rot, farbe] of d.gebaeude) {
     const y0 = hoeheBei(d, x, z);
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -rot);
     box(new THREE.Vector3(x, y0 + bh / 2 - 0.3, z), [bw / 2, bh / 2 + 0.3, bd / 2], q, HAUS_FARBEN[farbe] || "#cccccc");
   }
 
-  // --- bäume und felsen (nur optik, als instanzen) ---
   const anzahl = d.baeume.length / 3;
   if (anzahl) {
     const kronen = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 2.4, 7), new THREE.MeshStandardMaterial({ roughness: 1 }), anzahl);

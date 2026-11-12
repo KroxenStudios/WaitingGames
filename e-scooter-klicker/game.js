@@ -1,7 +1,5 @@
 "use strict";
 const L = WG.L, LOCALE = L('de-DE', 'en-US');
-// ================= Konfiguration =================
-// base: Grundpreis, grow: Preisfaktor je Kauf, cps: Scooter pro Sekunde je Stueck
 const UPS = [
   { id: 'click',  name: 'Kräftiger Kick',     desc: '+1 Scooter pro Klick',               base: 15,      grow: 1.6,  click: 1 },
   { id: 'click2', name: 'Turbo-Motor',        desc: '+5 Scooter pro Klick',               base: 500,     grow: 1.7,  click: 5 },
@@ -13,9 +11,7 @@ const UPS = [
   { id: 'mond',   name: 'Mond-Werkstatt',     desc: '4.000 Scooter pro Sekunde',          base: 500000,  grow: 1.15, cps: 4000 },
 ];
 
-// Meilensteine: werden einmalig freigeschaltet und sind danach nachlesbar.
-// total = insgesamt produzierte Scooter, own(id) = Anzahl gekaufter Power-ups.
-const EARTH = 1e15;   // Scooter, die die gesamte Erdoberflaeche (510 Mio. km2) bedecken
+const EARTH = 1e15;
 const MS = [
   { id: 'first',  total: 1,     title: 'Der erste Scooter',        text: 'Aus einer Idee wird ein Fahrzeug. Er rollt noch wackelig, aber er rollt.' },
   { id: 'garage', total: 100,   title: 'Garagen-Startup',          text: 'Hundert Scooter stehen in der Garage. Die Nachbarn beschweren sich schon über den Lärm.' },
@@ -74,7 +70,6 @@ if (WG.lang === 'en') {
 }
 const msDone = m => m.total ? save.total >= m.total : owned(UPS.find(u => u.id === m.own[0])) >= m.own[1];
 
-// ================= Speicherstand =================
 let stored = {};
 try { stored = JSON.parse(localStorage.getItem('escooterklicker') || '{}'); } catch (e) {}
 const save = Object.assign({ n: 0, total: 0, own: {}, ms: {} }, stored);
@@ -92,7 +87,6 @@ const fmt = n => {
   return n.toLocaleString(LOCALE, { maximumFractionDigits: 2 }) + ' ' + s[i];
 };
 
-// ================= Flotte =================
 const field = document.getElementById('field');
 const MAX_VISIBLE = 160;
 let shown = 0;
@@ -114,7 +108,6 @@ function syncFleet(animate) {
   while (shown < want) addScooter(animate);
 }
 
-// ================= UI =================
 const $ = id => document.getElementById(id);
 if (WG.lang === 'en') {
   $('lblScooter').textContent = 'e-scooters';
@@ -157,7 +150,6 @@ function render() {
   checkMs(); renderMs();
 }
 
-// ================= Meilensteine =================
 const msPanel = $('msPanel');
 const showTab = ms => {
   $('tabShop').classList.toggle('on', !ms); $('tabMs').classList.toggle('on', ms);
@@ -209,7 +201,7 @@ btn.addEventListener('pointerdown', e => {
   document.body.appendChild(p); setTimeout(() => p.remove(), 800);
   render();
 });
-btn.addEventListener('keydown', e => {   // Tastatur: Leertaste/Enter
+btn.addEventListener('keydown', e => {
   if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) { gain(perClick()); syncFleet(true); render(); } }
 });
 $('reset').onclick = () => {
@@ -217,7 +209,6 @@ $('reset').onclick = () => {
   save.n = 0; save.total = 0; save.own = {}; save.ms = {}; field.innerHTML = ''; shown = 0; persist(); render();
 };
 
-// Spiel-Tick: Scooter pro Sekunde
 let last = performance.now(), acc = 0, saveT = 0;
 setInterval(() => {
   const now = performance.now(), dt = Math.min(1, (now - last) / 1000); last = now;

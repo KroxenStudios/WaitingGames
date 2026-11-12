@@ -1,5 +1,3 @@
-// Asphalt Arkade Online: Netzwerk und Interpolation der anderen Fahrer, des Verkehrs
-// und der Verfolger. Es werden nur Fahrzeugdaten gesendet (kein Chat, keine Namen).
 (() => {
   "use strict";
 
@@ -8,10 +6,10 @@
     params.get("server") ||
     "wss://asphalt-arkade-online.kroxenstudios.workers.dev/ws";
 
-  const SEND_MS = 50;             // Sendetakt des eigenen Autos
-  const INTERPOLATION_MS = 100;   // Anzeige der Fahrer liegt etwas hinter der Echtzeit
-  const TRAFFIC_INTERP_MS = 170;  // Verkehr kommt seltener, braucht mehr Puffer
-  const STALE_MS = 3000;          // ohne Update verschwindet ein Fahrer
+  const SEND_MS = 50;
+  const INTERPOLATION_MS = 100;
+  const TRAFFIC_INTERP_MS = 170;
+  const STALE_MS = 3000;
   const TRAFFIC_STALE_MS = 1500;
 
   let ws = null;
@@ -20,8 +18,12 @@
   let retryDelay = 1500;
   let pingTimer = 0;
   let lastSend = 0;
+  let myName = "";
+  let sentName = null;
+  let pendingName = null;
+  let nameTimer = 0;
+  const names = new Map();
 
-  // Position aus einer Schnappschuss-Liste zum Zeitpunkt renderTime bestimmen.
   function sample(buf, renderTime) {
     let from = buf[0];
     let to = buf[0];
@@ -51,21 +53,19 @@
   }
 
   const api = {
-    status: "off",          // off | connecting | online | error
-    count: 0,               // Fahrer insgesamt im Raum (inklusive dir)
-    remotes: new Map(),     // id -> anderer Fahrer (interpoliert)
-    netNpcs: new Map(),     // id -> Verkehrsauto des Hosts (interpoliert)
+    status: "off",
+    count: 0,
+    remotes: new Map(),
+    netNpcs: new Map(),
     myId: null,
-    hostId: null,           // Verkehrs-Host des Raums
-    onHit: null,            // (vonId, jx, jy): Stoß eines anderen Fahrers
-    onNpcHit: null,         // (npcId, dvx, dvy, dva): Stoß gegen ein Verkehrsauto (nur beim Host)
+    hostId: null,
+    onHit: null,
+    onNpcHit: null,
 
-    // Bin ich der Verkehrs-Host? (ohne Verbindung simuliert jeder seinen Verkehr selbst)
     get isHost() {
       return api.status !== "online" || api.hostId === null || api.hostId === api.myId;
     },
 
-    // Online-Modus ein-/ausschalten (kann jederzeit aufgerufen werden).
     enable(on) {
       on = !!on;
       if (on === wanted) return;
@@ -78,7 +78,15 @@
       }
     },
 
-    // Eigenen Zustand senden (höchstens alle SEND_MS). s.q = Verfolger [[x, y, Winkel], ...]
+    setName(name) {
+      name = String(name || "").slice(0, 16);
+      if (name === pendingName) return;
+      pendingName = name;
+      myName = name;
+      clearTimeout(nameTimer);
+      nameTimer = setTimeout(sendName, 500);
+    },
+
     send(s) {
       const now = performance.now();
       if (!ws || ws.readyState !== WebSocket.OPEN || now - lastSend < SEND_MS) return;
@@ -103,20 +111,16 @@
       );
     },
 
-    // Verkehr senden (nur der Host, höchstens alle TRAFFIC_MS).
-    // Zeilen: [id, x, y, Winkel, Art 0-3, Farbe, vx, vy, bremst]
     sendTraffic(rows) {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify({ t: "n", p: rows }));
     },
 
-    // Stoß an einen anderen Fahrer weitergeben (Impuls in px/Bild).
     sendHit(to, jx, jy) {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify({ t: "h", to, x: Math.round(jx * 1000) / 1000, y: Math.round(jy * 1000) / 1000 }));
     },
 
-    // Stoß gegen ein Verkehrsauto an den Host melden.
     sendNpcHit(id, dvx, dvy, dva) {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify({
@@ -128,7 +132,6 @@
       }));
     },
 
-    // Pro Bild aufrufen: berechnet die angezeigte Position aller anderen Fahrer und Autos.
     update(now) {
       const renderTime = now - INTERPOLATION_MS;
 
@@ -146,7 +149,6 @@
         r.vx = lerp(from.vx, to.vx, k);
         r.vy = lerp(from.vy, to.vy, k);
 
-        // Verfolger dieses Fahrers: nur mischen, wenn die Anzahl gleich geblieben ist
         const qa = from.q, qb = to.q;
         const src = qa.length === qb.length ? qa : qb;
         while (r.chasers.length < src.length) {
@@ -181,6 +183,12 @@
     }
   };
 
+  function sendName() {
+    if (!ws || ws.readyState !== WebSocket.OPEN || sentName === myName) return;
+    sentName = myName;
+    ws.send(JSON.stringify({ t: "u", n: myName }));
+  }
+
   function connect() {
     if (!wanted || ws) return;
 
@@ -200,6 +208,8 @@
     mine.addEventListener("open", () => {
       api.status = "online";
       retryDelay = 1500;
+      sentName = null;
+      sendName();
       clearInterval(pingTimer);
       pingTimer = setInterval(() => {
         if (mine.readyState === WebSocket.OPEN) mine.send('{"t":"p"}');
@@ -263,7 +273,6 @@
       const now = performance.now();
       api.count = m.n | 0;
 
-      // Hat sich der Verkehrs-Host geändert, gehört der alte Verkehr nicht mehr zu uns.
       const host = m.h ?? null;
       if (host !== api.hostId) {
         api.hostId = host;
@@ -273,18 +282,20 @@
       const present = new Set();
 
       for (const row of m.p) {
-        const [id, x, y, a, vx, vy, car, lvl, k, q] = row;
+        const [id, x, y, a, vx, vy, car, lvl, k, q, name] = row;
         present.add(id);
+        if (name !== undefined) names.set(id, name);
 
         let r = api.remotes.get(id);
         if (!r) {
-          r = { id, buf: [], x, y, a, vx, vy, car, lvl, k, seenAt: now, chasers: [] };
+          r = { id, buf: [], x, y, a, vx, vy, car, lvl, k, seenAt: now, chasers: [], name: "" };
           api.remotes.set(id, r);
         }
 
         r.buf.push({ t: now, x, y, a, vx, vy, q: q || [] });
         if (r.buf.length > 12) r.buf.shift();
 
+        r.name = names.get(id) || "";
         r.car = car;
         r.lvl = lvl;
         r.k = k;
@@ -302,6 +313,7 @@
       clearInterval(pingTimer);
       api.remotes.clear();
       api.netNpcs.clear();
+      names.clear();
       api.count = 0;
       api.myId = null;
       api.hostId = null;
@@ -342,6 +354,7 @@
     api.status = "off";
     api.remotes.clear();
     api.netNpcs.clear();
+    names.clear();
     api.count = 0;
     api.myId = null;
     api.hostId = null;

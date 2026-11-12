@@ -1,10 +1,8 @@
-// vorschaubild eines fahrzeugs: wird im browser des hochladenden gezeichnet (kleines webp/jpeg) und
-// mit dem upload an den server geschickt. der server prüft nur dateityp und größe.
 import * as THREE from "three";
 import { fahrzeugGrafik, entsorge } from "./teile3d.js";
 import { bereinige } from "./bau.js";
 
-const MAX_ZEICHEN = 55000;   // der server erlaubt 60 000
+const MAX_ZEICHEN = 55000;
 
 export function modellbild(planText) {
   const plan = bereinige(JSON.parse(planText));
@@ -28,7 +26,6 @@ export function modellbild(planText) {
   const mitte = box.getCenter(new THREE.Vector3());
   const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 0.5);
 
-  // boden als standfläche, damit man größe und lage erkennt
   const boden = new THREE.Mesh(new THREE.CircleGeometry(radius * 1.3, 40), new THREE.MeshStandardMaterial({ color: "#2b3546", roughness: 0.95 }));
   boden.rotation.x = -Math.PI / 2;
   boden.position.set(mitte.x, box.min.y - 0.02, mitte.z);

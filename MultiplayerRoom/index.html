@@ -10,7 +10,6 @@
   <script src="lang.js"></script>
   <script type="importmap">{"imports":{"three":"./lib/three.module.js","three/addons/":"./lib/addons/"}}</script>
   <style>
-    /* start-overlay "kroxenstudios" (wie in den anderen waitinggames) */
     .splash { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 22px; background: #2b2f34; pointer-events: none; animation: splash-out 0.6s ease 2.2s forwards; }
     .splash-name { color: #e10600; font-size: clamp(32px, 9vw, 84px); font-weight: 900; letter-spacing: 0.08em; animation: splash-in 0.9s ease both; }
     .splash-bar { width: clamp(140px, 30vw, 320px); height: 3px; background: #e1060033; overflow: hidden; }
@@ -44,7 +43,6 @@
     <div id="hint" aria-live="polite"></div>
     <div id="meldung" aria-live="polite"></div>
 
-    <!-- bauen: teile, farben, werkzeuge -->
     <aside id="baupanel" class="panel">
       <div class="kopf">
         <span><span data-en="Parking lot">Parkplatz</span> <b id="lotNr">–</b></span>
@@ -70,13 +68,11 @@
       </div>
     </aside>
 
-    <!-- einstellungen eines teils -->
     <aside id="inspector" class="panel" hidden>
       <div class="kopf"><b id="inspTitel">Teil</b><button type="button" id="inspZu" aria-label="Schließen" data-en-aria="Close">✕</button></div>
       <div id="inspInhalt"></div>
     </aside>
 
-    <!-- fahren: belegung der tasten -->
     <aside id="fahrpanel" class="panel" hidden>
       <div class="kopf"><b data-en="Controls">Steuerung</b></div>
       <div id="tastenListe"></div>

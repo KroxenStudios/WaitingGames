@@ -1,5 +1,3 @@
-// live-vorschau der spielfigur mit namensschild (konto.html). hört auf das ereignis "krox-look",
-// das der charakter-editor in accounts.js bei jeder änderung auslöst.
 import * as THREE from "three";
 import { spielfigur, figurAktualisieren, textSprite, entsorge } from "./teile3d.js";
 import { lookAus } from "./look.js";
@@ -39,13 +37,12 @@ export function startVorschau(container, start = {}) {
   function setzeName(name) {
     if (schild) { scene.remove(schild); entsorge(schild); }
     schild = textSprite(name);
-    schild.position.set(0, 2.05, 0);   // schwebt über dem kopf, dreht sich nicht mit
+    schild.position.set(0, 2.05, 0);
     scene.add(schild);
   }
   aktualisiere();
   setzeName(zustand.name);
 
-  // drehen per ziehen, sonst langsame eigenrotation
   let ziehen = false, letzteX = 0, pause = 0;
   const el = renderer.domElement;
   el.addEventListener("pointerdown", e => { ziehen = true; letzteX = e.clientX; el.setPointerCapture(e.pointerId); el.style.cursor = "grabbing"; });

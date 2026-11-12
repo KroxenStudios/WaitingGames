@@ -1,4 +1,3 @@
-// bastelkarre: einfache partikel für abgas, nebel und triebwerksflammen.
 import * as THREE from "three";
 
 const VERT = `
@@ -68,11 +67,9 @@ export class Partikel {
     this.material.uniforms.skala.value = hoehePixel / (2 * Math.tan((fov * Math.PI) / 360));
   }
 
-  // p, v: vector3; farbe: three.color oder text; größe in metern
   emit(p, v, farbe, s0, s1, life, a0 = 0.8, auftrieb = 0) {
     let i = this.n;
     if (i >= this.max) {
-      // ältestes überschreiben: einfach zufällig einen platz nehmen
       i = Math.floor(Math.random() * this.max);
     } else {
       this.n++;
@@ -92,7 +89,6 @@ export class Partikel {
     for (let i = 0; i < this.n; i++) {
       this.life[i] += dt;
       if (this.life[i] >= this.maxLife[i]) {
-        // mit dem letzten tauschen
         const j = --this.n;
         if (i !== j) {
           for (const arr of [this.pos, this.vel, this.col]) {

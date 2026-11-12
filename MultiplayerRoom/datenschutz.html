@@ -58,16 +58,19 @@
       Cloudflare (Cloudflare Workers) betreiben. Damit andere Spieler dich sehen können, werden
       folgende Daten übertragen und an alle Spieler im Raum weitergegeben:</p>
     <ul>
-      <li>dein Spielername (max. 20 Zeichen), deine Figurfarbe und dein Aussehen (Kleidung, Frisur, Haar- und Hautfarbe), alles aus
+      <li>dein Spielername (max. 20 Zeichen), deine Figurfarbe und dein Aussehen (Figur, Kleidung, Frisur, Mund, Haar- und Hautfarbe), alles aus
         deinen Einstellungen (Konto-Seite),</li>
       <li>deine Position und die Lage der Teile deines Fahrzeugs im Raum,</li>
       <li>den Bauplan deines Fahrzeugs (welche Teile du wo gebaut hast),</li>
-      $1
+      <li>Chatnachrichten (max. 100 Zeichen; Chatten geht nur mit Konto, dein Kontoname steht dabei). Sie sind für alle im Raum
+        sichtbar, werden nicht gespeichert und verblassen im Spiel nach kurzer Zeit.</li>
+    </ul>
     <p>Diese Daten liegen nur im Arbeitsspeicher des Raums, solange du verbunden bist. Wir speichern sie
       weder dauerhaft noch in einer Datenbank. Bitte gib deshalb keinen echten Namen und keine
       persönlichen Daten in Namen oder Chat ein. Technisch bedingt verarbeitet Cloudflare als
       Dienstleister deine IP-Adresse, um die Verbindung herzustellen. Wir sehen diese Adresse nicht
-      und speichern sie nicht. Ein Admin kann Spieler aus dem Raum entfernen.</p>
+      und speichern sie nicht. Der Raum-Server erhält sie ebenfalls und merkt sie sich nur im Arbeitsspeicher, solange du verbunden
+      bist, um die gleichzeitigen Verbindungen je Adresse zu begrenzen (höchstens sechs je Raum); sie wird nicht gespeichert. Ein Admin kann Spieler aus dem Raum entfernen.</p>
     <p>Name und Farbe speichert dein Browser lokal (Local Storage, Eintrag <code>characterSettings</code>).
       Dieser Eintrag wird nur beim Beitritt zum Raum an den Server gesendet. Du kannst ihn jederzeit in
       den Browsereinstellungen löschen.</p>
@@ -106,8 +109,8 @@
       wir dafür nur einen Hash (keine lesbare Adresse), der nach spätestens 24 Stunden gelöscht wird.</p>
     <p><b>Hangar:</b> Du kannst ein Fahrzeug hochladen. Öffentlich sichtbar sind dann Titel,
       Beschreibung, Bauplan, dein Benutzername, das Datum und die Zahl der Downloads. Jeder darf das
-      Fahrzeug laden und weiterverwenden. Vor der Veröffentlichung prüft der Betreiber den Upload;
-      abgelehnte Uploads werden gelöscht. Für die Download-Zahl merken wir uns, wer ein Fahrzeug schon
+      Fahrzeug laden und weiterverwenden. Uploads sind sofort sichtbar; der Betreiber prüft sie
+      nachträglich (zum Beispiel nach Meldungen) und entfernt unpassende Fahrzeuge. Für die Download-Zahl merken wir uns, wer ein Fahrzeug schon
       geladen hat, damit niemand mehrfach zählt: bei angemeldeten Nutzern über die Konto-Kennung,
       bei nicht angemeldeten über einen Hash aus IP-Adresse, Datum und einem geheimen Wert. Dieser Hash
       ist nicht rückrechenbar und wird nach ein bis zwei Tagen gelöscht.</p>
@@ -190,17 +193,17 @@
       (Cloudflare Workers). So that other players can see you, the following data is transmitted and
       passed on to all players in the room:</p>
     <ul>
-      <li>your player name (max. 20 characters), figure colour and look (clothing, hairstyle, hair and skin colour), all from
+      <li>your player name (max. 20 characters), figure colour and look (figure, clothing, hairstyle, mouth, hair and skin colour), all from
         your settings (account page),</li>
       <li>your position and the position of your vehicle's parts in the room,</li>
       <li>the design of your vehicle (which parts you built where),</li>
-      <li>chat messages (max. 100 characters). They are visible to everyone in the room and deleted
-        after about five seconds.</li>
+      <li>chat messages (max. 100 characters; chatting needs an account, and your account name is shown with the message). They are
+        visible to everyone in the room, are not stored and fade out in the game after a short time.</li>
     </ul>
     <p>This data is held only in the room's memory while you are connected. We do not store it
       permanently or in a database. Please therefore do not enter a real name or personal data in
       the name or chat. As is technically unavoidable, Cloudflare, as a service provider, processes
-      your IP address to establish the connection. We do not see or store this address. An admin can
+      your IP address to establish the connection. We do not see or store this address. The room server also receives it and keeps it only in memory while you are connected, to limit the simultaneous connections per address (at most six per room); it is not stored. An admin can
       remove players from the room.</p>
     <p>Your browser stores name and colour locally (Local Storage, entry <code>characterSettings</code>).
       This entry is sent to the server only when you join the room. You can delete it at any time in
@@ -239,8 +242,8 @@
       hash (no readable address), deleted after 24 hours at the latest.</p>
     <p><b>Hangar:</b> You can upload a vehicle. Publicly visible are then its title,
       description, design, your username, the date and the number of downloads. Anyone may load and
-      reuse the vehicle. Before publication the operator reviews the upload; rejected uploads are
-      deleted. For the download count we remember who has already loaded a vehicle so nobody is
+      reuse the vehicle. Uploads are visible immediately; the operator reviews them
+      afterwards (for example after reports) and removes inappropriate vehicles. For the download count we remember who has already loaded a vehicle so nobody is
       counted twice: for signed-in users via the account identifier, for others via a hash of IP
       address, date and a secret value. This hash cannot be reversed and is deleted after one to two
       days.</p>

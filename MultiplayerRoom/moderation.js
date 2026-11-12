@@ -1,5 +1,3 @@
-// moderation (nur für das admin-konto): meldungen bearbeiten, konten stummschalten oder sperren, protokoll.
-// alle rechte prüft der server; diese seite ist nur die oberfläche.
 import { Konto } from "./accounts.js";
 import { el } from "./profil.js";
 
@@ -25,7 +23,6 @@ async function aktion(fn, nachher) {
   try { await fn(); if (nachher) await nachher(); } catch (e) { zeigeHinweis(Konto.fehlerText(e.message) || L("Fehler", "Error"), "fehler"); }
 }
 
-// ----------------------------------------------------------------------- meldungen
 const meldungenBox = el("div", { class: "kontoInhalt" });
 async function ladeMeldungen() {
   let d;
@@ -75,7 +72,6 @@ async function bearbeite(r, body) {
   });
 }
 
-// ----------------------------------------------------------------------- konten
 const kontenBox = el("div", { class: "kontoInhalt" });
 const suchFeld = el("input", { type: "text", placeholder: L("Benutzername (oder Anfang davon)", "Username (or its beginning)"), autocapitalize: "none", spellcheck: false });
 const suchErgebnis = el("div", { class: "kontoBox" });
@@ -110,7 +106,6 @@ async function zeigeNutzer(name) {
   });
 }
 
-// ----------------------------------------------------------------------- protokoll
 const protokollBox = el("div", { class: "kontoInhalt" });
 async function ladeProtokoll() {
   try {
@@ -123,7 +118,6 @@ async function ladeProtokoll() {
   } catch {}
 }
 
-// ----------------------------------------------------------------------- start
 async function start() {
   if (!Konto.angemeldet()) {
     app.replaceChildren(el("div", { class: "kontoInhalt" }, el("h2", { textContent: L("Nur für das Moderationskonto", "Moderation account only") }),

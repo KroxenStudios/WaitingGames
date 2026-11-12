@@ -1,11 +1,12 @@
-    // Englische Fassung: statische Texte (Textknoten und Attribute) anhand der Tabelle ersetzen
     const L = WG.L, LOCALE = L("de-DE", "en-US");
     const EN_TEXT = {
   "Online fahren: andere Fahrer sehen und zusammen fahren": "Drive online: see other drivers and drive together",
   "Online": "Online",
   "Online-Modus an/aus": "Online mode on/off",
   "Online fahren (andere Fahrer sehen, Zusammenstöße)": "Drive online (see other drivers, collisions)",
-  "Es werden nur Position und Fahrzeugmodell sowie Verkehr und Verfolger gesendet. Kein Chat, keine Namen.": "Only position and car model, plus traffic and chasers, are sent. No chat, no names.",
+  "Gesendet werden Position, Fahrzeugmodell, dein Name sowie Verkehr und Verfolger. Es gibt keinen Chat.": "Position, car model, your name, plus traffic and chasers are sent. There is no chat.",
+  "Dein Name": "Your name",
+  "Wird anderen Fahrern über deinem Auto angezeigt (höchstens 16 Zeichen). Leer = „Fahrer“ mit Nummer.": "Shown to other drivers above your car (16 characters max). Empty = \"Driver\" with a number.",
   "Hitboxen der Fahrzeuge anzeigen": "Show vehicle hitboxes",
   "Drifte durch eine riesige Welt und sammle Geld.": "Drift through a huge world and collect money.",
   "vom Kleinwagen bis zur Rakete": "from compact car to rocket",

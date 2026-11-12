@@ -1,29 +1,34 @@
-# WaitingGames
-<img width="882" height="228" alt="image" src="https://github.com/user-attachments/assets/155640a8-c28a-4876-9e09-aac0f8c84b39" />
+# Waiting Games – KroxenStudios
 
+Kleine Browserspiele für zwischendurch. Die Seiten sind rein statisch und laufen auf GitHub Pages.
 
-A work-in-progress collection of simple browser games by **KroxenStudios**, released under the Apache License 2.0.
+| Pfad | Spiel |
+|---|---|
+| `Asphalt Arkade/` | Drift durch eine Stadt |
+| `Mattenwurf/` | Zeitungen werfen |
+| `e-scooter-klicker/` | Klicker |
+| `MultiplayerRoom/` | **Bastelkarre** – Fahrzeuge aus Teilen bauen, online fahren und fliegen |
 
-[WaitingGames on Pages](https://kroxenstudios.github.io/WaitingGames/)
+## Veröffentlichen (GitHub Pages)
 
-## Games
+1. Diesen Ordner als Repository-Wurzel pushen (der Ordner `nicht veröffentlichen/` steht in der `.gitignore`).
+2. Auf GitHub: *Settings → Pages → Deploy from a branch → `main` / `/ (root)`*.
+3. Die Startseite ist dann `https://<name>.github.io/<repo>/`, die Bastelkarre liegt unter `/MultiplayerRoom/`.
 
-### Asphalt Arkade
-A 2D top-down driving game where you try to escape pursuing vehicles. Survive longer to earn more points, explore a large map, and upgrade your cars. The game features eight vehicles and areas including suburbs, downtown, industrial districts, highways, mountains, villages, and the seaside.
+Alle Pfade sind relativ; `.nojekyll` sorgt dafür, dass die Dateien unverändert ausgeliefert werden.
 
-### Mattenwurf
-A casual skill game about throwing newspapers onto doorsteps. Aim for the doormat, build streaks for bonus points, and avoid windows and garden objects. An upgrade helps make throws steadier.
+Zur Bastelkarre gehört die fertig erzeugte Karte `MultiplayerRoom/welt.json` (ca. 0,5 MB) mit `gelaende.js`. Sie wird einmal vom Generator in `nicht veröffentlichen/weltgenerator/` erzeugt und nicht zur Laufzeit berechnet.
 
-### E-Scooter Clicker
-An idle clicker game about progressing through milestones and unlocking upgrades. It is designed primarily for AFK play.
+## Server der Bastelkarre
 
-### Bastelkarre / MultiplayerRoom
-An online multiplayer sandbox game where players build vehicles from modular blocks or start with preset designs. Rooms support up to 12 players, and vehicle builds can be saved using JSON.
+Die Bastelkarre verbindet sich per WebSocket mit dem Cloudflare-Worker `bastelkarre-online`
+(`https://bastelkarre-online.kroxenstudios.workers.dev`, Quelltext in `nicht veröffentlichen/bastelkarre-online/`).
+Deploy: `nicht veröffentlichen/bastelkarre-online/deploy.cmd`. Der Worker liefert den Ordner
+`MultiplayerRoom/` zusätzlich selbst aus; GitHub Pages braucht ihn nur für die Mehrspieler-Verbindung.
 
-## Development
+Änderst du den Namen des Workers, passe `WORKER_HOST` in `MultiplayerRoom/spiel.js` an.
 
-This collection is actively being developed. Features, games, and details may change over time.
+## Sprachen
 
-## License
-
-The games in this collection are licensed under the [Apache License 2.0](LICENSE).
+Deutsch und Englisch. Die Wahl wird wie bei den anderen Spielen unter `wg-lang` im Browser gespeichert
+(Startseite oder Knopf „DE | EN“ im Spiel); Vorgabe ist die Browsersprache.

@@ -1054,6 +1054,23 @@ h1, h2, .start-card h1 {
   accent-color: #65e6a5;
 }
 
+.settings-card input[type="text"] {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid #ffffff33;
+  border-radius: 8px;
+  background: #0c1522;
+  color: #e6edf3;
+  font: inherit;
+}
+
+.settings-card input[type="text"]:focus {
+  border-color: #65e6a5;
+  outline: none;
+}
+
 .online-badge {
   position: absolute;
   top: 84px;

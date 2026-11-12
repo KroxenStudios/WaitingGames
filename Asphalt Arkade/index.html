@@ -84,7 +84,10 @@
 
       <h3>Online</h3>
       <label class="check"><input type="checkbox" data-key="online"> Online fahren (andere Fahrer sehen, Zusammenstöße)</label>
-      <small class="settings-note">Es werden nur Position und Fahrzeugmodell sowie Verkehr und Verfolger gesendet. Kein Chat, keine Namen.</small>
+      <label>Dein Name
+        <input type="text" data-key="playerName" maxlength="16" placeholder="Fahrer" autocomplete="off" spellcheck="false">
+        <small>Wird anderen Fahrern über deinem Auto angezeigt (höchstens 16 Zeichen). Leer = „Fahrer“ mit Nummer.</small></label>
+      <small class="settings-note">Gesendet werden Position, Fahrzeugmodell, dein Name sowie Verkehr und Verfolger. Es gibt keinen Chat.</small>
       <label class="check"><input type="checkbox" data-key="showHitbox"> Hitboxen der Fahrzeuge anzeigen</label>
 
       <h3>Verfolger</h3>

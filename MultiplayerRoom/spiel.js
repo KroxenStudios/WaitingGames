@@ -3,7 +3,7 @@ import RAPIER from "./lib/rapier.mjs";
 import * as BAU from "./bau.js";
 import * as PH from "./physik.js";
 import {
-  fahrzeugGrafik, setzeRaeder, geistModell, schirmModell, spielfigur, figurAktualisieren, setzeSitzen, textSprite, entsorge, mat
+  fahrzeugGrafik, trenneGrafik, setzeRaeder, geistModell, schirmModell, spielfigur, figurAktualisieren, setzeSitzen, textSprite, entsorge, mat
 } from "./teile3d.js";
 import { lookAus } from "./look.js";
 import { Partikel } from "./partikel.js";
@@ -63,7 +63,7 @@ const TEXTE = {
   "Tippen = Werkzeug · Ziehen = drehen · Zwei Finger = zoomen/schieben": "Tap = tool · drag = rotate · two fingers = zoom/pan",
   "Linksklick setzen · Rechtsklick entfernen · Mittelklick einstellen · Umschalt+Klick mehrere auswählen · Ziehen dreht die Ansicht · WASD schiebt · R/T drehen/kippen":
     "Left-click place · right-click remove · middle-click adjust · Shift+click multi-select · drag rotates the view · WASD moves · R/T rotate/tilt",
-  "Auswählen": "Select", "Duplizieren": "Duplicate", "dupliziert (Rückgängig mit Strg+Z)": "duplicated (undo with Ctrl+Z)",
+  "Auswählen": "Select", "Beschriftung": "Label", "Erscheint auf dem Knopf im Handheld-Modus (höchstens 10 Zeichen)": "Shown on the button in handheld mode (max. 10 characters)", "Duplizieren": "Duplicate", "dupliziert (Rückgängig mit Strg+Z)": "duplicated (undo with Ctrl+Z)",
   "Ausgewählt: jetzt auf die Zielstelle klicken (mehrere Teile mit Umschalt+Klick)": "Selected: now click the target spot (several parts with Shift+click)", "Teile": "parts", "Gemischte Teile: nur Farbe und Entfernen gelten für alle.": "Mixed parts: only colour and removal apply to all.",
   "Alle gleichen auswählen": "Select all of this type", "Teile entfernen": "Remove parts", "Auswahl aufheben": "Clear selection",
   "Alle Teile ausgewählt": "All parts selected",
@@ -141,6 +141,9 @@ try {
 }
 let kontoName = "";
 try { kontoName = localStorage.getItem("krox-user") || ""; } catch {}
+// das admin-konto darf sprengladungen mit größerer reichweite bauen
+const istAdminKonto = kontoName.toLowerCase() === BAU.ADMIN_NAME;
+const eigenBereinige = raw => BAU.bereinige(raw, { admin: istAdminKonto });
 const spielerName = (charakter.name || kontoName || tr("Gast")).trim().slice(0, 20) || "Gast";
 const spielerFarbe = /^#[0-9a-f]{6}$/i.test(charakter.color || "") ? charakter.color : "#62e6b2";
 const spielerLook = lookAus(charakter);
@@ -286,8 +289,8 @@ function aktualisiereHimmel(zeit) {
   }
 }
 
-const rauch = new Partikel(scene, 2600, false);
-const feuer = new Partikel(scene, 1400, true);
+const rauch = new Partikel(scene, 4500, false);
+const feuer = new Partikel(scene, 3000, true);
 
 await RAPIER.init();
 $("#laden").hidden = true;
@@ -609,7 +612,7 @@ baueWelt();
 const PLAN_KEY = "bastelkarre-plan";
 let plan;
 try {
-  plan = BAU.bereinige(JSON.parse(localStorage.getItem(PLAN_KEY) || "null"));
+  plan = eigenBereinige(JSON.parse(localStorage.getItem(PLAN_KEY) || "null"));
 } catch {
   plan = null;
 }
@@ -706,7 +709,7 @@ function planGeaendert(merken = true) {
 function planAusKonto(text) {
   let neu;
   try {
-    neu = BAU.bereinige(JSON.parse(text));
+    neu = eigenBereinige(JSON.parse(text));
   } catch {
     return;
   }
@@ -816,7 +819,7 @@ function schalteKoerper() {
 }
 function rueckgaengig() {
   if (!verlauf.length) return meldung("Nichts rückgängig zu machen");
-  plan = BAU.bereinige(JSON.parse(verlauf.pop()));
+  plan = eigenBereinige(JSON.parse(verlauf.pop()));
   schliesseInspector();
   planGeaendert();
 }
@@ -839,7 +842,7 @@ $("#importDatei").onchange = async e => {
   if (!datei) return;
   let neu = null;
   try {
-    neu = BAU.bereinige(JSON.parse(await datei.text()));
+    neu = eigenBereinige(JSON.parse(await datei.text()));
   } catch {}
   if (!neu || !neu.parts.length) return meldung("Ungültige Fahrzeug-Datei");
   merkeVerlauf();
@@ -859,6 +862,7 @@ $("#btnLeeren").onclick = () => {
 
 const inspector = $("#inspector");
 const inspInhalt = $("#inspInhalt");
+const BESCHRIFTBAR = ["nebel", "duese", "rakete", "servo", "bruch", "fallschirm", "kamera", "steuerflaeche", "scheinwerfer", "propeller", "explosive"];
 // auswahl: geordnete liste von teil-indizes, das erste ist das führende teil des inspektors
 let inspAuswahl = [];
 let tastenWarten = null;
@@ -977,7 +981,8 @@ function zeigeInspector() {
     zahl.step = step;
     zahl.value = p.k[key];
     zahl.title = tr("Auch Werte außerhalb des Reglers sind möglich");
-    const [lo, hi] = BAU.GRENZEN[key] || [-1e9, 1e9];
+    let [lo, hi] = BAU.GRENZEN[key] || [-1e9, 1e9];
+    if (key === "reichweite" && istAdminKonto) hi = BAU.ADMIN_REICHWEITE;
     const wertBox = d.querySelector(".wert");
     wertBox.textContent = "";
     wertBox.append(zahl, document.createTextNode(einheit));
@@ -1139,6 +1144,18 @@ function zeigeInspector() {
       regler("Reichweite", "reichweite", 0.5, 30, 0.5, " m");
       regler("Kraft", "kraft", 1, 1000, 1, " kN");
       break;
+  }
+
+  // beschriftung für den knopf im handheld-modus, nur bei teilen mit taste
+  if (gleich && BESCHRIFTBAR.includes(p.t)) {
+    const eingabe = document.createElement("input");
+    eingabe.type = "text";
+    eingabe.maxLength = 10;
+    eingabe.value = p.k.name || "";
+    eingabe.placeholder = tr(def.name).slice(0, 10);
+    eingabe.title = tr("Erscheint auf dem Knopf im Handheld-Modus (höchstens 10 Zeichen)");
+    eingabe.onchange = () => aendern(() => { setzeK("name", eingabe.value.replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 10) || undefined); });
+    feld("Beschriftung", eingabe);
   }
 
   const hinweis = document.createElement("p");
@@ -1974,6 +1991,17 @@ function schalteVerbrauch() {
   meldung(verbrauchAn ? "Treibstoffverbrauch an" : "Treibstoffverbrauch aus (unbegrenzt)");
 }
 
+// überträgt abgelöste teile (nach einer sprengung) in die grafik: jedes bekommt eine eigene gruppe
+function pflegeTrennungen(veh, grafik) {
+  if (!veh || !grafik) return;
+  grafik.sprengOrt = veh.sprengPos;
+  while (veh.neuGetrennt.length) {
+    const g = trenneGrafik(grafik, veh.neuGetrennt.shift());
+    grafik.groups.push(g);
+    scene.add(g);
+  }
+}
+
 function erzeugeEigenes() {
   if (meinFahrzeug) PH.entferneFahrzeug(world, meinFahrzeug);
   entferneGrafik(meineGrafik);
@@ -2053,10 +2081,12 @@ const touchTasten = $("#touchTasten");
 function baueTastenListe() {
   const liste = [["W / S", "Gas / Rückwärts"], ["A / D", "Lenken"], ["Leertaste", "Bremse"], ["M", "Motor an/aus"], ["C", "Kamera"], ["Tab", "Bauen"], ["⌫", "Neu starten"], ["X", "Aus-/Einsteigen"]];
   const aktionen = new Map();
-  const add = (t, text) => {
+  // eigene beschriftung des teils ersetzt den vorgegebenen text (zusatz z. b. "+" bei zwei tasten)
+  const add = (t, text, name, zusatz = "") => {
     if (!t) return;
+    const label = name ? name + zusatz : text;
     const alt = aktionen.get(t);
-    aktionen.set(t, alt && !alt.includes(text) ? `${alt}, ${text}` : text);
+    aktionen.set(t, alt && !alt.includes(label) ? `${alt}, ${label}` : label);
   };
   const raketen = [];
   let hatTank = false;
@@ -2064,18 +2094,18 @@ function baueTastenListe() {
   const joystickTasten = new Set();
   plan.parts.forEach((p, i) => {
     switch (p.t) {
-      case "nebel": add(p.k.taste, "Nebel"); break;
-      case "duese": add(p.k.taste, "Triebwerk"); break;
-      case "rakete": add(p.k.taste, "Rakete"); raketen.push(i); break;
-      case "fallschirm": add(p.k.taste, "Fallschirm"); break;
-      case "kamera": add(p.k.taste, "Kamera"); break;
-      case "scheinwerfer": add(p.k.taste, "Scheinwerfer"); break;
-      case "propeller": add(p.k.plus, "Gashebel +"); add(p.k.minus, "Gashebel −"); break;
+      case "nebel": add(p.k.taste, "Nebel", p.k.name); break;
+      case "duese": add(p.k.taste, "Triebwerk", p.k.name); break;
+      case "rakete": add(p.k.taste, "Rakete", p.k.name); raketen.push(i); break;
+      case "fallschirm": add(p.k.taste, "Fallschirm", p.k.name); break;
+      case "kamera": add(p.k.taste, "Kamera", p.k.name); break;
+      case "scheinwerfer": add(p.k.taste, "Scheinwerfer", p.k.name); break;
+      case "propeller": add(p.k.plus, "Gashebel +", p.k.name, " +"); add(p.k.minus, "Gashebel −", p.k.name, " −"); break;
       case "tank": hatTank = true; break;
       case "steuerflaeche": {
         const n = { nick: "Nicken", roll: "Rollen", gier: "Gieren" }[p.k.kanal] || "Ruder";
-        add(p.k.plus, `${n} +`);
-        add(p.k.minus, `${n} −`);
+        add(p.k.plus, `${n} +`, p.k.name, " +");
+        add(p.k.minus, `${n} −`, p.k.name, " −");
         if (p.k.kanal === "nick" || p.k.kanal === "roll") {
           steuerKanaele[p.k.kanal] = true;
           joystickTasten.add(p.k.plus);
@@ -2083,9 +2113,9 @@ function baueTastenListe() {
         }
         break;
       }
-      case "servo": add(p.k.plus, "Motor +"); add(p.k.minus, "Motor −"); break;
-      case "bruch": add(p.k.taste, "Trennen"); break;
-      case "explosive": add(p.k.taste, "Sprengen"); break;
+      case "servo": add(p.k.plus, "Motor +", p.k.name, " +"); add(p.k.minus, "Motor −", p.k.name, " −"); break;
+      case "bruch": add(p.k.taste, "Trennen", p.k.name); break;
+      case "explosive": add(p.k.taste, "Sprengen", p.k.name); break;
     }
   });
   if (hatTank) liste.push(["K", "Treibstoffverbrauch an/aus"]);
@@ -2172,13 +2202,20 @@ function emitEffekte(besitzer, planX, grafik, fx, dt) {
     tmpD.set(0, 1, 0).transformDirection(e.obj.matrixWorld);
     const key = besitzer + ":" + i;
     let akku = fxAkku.get(key) || 0;
-    let rate = 0;
+    let rate = 0, burstRate = 0;
     switch (p.t) {
       case "auspuff": rate = 14 + 46 * staerke; break;
       case "nebel": rate = 55; break;
       case "duese": rate = 160; break;
       case "rakete": rate = 300; break;
-      case "explosive": rate = 900 * staerke; break;
+      case "explosive": {
+        // kurzer ausbruch (die ersten 1,6 s), danach schwelt nur noch rauch bis zum ende
+        const zeit = (1 - staerke) * BLITZ_ZEIT;
+        const ausbruch = Math.pow(Math.max(0, 1 - zeit / 1.6), 2);
+        burstRate = 4000 * ausbruch * Math.min(2.5, 0.5 + (p.k.reichweite ?? 3) * 0.12);
+        rate = burstRate + 70 * Math.min(2.5, 0.5 + (p.k.reichweite ?? 3) * 0.12);
+        break;
+      }
     }
     akku += rate * dt;
     const zufall = s => (Math.random() - 0.5) * s;
@@ -2193,11 +2230,17 @@ function emitEffekte(besitzer, planX, grafik, fx, dt) {
         tmpVel.copy(tmpD).multiplyScalar(2.2).add(new THREE.Vector3(zufall(0.8), zufall(0.4), zufall(0.8)));
         rauch.emit(pos, tmpVel, tmpFarbe.set(p.k.farbe || "#e8f0ff"), 0.3, 2.6, 3.2 + Math.random() * 1.5, 0.5, 0.25);
       } else if (p.t === "explosive") {
-        // funken in alle richtungen, dazu etwas rauch
-        tmpVel.set(zufall(2), zufall(2), zufall(2)).normalize().multiplyScalar(6 + Math.random() * 14);
+        // feuerball und funken in alle richtungen, dazu dunkler rauch; alles wächst mit der reichweite
+        const r = Math.max(1, p.k.reichweite ?? 3);
+        // die funken erreichen etwa in einer halben sekunde den rand der reichweite
+        tmpVel.set(zufall(2), zufall(2), zufall(2)).normalize().multiplyScalar(Math.min(2 * r, 80) * (0.3 + Math.random() * 0.9));
         pos.addScaledVector(tmpVel, versatz);
-        feuer.emit(pos, tmpVel, tmpFarbe.setHSL(0.1 + Math.random() * 0.05, 1, 0.7 + Math.random() * 0.25), 0.4, 0.05, 0.2, 0.9);
-        if (Math.random() < 0.15) rauch.emit(pos, tmpVel.multiplyScalar(0.3), tmpFarbe.set("#8b8f98"), 0.3, 1.6, 1.6 + Math.random(), 0.4, 0.4);
+        const heiss = Math.random();
+        const nurRauch = Math.random() * rate >= burstRate;
+        if (!nurRauch) feuer.emit(pos, tmpVel, tmpFarbe.setHSL(0.04 + heiss * 0.09, 1, 0.5 + heiss * 0.45), Math.min(0.35 + r * 0.22, 12), 0.05, 0.9 + Math.random() * 1.1, 0.95);
+        if (nurRauch || Math.random() < 0.35) {
+          rauch.emit(pos, tmpVel.multiplyScalar(nurRauch ? 0.04 : 0.25), tmpFarbe.set(Math.random() < 0.5 ? "#3a3d42" : "#8b8f98"), Math.min(0.4 + r * 0.15, 8), Math.min(1 + r * 0.9, 30), 5 + Math.random() * 4, 0.55, 0.35);
+        }
       } else {
         const rak = p.t === "rakete";
         const v = rak ? 22 : 14;
@@ -2218,6 +2261,20 @@ const schirme = new Map();
 
 const lichtPool = [];
 const blitzPool = [];
+const wellePool = [];
+// helligkeit des blitzes über die zeit: hell am anfang, klingt über gut 2 s ab
+function blitzLicht(staerke) {
+  const zeit = (1 - staerke) * BLITZ_ZEIT;
+  return Math.pow(Math.max(0, 1 - zeit / 2.4), 2);
+}
+// nachglühen der luft um die explosion: klingt über ~9 s langsam ab und wird dabei rötlicher
+function gluehen(staerke) {
+  const zeit = (1 - staerke) * BLITZ_ZEIT;
+  return Math.pow(Math.max(0, 1 - zeit / 9), 1.5);
+}
+const gluehPool = [];
+const gluehFarbe = new THREE.Color();
+const BLITZ_ZEIT = 10; // gleich wie BLITZ_DAUER in physik.js
 function aktualisiereLichter() {
   const kandidaten = [];
   const blitze = [];
@@ -2227,13 +2284,14 @@ function aktualisiereLichter() {
       const staerke = fx.get(i) ?? 0;
       const an = staerke > 0;
       const blitz = planX.parts[i]?.t === "explosive";
-      linse.material.emissiveIntensity = an ? (blitz ? 10 * staerke : 2.2) : 0;
+      linse.material.emissiveIntensity = an ? (blitz ? 30 * blitzLicht(staerke) + 4 * gluehen(staerke) : 2.2) : 0;
       const e = grafik.emit.get(i);
       if (!an || !e) continue;
       e.obj.updateWorldMatrix(true, false);
       const pos = e.obj.localToWorld(e.punkt.clone());
       if (blitz) {
-        blitze.push({ pos, farbe: planX.parts[i].k.farbe || "#ffffff", staerke, d: pos.distanceToSquared(camera.position) });
+        const o = grafik.sprengOrt?.get(i);
+        blitze.push({ fest: o ? new THREE.Vector3(o[0], o[1], o[2]) : pos, pos, farbe: planX.parts[i].k.farbe || "#ffffff", staerke, r: planX.parts[i].k.reichweite ?? 3, d: pos.distanceToSquared(camera.position) });
         continue;
       }
       const dir = new THREE.Vector3(0, 1, 0).transformDirection(e.obj.matrixWorld);
@@ -2270,10 +2328,88 @@ function aktualisiereLichter() {
   }
   blitzPool.forEach((licht, n) => {
     const b = blitze[n];
-    licht.intensity = b ? 40000 * b.staerke : 0;
+    // kurz und extrem hell, dann schnell abklingend
+    licht.intensity = b ? (20000 * gluehen(b.staerke) + 220000 * blitzLicht(b.staerke)) * Math.min(3, 0.5 + b.r * 0.15) : 0;
     if (!b) return;
-    licht.color.set(b.farbe);
+    licht.distance = 20 + b.r * 8;
+    // vom blitzfarbton über orange zu dunklem rot
+    const kuehl = 1 - gluehen(b.staerke);
+    licht.color.set(b.farbe).lerp(gluehFarbe.set("#ff6a1a"), Math.min(1, kuehl * 1.6));
     licht.position.copy(b.pos);
+  });
+
+  // druckwelle: eine durchscheinende kugel, die bis zur reichweite wächst und verblasst
+  // pro explosion zwei schalen: die hauptwelle und ein schwächeres, nachlaufendes echo
+  for (let n = 0; n < Math.min(4, blitze.length * 2); n++) {
+    if (!wellePool[n]) {
+      // leuchtender rand statt voller kugel: die welle bleibt als schale sichtbar, man sieht hindurch
+      const m = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 48, 32),
+        new THREE.ShaderMaterial({
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+          fog: false,
+          uniforms: { farbe: { value: new THREE.Color("#ffffff") }, stark: { value: 0 } },
+          vertexShader: "varying vec3 vN; varying vec3 vV; void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
+          fragmentShader: "varying vec3 vN; varying vec3 vV; uniform vec3 farbe; uniform float stark; void main() { float rand = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 1.5); gl_FragColor = vec4(farbe * (0.25 + 4.5 * rand) * stark, 1.0); }"
+        })
+      );
+      m.frustumCulled = false;
+      m.userData.keinSchatten = true;
+      scene.add(m);
+      wellePool[n] = m;
+    }
+  }
+  wellePool.forEach((m, n) => {
+    const b = blitze[n >> 1];
+    const echo = n & 1;
+    m.visible = !!b;
+    if (!b) return;
+    // die welle läuft über die reichweite hinaus (auf das 2,2-fache), bremst dabei ab und verblasst langsam;
+    // das echo startet 0,3 s später und ist schwächer
+    const t = (1 - b.staerke) * BLITZ_ZEIT - (echo ? 0.3 : 0);
+    m.visible = t > 0;
+    const lauf = Math.min(1, Math.max(0, t) / 1.6);
+    // die welle bleibt am ort der zündung stehen, alles andere folgt dem block
+    m.position.copy(b.fest);
+    m.scale.setScalar(Math.max(0.05, b.r * 2.2 * (echo ? 0.8 : 1) * (1 - Math.pow(1 - lauf, 3))));
+    m.material.uniforms.farbe.value.set(b.farbe);
+    m.material.uniforms.stark.value = Math.max(0, 1 - t / 3.8) * (echo ? 0.55 : 1);
+  });
+
+  // glühende luftkugel: weicher heller kern, der lange nachleuchtet
+  for (let n = 0; n < Math.min(2, blitze.length); n++) {
+    if (!gluehPool[n]) {
+      const m = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 32, 20),
+        new THREE.ShaderMaterial({
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          side: THREE.BackSide,
+          fog: false,
+          uniforms: { farbe: { value: new THREE.Color("#ff8a3a") }, stark: { value: 0 } },
+          vertexShader: "varying vec3 vN; varying vec3 vV; void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
+          fragmentShader: "varying vec3 vN; varying vec3 vV; uniform vec3 farbe; uniform float stark; void main() { float kern = pow(abs(dot(normalize(vN), normalize(vV))), 1.6); gl_FragColor = vec4(farbe * kern * stark, 1.0); }"
+        })
+      );
+      m.frustumCulled = false;
+      m.userData.keinSchatten = true;
+      scene.add(m);
+      gluehPool[n] = m;
+    }
+  }
+  gluehPool.forEach((m, n) => {
+    const b = blitze[n];
+    m.visible = !!b;
+    if (!b) return;
+    const g = gluehen(b.staerke);
+    m.position.copy(b.pos);
+    m.scale.setScalar(Math.max(0.5, Math.min(b.r * 0.9, 150)));
+    m.material.uniforms.farbe.value.set("#ffd9a0").lerp(gluehFarbe.set("#ff4a10"), Math.min(1, (1 - g) * 1.4));
+    m.material.uniforms.stark.value = 0.7 * g;
   });
 }
 
@@ -2697,7 +2833,7 @@ function sendePose(sofort = false) {
   const takt = modus === "fahr" ? 33 : 1000;
   if (!sofort && jetzt - letztePose < takt) return;
   letztePose = jetzt;
-  const msg = { type: "pose", m: modus, s: spawnZaehler, b: [], w: [], fx: [], g: [] };
+  const msg = { type: "pose", m: modus, s: spawnZaehler, b: [], w: [], fx: [], g: [], sp: [] };
   if (modus === "fahr" && meinFahrzeug) {
     for (const b of meinFahrzeug.bodies) {
       const t = b.rb.translation(), q = b.rb.rotation();
@@ -2706,6 +2842,7 @@ function sendePose(sofort = false) {
     for (const z of letzterRadZustand) msg.w.push(z.teil, r3(z.feder), r3(z.lenk), r3(z.dreh % 1000));
     for (const [i, s] of meinFahrzeug.fx) msg.fx.push([i, r3(s * 10)]);
     meinFahrzeug.gelenke.forEach((g, i) => { if (!g.aktiv) msg.g.push(i); });
+    msg.sp = meinFahrzeug.sprengReihe;
   }
   if (modus === "fahr") {
     if (fussRb) msg.f = [r3(meineFigur.position.x), r3(meineFigur.position.y), r3(meineFigur.position.z), r3(meineFigur.rotation.y)];
@@ -2734,8 +2871,14 @@ function setzePlanAnderer(id, dv, text) {
   const r = anderer(id);
   if (dv === r.dv) return;
   r.dv = dv;
+  r.planText = text;
+  parsePlanAnderer(r);
+}
+
+// die reichweiten-grenze hängt am (vom server bestätigten) konto des absenders
+function parsePlanAnderer(r) {
   try {
-    r.plan = BAU.bereinige(JSON.parse(text));
+    r.plan = BAU.bereinige(JSON.parse(r.planText), { admin: r.acc === BAU.ADMIN_NAME });
   } catch {
     r.plan = null;
   }
@@ -2744,7 +2887,9 @@ function setzePlanAnderer(id, dv, text) {
 
 function aktualisiereAnderen(id, p) {
   const r = anderer(id);
+  const altAcc = r.acc;
   r.acc = typeof p.acc === "string" ? p.acc : null;
+  if (r.planText && (r.acc === BAU.ADMIN_NAME) !== (altAcc === BAU.ADMIN_NAME)) parsePlanAnderer(r);
   const name = String(p.name || "Spieler").slice(0, 20);
   if (name !== r.name) {
     r.name = name;
@@ -2775,6 +2920,7 @@ function aktualisiereAnderen(id, p) {
     if (r.fPuffer.length > 30) r.fPuffer.shift();
   }
   if (r.m === "fahr" && Array.isArray(p.b) && p.b.length) {
+    r.spZiel = Array.isArray(p.sp) ? p.sp.filter(Number.isInteger).slice(0, 4096) : [];
     r.puffer.push({ t: performance.now(), b: p.b, w: p.w || [], fx: p.fx || [] });
     if (r.puffer.length > 30) r.puffer.shift();
   }
@@ -2786,6 +2932,7 @@ function baueAnderen(r) {
   if (r.kin) PH.entferneFahrzeug(world, r.kin);
   r.grafik = null;
   r.kin = null;
+  r.spN = 0;
   const steh = lotPos(r.lot).add(new THREE.Vector3(6.9, 0, -6.9));
   r.angebunden = null;
   if (!r.plan || !r.plan.parts.length) {
@@ -2858,6 +3005,21 @@ function bewegeAndere(jetzt, dt) {
     if (r.neu) baueAnderen(r);
     bewegeFigurAnderer(r, jetzt, dt);
     if (!r.grafik || r.m !== "fahr" || !r.puffer.length) continue;
+    // sprengungen des anderen spielers nachvollziehen, in derselben reihenfolge
+    if (r.kin && r.spZiel) {
+      r.spN = r.spN || 0;
+      // aufzeichnung: ladung, anzahl, teile (jeweils hintereinander)
+      while (r.spN + 1 < r.spZiel.length) {
+        const i = r.spZiel[r.spN], anzahl = r.spZiel[r.spN + 1];
+        if (r.spN + 2 + anzahl > r.spZiel.length) break;
+        const liste = r.spZiel.slice(r.spN + 2, r.spN + 2 + anzahl);
+        r.spN += 2 + anzahl;
+        if (r.plan?.parts[i]?.t === "explosive" && liste.every(n => r.plan.parts[n])) {
+          PH.sprenge(r.kin, i, liste);
+          pflegeTrennungen(r.kin, r.grafik);
+        }
+      }
+    }
     const zeit = jetzt - 100;
     let von = r.puffer[0], bis = r.puffer[0];
     for (const s of r.puffer) {
@@ -2865,9 +3027,9 @@ function bewegeAndere(jetzt, dt) {
       else { bis = s; break; }
     }
     const k = bis !== von ? THREE.MathUtils.clamp((zeit - von.t) / (bis.t - von.t), 0, 1) : 0;
-    const n = Math.min(r.grafik.groups.length, von.b.length, bis.b.length);
+    const n = Math.min(r.grafik.groups.length, bis.b.length);
     for (let i = 0; i < n; i++) {
-      const a = von.b[i], b = bis.b[i];
+      const a = von.b[i] || bis.b[i], b = bis.b[i];
       const g = r.grafik.groups[i];
       g.position.set(a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k);
       qa.set(a[3], a[4], a[5], a[6]).normalize();
@@ -2936,6 +3098,7 @@ function schleife(zeit) {
     akku -= PH.PHYSIK_TAKT;
     schritte++;
   }
+  pflegeTrennungen(meinFahrzeug, meineGrafik);
   if (schritte && modus === "fahr") {
     plan.parts.forEach((p, i) => {
       if (p.t === "kamera" && angetippt.has(p.k.taste)) aktiveKamera = aktiveKamera === i ? null : i;

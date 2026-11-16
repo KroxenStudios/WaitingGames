@@ -328,7 +328,7 @@ export function fahrzeugGrafik(plan, opts = {}) {
   const leitern = [];
 
   const kopfZiel = new Map();
-  for (const gl of ana.gelenke) if (gl.art !== "spreng") kopfZiel.set(gl.teil, gl.bodyB);
+  for (const gl of ana.gelenke) kopfZiel.set(gl.teil, gl.bodyB);
 
   plan.parts.forEach((p, i) => {
     const bi = ana.bodyOf[i];
@@ -358,6 +358,22 @@ export function fahrzeugGrafik(plan, opts = {}) {
   });
 
   return { ana, groups, raeder, emit, sitz: sitze[0] || null, sitze, klappen, lampen, rotoren, leitern, teilObj };
+}
+
+// hängt das modell eines abgelösten teils in eine eigene gruppe um (gleicher index wie der neue körper).
+// gibt die neue gruppe zurück, die der aufrufer in die szene und in grafik.groups einträgt.
+export function trenneGrafik(grafik, t) {
+  const g = new THREE.Group();
+  const obj = grafik.teilObj.get(t.teil);
+  const von = grafik.groups[t.von];
+  if (!obj || !von) return g;
+  g.position.copy(obj.position).applyQuaternion(von.quaternion).add(von.position);
+  g.quaternion.copy(von.quaternion);
+  obj.position.set(0, 0, 0);
+  g.add(obj);
+  const e = grafik.emit.get(t.teil);
+  if (e) e.body = t.index;
+  return g;
 }
 
 export function setzeRaeder(grafik, zustand) {

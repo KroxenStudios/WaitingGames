@@ -1,6 +1,6 @@
 
 import {
-  TEILE, ORIENT, ZELLE, RAD_TIEFE, analysiere, zellMitte, teilAchse, radRadius, matVec
+  TEILE, ORIENT, ZELLE, RAD_TIEFE, analysiere, zellMitte, teilAchse, radRadius, matVec, sprengZiele
 } from "./bau.js";
 
 export const PHYSIK_TAKT = 1 / 60;
@@ -133,6 +133,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
     fx: new Map(), nebelAn: new Map(), raketen: new Map(), schirme: new Map(), ruder: new Map(), servoZiel: new Map(),
     tasteVorher: new Set(), angetrieben: new Set(),
     licht: new Map(), hebel: new Map(), gruppe: [], sprengung: new Map(),
+    sprengPos: new Map(), R, world, colliderVon: new Map(), neuGetrennt: [], sprengReihe: [], abgeloest: new Set(),
     tank: { menge: new Map(), aktiv: false }, verbrauch: opts.verbrauch !== false
   };
 
@@ -168,6 +169,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
       }
       const col = world.createCollider(cd, rb);
       veh.colliderSet.add(col.handle);
+      veh.colliderVon.set(i, col);
     }
 
     const radTeile = nurRaeder ? [] : b.parts.filter(i => TEILE[parts[i].t].rad);
@@ -449,7 +451,7 @@ export function steuere(world, veh, eingabe, dt) {
         if (!st && neu.has(k.taste)) {
           st = { zeit: 0 };
           veh.sprengung.set(i, st);
-          zuende(world, veh, i);
+          sprenge(veh, i);
         } else if (st) {
           st.zeit += dt;
         }
@@ -506,7 +508,6 @@ export function steuere(world, veh, eingabe, dt) {
   let getrennt = false;
   for (const g of veh.gelenke) {
     if (!g.aktiv) continue;
-    if (g.art === "spreng") continue;
     const k = parts[g.teil].k || {};
     if (g.art === "bruch") {
       if (neu.has(k.taste)) {
@@ -595,35 +596,84 @@ export function trenne(world, veh, g) {
   A.rb.applyImpulse(vec(scale(stoss, -1)), true);
 }
 
-const BLITZ_DAUER = 0.6;
+const BLITZ_DAUER = 10;
 const STOSS_DAUER = 0.02;
 
-// kappt alle verbindungen im bereich der ladung und schleudert die teile nach aussen
-function zuende(world, veh, i) {
+// löst ein einzelnes teil aus seinem starren körper und gibt ihm einen eigenen körper
+// (mit der geschwindigkeit, die es gerade hatte). gibt den index des körpers zurück.
+function loeseTeil(veh, n) {
+  const { R, world } = veh;
+  const part = veh.plan.parts[n];
+  const bi = veh.ana.bodyOf[n];
+  const alt = veh.bodies[bi];
+  const col = veh.colliderVon.get(n);
+  if (!alt || !col || veh.abgeloest.has(n) || alt.parts.length < 2) return bi;
+
+  const rot = alt.rb.rotation();
+  const mitte = zellMitte(part);
+  const pos = add(arr(alt.rb.translation()), quatRot(rot, sub(mitte, alt.ursprung)));
+  const v = punktGeschw(alt.rb, pos), w = alt.rb.angvel();
+
+  veh.colliderSet.delete(col.handle);
+  world.removeCollider(col, true);
+
+  const desc = veh.kin ? R.RigidBodyDesc.kinematicPositionBased() : R.RigidBodyDesc.dynamic();
+  desc.setTranslation(...pos).setRotation(rot).setCanSleep(false);
+  if (!veh.kin) desc.setLinearDamping(0.05).setAngularDamping(0.3).setCcdEnabled(true);
+  const rb = world.createRigidBody(desc);
+  const neu = world.createCollider(colliderFuer(R, part, [0, 0, 0]), rb);
+  veh.colliderSet.add(neu.handle);
+  veh.colliderVon.set(n, neu);
+  if (!veh.kin) {
+    rb.setLinvel(vec(v), true);
+    rb.setAngvel(w, true);
+  }
+
+  const body = { rb, index: veh.bodies.length, ursprung: mitte, parts: [n], vc: null, raeder: [], loseRaeder: false };
+  veh.bodies.push(body);
+  alt.parts.splice(alt.parts.indexOf(n), 1);
+  veh.ana.bodyOf[n] = body.index;
+  veh.ana.bodies.push({ parts: [n], masse: TEILE[part.t].masse, ursprung: mitte });
+  veh.abgeloest.add(n);
+  veh.neuGetrennt.push({ teil: n, index: body.index, von: bi });
+  return body.index;
+}
+
+// zündet eine ladung: löst alle teile im bereich ab und schleudert sie nach aussen.
+// der körper bleibt bis zur zündung starr, es ändert sich nichts durchs platzieren.
+// bei fremden (kinematischen) fahrzeugen wird nur aufgeteilt, ohne stösse.
+// weltposition der mitte von teil n, abhängig vom körper, an dem es gerade sitzt
+function teilWeltPos(veh, n) {
+  const b = veh.bodies[veh.ana.bodyOf[n]];
+  return add(arr(b.rb.translation()), quatRot(b.rb.rotation(), sub(zellMitte(veh.plan.parts[n]), b.ursprung)));
+}
+
+// vorgabe: fertige liste der abzulösenden teile (vom zündenden spieler), damit alle dieselbe trennung sehen
+export function sprenge(veh, i, vorgabe = null) {
   const parts = veh.plan.parts;
   const p = parts[i];
   const k = p.k || {};
-  const b0 = veh.bodies[veh.ana.bodyOf[i]];
-  if (!b0) return;
-  const rot0 = b0.rb.rotation();
-  const ursprung = add(arr(b0.rb.translation()), quatRot(rot0, sub(zellMitte(p), b0.ursprung)));
+  if (!veh.bodies[veh.ana.bodyOf[i]]) return;
+  // ursprung ist die weltposition genau dieses blocks, nicht die des fahrzeugs
+  const ursprung = teilWeltPos(veh, i);
+  // ort der zündung merken: licht, glühen und rauch bleiben dort stehen
+  veh.sprengPos.set(i, ursprung);
   const reichweite = k.reichweite ?? 3;
   const impuls = (k.kraft ?? 25) * 1000 * STOSS_DAUER;
 
-  // verbindungen lösen, bevor die stösse wirken
-  for (const g of veh.gelenke) {
-    if (!g.aktiv || g.art !== "spreng" || !g.ladungen.includes(i)) continue;
-    g.aktiv = false;
-    world.removeImpulseJoint(g.j, true);
-  }
+  const ziele = vorgabe || sprengZiele(veh.plan, veh.ana, i, n => teilWeltPos(veh, n));
+  // aufzeichnung für andere spieler: ladung, anzahl, teile
+  if (!vorgabe) veh.sprengReihe.push(i, ziele.length, ...ziele);
+  for (const n of ziele) loeseTeil(veh, n);
   berechneGruppen(veh);
   aktualisiereAntrieb(veh);
+  if (veh.kin) return;
 
   // jedes teil im bereich bekommt einen stoss weg von der ladung, nach aussen schwächer
   for (let n = 0; n < parts.length; n++) {
     const q = parts[n];
     const b = veh.bodies[veh.ana.bodyOf[n]];
-    if (!b) continue;
+    if (!b || n === i) continue;
     // ein körper mit panzerblock bleibt ruhig liegen: er ist zu schwer und fest verbunden
     if (b.parts.some(j => TEILE[parts[j].t].sprengfest)) continue;
     const rot = b.rb.rotation();
@@ -634,6 +684,11 @@ function zuende(world, veh, i) {
     const richtung = abstand > 0.05 ? scale(d, 1 / abstand) : [0, 1, 0];
     const faktor = 1 - 0.7 * (abstand / Math.max(reichweite, 0.01));
     b.rb.applyImpulseAtPoint(vec(scale(richtung, impuls * faktor)), vec(punkt), true);
+    // etwas drall, damit die trümmer trudeln
+    if (b.parts.length === 1) {
+      const dreh = [Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5];
+      b.rb.applyTorqueImpulse(vec(scale(dreh, impuls * faktor * 0.04)), true);
+    }
   }
 }
 

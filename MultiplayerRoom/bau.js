@@ -169,7 +169,12 @@ export function inBauraum(x, y, z) {
   return x >= -BAU_X && x < BAU_X && z >= -BAU_Z && z < BAU_Z && y >= 0 && y < BAU_Y;
 }
 
-export function bereinige(raw) {
+// der admin-konto-name (kleingeschrieben, wie ihn der server liefert) darf größere sprengungen bauen
+export const ADMIN_NAME = "kroxenstudios";
+export const ADMIN_REICHWEITE = 1000;
+
+// opts.admin hebt das reichweiten-limit der sprengladung an
+export function bereinige(raw, opts = {}) {
   const parts = [];
   const used = new Set();
   const list = Array.isArray(raw?.parts) ? raw.parts : [];
@@ -182,14 +187,14 @@ export function bereinige(raw) {
     if (used.has(key)) continue;
     const o = Math.trunc(Number(p.o));
     const c = typeof p.c === "string" && /^#[0-9a-f]{6}$/i.test(p.c) ? p.c : FARBEN[7];
-    const k = { ...standardEinstellungen(p.t), ...bereinigeEinstellungen(p.t, p.k) };
+    const k = { ...standardEinstellungen(p.t), ...bereinigeEinstellungen(p.t, p.k, !!opts.admin) };
     used.add(key);
     parts.push({ t: p.t, x, y, z, o: o >= 0 && o < 24 ? o : 0, c, k });
   }
   return { v: 1, parts };
 }
 
-function bereinigeEinstellungen(typ, k) {
+function bereinigeEinstellungen(typ, k, admin = false) {
   if (!k || typeof k !== "object") return {};
   const out = {};
   const taste = v => (typeof v === "string" ? v.toLowerCase().slice(0, 12) : undefined);
@@ -216,9 +221,12 @@ function bereinigeEinstellungen(typ, k) {
   set("fov", zahl(k.fov, ...GRENZEN.fov));
   set("kapazitaet", zahl(k.kapazitaet, ...GRENZEN.kapazitaet));
   set("tempo", zahl(k.tempo, ...GRENZEN.tempo));
-  set("reichweite", zahl(k.reichweite, ...GRENZEN.reichweite));
+  set("reichweite", zahl(k.reichweite, GRENZEN.reichweite[0], admin ? ADMIN_REICHWEITE : GRENZEN.reichweite[1]));
   set("kraft", zahl(k.kraft, ...GRENZEN.kraft));
   set("modus", ["winkel", "dauer"].includes(k.modus) ? k.modus : undefined);
+  // eigene beschriftung für den knopf im handheld-modus (höchstens 10 zeichen)
+  const name = typeof k.name === "string" ? k.name.replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 10) : "";
+  set("name", name || undefined);
   return out;
 }
 
@@ -245,6 +253,35 @@ const DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1
 const sameDir = (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 const hasFace = (part, dir) => weltFlaechen(part).some(f => sameDir(f.dir, dir));
 
+// teile, die eine sprengladung beim zünden als eigene körper ablöst: alles in reichweite,
+// außer starre teile (räder, sitz, gelenke), panzerblöcke und alles, was direkt an einem panzerblock klebt
+// pos(n) liefert die aktuelle weltposition der mitte von teil n (jedes teil zählt mit seinem eigenen ort,
+// auch wenn es an einem verdrehten oder getrennten körper sitzt); ohne pos gelten die bauzellen
+export function sprengZiele(bauplan, ana, i, pos = null) {
+  const parts = bauplan.parts;
+  const lad = parts[i];
+  const r = lad.k?.reichweite ?? 3;
+  const mitte = n => (pos ? pos(n) : zellMitte(parts[n]));
+  const m0 = mitte(i);
+  const map = zellenMap(bauplan);
+  const gebunden = new Set();
+  for (const g of ana.gelenke) { gebunden.add(g.teil); gebunden.add(g.other); }
+  const out = [];
+  parts.forEach((p, n) => {
+    const def = TEILE[p.t];
+    // die ladung selbst bleibt am fahrzeug, damit die explosion von ihrem aktuellen ort ausgeht
+    if (n === i || def.sprengfest || def.rad || def.gelenk || p.t === "sitz" || gebunden.has(n)) return;
+    const c = mitte(n);
+    if (Math.hypot(c[0] - m0[0], c[1] - m0[1], c[2] - m0[2]) > r) return;
+    for (const d of DIRS) {
+      const j = teilAn(map, p.x + d[0], p.y + d[1], p.z + d[2]);
+      if (j !== undefined && TEILE[parts[j].t].sprengfest) return;
+    }
+    out.push(n);
+  });
+  return out;
+}
+
 export function analysiere(bauplan) {
   const parts = bauplan.parts;
   const map = zellenMap(bauplan);
@@ -252,24 +289,6 @@ export function analysiere(bauplan) {
   const find = i => (parent[i] === i ? i : (parent[i] = find(parent[i])));
   const union = (a, b) => { parent[find(a)] = find(b); };
   const gelenkKanten = [];
-  const sprengKanten = [];
-
-  // sprengladungen: jedes teil innerhalb der reichweite wird nicht fest verschmolzen,
-  // sondern über eine lösbare verbindung gehalten, die die ladung beim zünden kappt
-  const ladungen = [];
-  parts.forEach((p, i) => {
-    if (p.t !== "explosive") return;
-    ladungen.push({ i, mitte: zellMitte(p), r: p.k?.reichweite ?? 3 });
-  });
-  const imBereich = j => {
-    const c = zellMitte(parts[j]);
-    const ids = [];
-    for (const l of ladungen) {
-      if (Math.hypot(c[0] - l.mitte[0], c[1] - l.mitte[1], c[2] - l.mitte[2]) <= l.r) ids.push(l.i);
-    }
-    return ids;
-  };
-  const bereich = ladungen.length ? parts.map((_, j) => imBereich(j)) : null;
 
   for (let i = 0; i < parts.length; i++) {
     const a = parts[i];
@@ -285,10 +304,7 @@ export function analysiere(bauplan) {
 
       if (aHead) gelenkKanten.push({ owner: i, other: j, dir: d });
       else if (bHead) gelenkKanten.push({ owner: j, other: i, dir: nd });
-      else if (bereich && !TEILE[a.t].sprengfest && !TEILE[b.t].sprengfest && (bereich[i].length || bereich[j].length)) {
-        const ids = [...new Set([...bereich[i], ...bereich[j]])];
-        sprengKanten.push({ owner: i, other: j, dir: d, ids });
-      } else union(i, j);
+      else union(i, j);
     }
   }
 
@@ -314,13 +330,9 @@ export function analysiere(bauplan) {
       teil: k.owner,
       bodyA: a,
       bodyB: b,
-      dir: k.dir
+      dir: k.dir,
+      other: k.other
     });
-  }
-  for (const k of sprengKanten) {
-    const a = bodyOf[k.owner], b = bodyOf[k.other];
-    if (a === b) continue;
-    gelenke.push({ art: "spreng", teil: k.owner, bodyA: a, bodyB: b, dir: k.dir, ladungen: k.ids });
   }
 
   for (const body of bodies) {

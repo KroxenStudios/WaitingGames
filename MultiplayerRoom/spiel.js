@@ -21,7 +21,10 @@ const TEXTE = {
   "Lenkrad (lenkbar)": "Steerable wheel", "Starres Rad": "Fixed wheel", "Einkaufswagenrad": "Caster wheel",
   "Auspuff": "Exhaust", "Nebelgenerator": "Fog generator", "Triebwerk": "Jet engine", "Raketentriebwerk": "Rocket engine",
   "Tragfläche": "Wing", "Steuerfläche": "Control surface", "Kamera": "Camera", "Fallschirm": "Parachute",
-  "Stellmotor": "Servo motor", "Sollbruchstelle": "Breakaway joint",
+  "Stellmotor": "Servo motor", "Sollbruchstelle": "Breakaway joint", "Explosive": "Explosive", "Panzerblock": "Armoured block",
+  "Sehr schwer und explosionssicher: Seine Verbindungen halten auch bei Sprengungen, und ein Körper mit Panzerblock wird nicht weggeschleudert.": "Very heavy and blast-proof: its connections hold even in explosions, and a body containing an armoured block is not thrown away.",
+  "Zünden": "Detonate", "Sprengen": "Detonate", "Reichweite": "Range", "Kraft": "Force",
+  "Einmal zünden: ein Blitz trennt alle Verbindungen im Umkreis (Reichweite in Metern) und drückt die Teile mit der eingestellten Kraft von der Ladung weg. Nach einem Neustart ist sie wieder scharf.": "Detonates once: a flash severs every connection within the range (in metres) and pushes the parts away from the charge with the set force. Armed again after a restart.",
   "Verkleidung": "Body", "Fahrer": "Driver", "Räder": "Wheels", "Effekte": "Effects", "Antrieb": "Drive",
   "Mechanik": "Mechanics", "Flug": "Flight",
   "Eigene Farbe": "Custom colour", "Max. Lenkwinkel": "Max. steering angle", "Größe": "Size", "Klein": "Small",
@@ -58,8 +61,12 @@ const TEXTE = {
   "Alles, was oben (an der Drehscheibe) angebaut ist, dreht sich gegen den Rest.": "Everything attached on top (the turntable) turns against the rest.",
   "Hält fest, bis du die Taste drückst. Dann trennt sie die Teile.": "Holds firmly until you press the key. Then it separates the parts.",
   "Tippen = Werkzeug · Ziehen = drehen · Zwei Finger = zoomen/schieben": "Tap = tool · drag = rotate · two fingers = zoom/pan",
-  "Linksklick setzen · Rechtsklick entfernen · Mittelklick einstellen · Ziehen dreht die Ansicht · WASD schiebt · R/T drehen/kippen":
-    "Left-click place · right-click remove · middle-click adjust · drag rotates the view · WASD moves · R/T rotate/tilt",
+  "Linksklick setzen · Rechtsklick entfernen · Mittelklick einstellen · Umschalt+Klick mehrere auswählen · Ziehen dreht die Ansicht · WASD schiebt · R/T drehen/kippen":
+    "Left-click place · right-click remove · middle-click adjust · Shift+click multi-select · drag rotates the view · WASD moves · R/T rotate/tilt",
+  "Auswählen": "Select", "Duplizieren": "Duplicate", "dupliziert (Rückgängig mit Strg+Z)": "duplicated (undo with Ctrl+Z)",
+  "Ausgewählt: jetzt auf die Zielstelle klicken (mehrere Teile mit Umschalt+Klick)": "Selected: now click the target spot (several parts with Shift+click)", "Teile": "parts", "Gemischte Teile: nur Farbe und Entfernen gelten für alle.": "Mixed parts: only colour and removal apply to all.",
+  "Alle gleichen auswählen": "Select all of this type", "Teile entfernen": "Remove parts", "Auswahl aufheben": "Clear selection",
+  "Alle Teile ausgewählt": "All parts selected",
   "Joystick fahren · Knöpfe rechts für Teile": "Joystick drives · buttons on the right for parts",
   "Joystick: Nicken und Rollen · Knöpfe rechts: Gieren und Teile": "Joystick: pitch and roll · buttons on the right: yaw and parts",
   "WASD fahren · Leertaste bremsen · X aus-/einsteigen oder Klick auf einen Sitz · M Motor · C Kamera · Tab zurück zum Bauen · Rücktaste neu starten":
@@ -677,6 +684,8 @@ function baueBauansicht() {
   bauGrafik = fahrzeugGrafik(plan, { koerperFarben });
   for (const g of bauGrafik.groups) scene.add(g);
   stelleAuf(bauGrafik, lotBasis(meinLot, BAU.bodenAbstand(plan)));
+  inspAuswahl = inspAuswahl.filter(i => plan.parts[i]);
+  zeichneMarkierungen();
   if (modus === "bau") {
     setzeFigurInSitz(meineFigur, null, lotPos(meinLot).add(new THREE.Vector3(6.9, 0, -6.9)));
   }
@@ -850,8 +859,29 @@ $("#btnLeeren").onclick = () => {
 
 const inspector = $("#inspector");
 const inspInhalt = $("#inspInhalt");
-let inspTeil = -1;
+// auswahl: geordnete liste von teil-indizes, das erste ist das führende teil des inspektors
+let inspAuswahl = [];
 let tastenWarten = null;
+const markierungen = new THREE.Group();
+scene.add(markierungen);
+const markierGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(BAU.ZELLE * 1.04, BAU.ZELLE * 1.04, BAU.ZELLE * 1.04));
+const markierMat = new THREE.LineBasicMaterial({ color: "#4aa3ff", depthTest: false, transparent: true });
+const markierMatErst = new THREE.LineBasicMaterial({ color: "#ffd43b", depthTest: false, transparent: true });
+
+function zeichneMarkierungen() {
+  markierungen.clear();
+  if (modus !== "bau") return;
+  const basis = lotBasis(meinLot, BAU.bodenAbstand(plan));
+  inspAuswahl.forEach((i, n) => {
+    const p = plan.parts[i];
+    if (!p) return;
+    const c = BAU.zellMitte(p);
+    const l = new THREE.LineSegments(markierGeo, n === 0 ? markierMatErst : markierMat);
+    l.position.set(basis.x + c[0], basis.y + c[1], basis.z + c[2]);
+    l.renderOrder = 10;
+    markierungen.add(l);
+  });
+}
 
 const TASTEN_NAMEN = {
   space: "Leertaste", shift: "Shift", control: "Strg", alt: "Alt", enter: "Enter",
@@ -865,23 +895,50 @@ function tasteNorm(e) {
 }
 
 function schliesseInspector() {
-  inspTeil = -1;
+  inspAuswahl = [];
   tastenWarten = null;
   inspector.hidden = true;
+  zeichneMarkierungen();
 }
 
-function oeffneInspector(i) {
-  inspTeil = i;
+// zusatz: teil zur auswahl hinzufügen bzw. daraus entfernen, statt die auswahl zu ersetzen
+function oeffneInspector(i, zusatz = false) {
+  if (zusatz) {
+    inspAuswahl = inspAuswahl.includes(i) ? inspAuswahl.filter(n => n !== i) : [...inspAuswahl, i];
+    if (!inspAuswahl.length) return schliesseInspector();
+  } else {
+    inspAuswahl = [i];
+  }
   inspector.hidden = false;
+  zeichneMarkierungen();
+  zeigeInspector();
+}
+
+function waehleAlle(typ) {
+  const alle = plan.parts.map((p, i) => i).filter(i => !typ || plan.parts[i].t === typ);
+  if (!alle.length) return;
+  // das führende teil bleibt vorn, damit der inspektor stabil bleibt
+  const vorn = inspAuswahl.length && alle.includes(inspAuswahl[0]) ? inspAuswahl[0] : alle[0];
+  inspAuswahl = [vorn, ...alle.filter(i => i !== vorn)];
+  inspector.hidden = false;
+  zeichneMarkierungen();
   zeigeInspector();
 }
 
 function zeigeInspector() {
-  const p = plan.parts[inspTeil];
+  inspAuswahl = inspAuswahl.filter(i => plan.parts[i]);
+  const p = plan.parts[inspAuswahl[0]];
   if (!p) return schliesseInspector();
+  const ziele = inspAuswahl.map(i => plan.parts[i]);
+  const gleich = ziele.every(q => q.t === p.t);
   const def = BAU.TEILE[p.t];
-  $("#inspTitel").textContent = tr(def.name);
+  $("#inspTitel").textContent = ziele.length > 1
+    ? (gleich ? `${tr(def.name)} ×${ziele.length}` : `${ziele.length} ${tr("Teile")}`)
+    : tr(def.name);
   inspInhalt.innerHTML = "";
+
+  // schreibt einen wert in alle ausgewählten teile
+  const setzeK = (key, wert) => { for (const q of ziele) q.k[key] = wert; };
 
   const aendern = fn => {
     merkeVerlauf();
@@ -925,13 +982,13 @@ function zeigeInspector() {
     wertBox.textContent = "";
     wertBox.append(zahl, document.createTextNode(einheit));
     r.oninput = () => { zahl.value = r.value; };
-    r.onchange = () => aendern(() => { p.k[key] = Number(r.value); });
+    r.onchange = () => aendern(() => { setzeK(key, Number(r.value)); });
     zahl.onchange = () => {
       const v = Number(zahl.value);
       if (!Number.isFinite(v)) { zahl.value = p.k[key]; return; }
       const geklemmt = Math.min(hi, Math.max(lo, v));
       if (geklemmt !== v) meldung("Wert auf die zulässige Grenze begrenzt");
-      aendern(() => { p.k[key] = geklemmt; });
+      aendern(() => { setzeK(key, geklemmt); });
     };
   };
 
@@ -946,7 +1003,7 @@ function zeigeInspector() {
     }
     feld(label, s);
     s.onchange = () => aendern(() => {
-      p.k[key] = s.value === "true" ? true : s.value === "false" ? false : s.value;
+      setzeK(key, s.value === "true" ? true : s.value === "false" ? false : s.value);
     });
   };
 
@@ -958,7 +1015,7 @@ function zeigeInspector() {
     b.onclick = () => {
       b.classList.add("warte");
       b.textContent = tr("Taste drücken …");
-      tastenWarten = t => aendern(() => { p.k[key] = t; });
+      tastenWarten = t => aendern(() => { setzeK(key, t); });
     };
     feld(label, b);
   };
@@ -968,7 +1025,7 @@ function zeigeInspector() {
     f.type = "color";
     f.value = p.k[key];
     feld(label, f);
-    f.onchange = () => aendern(() => { p.k[key] = f.value; });
+    f.onchange = () => aendern(() => { setzeK(key, f.value); });
   };
 
   const fz = document.createElement("div");
@@ -978,18 +1035,18 @@ function zeigeInspector() {
     b.type = "button";
     b.style.cssText = `background:${f};width:22px;height:22px;padding:0;border-radius:50%;flex:0 0 auto`;
     if (f === p.c) b.style.outline = "2px solid #fff";
-    b.onclick = () => aendern(() => { p.c = f; });
+    b.onclick = () => aendern(() => { for (const q of ziele) q.c = f; });
     fz.append(b);
   }
   const eigene = document.createElement("input");
   eigene.type = "color";
   eigene.value = p.c;
-  eigene.onchange = () => aendern(() => { p.c = eigene.value; });
+  eigene.onchange = () => aendern(() => { for (const q of ziele) q.c = eigene.value; });
   fz.append(eigene);
   inspInhalt.append(fz);
 
   const groessen = [["S", "Klein"], ["M", "Mittel"], ["L", "Groß"]];
-  switch (p.t) {
+  switch (gleich ? p.t : "") {
     case "rad_lenk":
       regler("Max. Lenkwinkel", "winkel", 5, 60, 1, "°");
       auswahl("Größe", "groesse", groessen);
@@ -1035,8 +1092,10 @@ function zeigeInspector() {
       }
       feld("Kanal", ks);
       ks.onchange = () => aendern(() => {
-        p.k.kanal = ks.value;
-        [p.k.plus, p.k.minus] = BAU.KANAL_TASTEN[ks.value];
+        for (const q of ziele) {
+          q.k.kanal = ks.value;
+          [q.k.plus, q.k.minus] = BAU.KANAL_TASTEN[ks.value];
+        }
       });
       auswahl("Richtung", "gegenlauf", [[false, "normal"], [true, "gegenläufig"]]);
       taste("Ausschlag +", "plus");
@@ -1074,9 +1133,16 @@ function zeigeInspector() {
     case "bruch":
       taste("Trennen", "taste");
       break;
+    case "explosive":
+      taste("Zünden", "taste");
+      farbe("Lichtfarbe", "farbe");
+      regler("Reichweite", "reichweite", 0.5, 30, 0.5, " m");
+      regler("Kraft", "kraft", 1, 1000, 1, " kN");
+      break;
   }
 
   const hinweis = document.createElement("p");
+  const hinweisText = gleich ? p.t : "gemischt";
   hinweis.style.cssText = "color:var(--muted);margin:10px 0 6px;line-height:1.35";
   hinweis.className = "hinweis";
   hinweis.textContent = tr({
@@ -1097,20 +1163,46 @@ function zeigeInspector() {
     fallschirm: "Taste öffnet den Schirm, nochmal drücken packt ihn ein. Er bremst umso stärker, je schneller du bist – auch beim Fallen.",
     rakete: "Sehr starker Schub, aber nur für die Brenndauer. Danach lädt sie wieder auf.",
     servo: "Alles, was oben (an der Drehscheibe) angebaut ist, dreht sich gegen den Rest.",
-    bruch: "Hält fest, bis du die Taste drückst. Dann trennt sie die Teile."
-  }[p.t] || "");
+    bruch: "Hält fest, bis du die Taste drückst. Dann trennt sie die Teile.",
+    panzer: "Sehr schwer und explosionssicher: Seine Verbindungen halten auch bei Sprengungen, und ein Körper mit Panzerblock wird nicht weggeschleudert.",
+    explosive: "Einmal zünden: ein Blitz trennt alle Verbindungen im Umkreis (Reichweite in Metern) und drückt die Teile mit der eingestellten Kraft von der Ladung weg. Nach einem Neustart ist sie wieder scharf.",
+    gemischt: "Gemischte Teile: nur Farbe und Entfernen gelten für alle."
+  }[hinweisText] || "");
   if (hinweis.textContent) inspInhalt.append(hinweis);
 
   const weg = document.createElement("button");
   weg.type = "button";
-  weg.textContent = tr("Teil entfernen");
-  weg.onclick = () => { entferneTeil(inspTeil); };
+  weg.textContent = tr(ziele.length > 1 ? "Teile entfernen" : "Teil entfernen");
+  weg.onclick = () => { entferneAuswahl(); };
   const z = document.createElement("div");
   z.className = "zeile";
   z.append(weg);
+  if (gleich && plan.parts.filter(q => q.t === p.t).length > ziele.length) {
+    const alle = document.createElement("button");
+    alle.type = "button";
+    alle.textContent = tr("Alle gleichen auswählen");
+    alle.onclick = () => waehleAlle(p.t);
+    z.append(alle);
+  }
+  if (ziele.length > 1) {
+    const aus = document.createElement("button");
+    aus.type = "button";
+    aus.textContent = tr("Auswahl aufheben");
+    aus.onclick = schliesseInspector;
+    z.append(aus);
+  }
   inspInhalt.append(z);
 }
 $("#inspZu").onclick = schliesseInspector;
+
+function entferneAuswahl() {
+  const liste = [...new Set(inspAuswahl)].filter(i => plan.parts[i]).sort((a, b) => b - a);
+  if (!liste.length) return;
+  merkeVerlauf();
+  for (const i of liste) plan.parts.splice(i, 1);
+  schliesseInspector();
+  planGeaendert();
+}
 
 function entferneTeil(i) {
   if (i < 0 || !plan.parts[i]) return;
@@ -1159,7 +1251,7 @@ function zeigeHinweis() {
   if (modus === "bau") {
     text = touchModus
       ? "Tippen = Werkzeug · Ziehen = drehen · Zwei Finger = zoomen/schieben"
-      : "Linksklick setzen · Rechtsklick entfernen · Mittelklick einstellen · Ziehen dreht die Ansicht · WASD schiebt · R/T drehen/kippen";
+      : "Linksklick setzen · Rechtsklick entfernen · Mittelklick einstellen · Umschalt+Klick mehrere auswählen · Ziehen dreht die Ansicht · WASD schiebt · R/T drehen/kippen";
   } else {
     text = touchModus
       ? (steuerKanaele.nick || steuerKanaele.roll ? "Joystick: Nicken und Rollen · Knöpfe rechts: Gieren und Teile" : "Joystick fahren · Knöpfe rechts für Teile")
@@ -1209,7 +1301,11 @@ addEventListener("keydown", e => {
     if (t === "t") kippen();
     if (t === "v") schalteKoerper();
     if (t === "escape") schliesseInspector();
-    if (t === "delete" && inspTeil >= 0) entferneTeil(inspTeil);
+    if (t === "delete" && inspAuswahl.length) entferneAuswahl();
+    if (t === "a" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      waehleAlle();
+    }
   } else {
     if (t === "backspace") return neuStarten();
     if (t === "x" && !e.repeat) return ausEinsteigen();
@@ -1321,6 +1417,7 @@ function zeigerEnde(e) {
   if (e.pointerType === "mouse") {
     if (start.button === 2) w = "entfernen";
     else if (start.button === 1 || start.alt) w = "einstellen";
+    else if (start.shift) w = "auswaehlen";
   }
   bauKlick(w);
 }
@@ -1454,6 +1551,34 @@ function aktualisiereGeist() {
   geist.visible = true;
 }
 
+// stempelt die ausgewählten teile an die zielstelle: das führende teil landet in der angeklickten zelle
+function dupliziere(treffer) {
+  const quellen = inspAuswahl.map(i => plan.parts[i]).filter(Boolean);
+  if (!quellen.length) return;
+  let zelle;
+  if (treffer.boden) zelle = treffer.boden;
+  else {
+    const q = plan.parts[treffer.teil];
+    zelle = [q.x + treffer.normal[0], q.y + treffer.normal[1], q.z + treffer.normal[2]];
+  }
+  const ref = quellen[0];
+  const dx = zelle[0] - ref.x, dy = zelle[1] - ref.y, dz = zelle[2] - ref.z;
+  if (!dx && !dy && !dz) return;
+
+  const belegt = new Set(plan.parts.map(p => `${p.x},${p.y},${p.z}`));
+  const neu = [];
+  for (const q of quellen) {
+    const p = { ...JSON.parse(JSON.stringify(q)), x: q.x + dx, y: q.y + dy, z: q.z + dz };
+    if (!BAU.inBauraum(p.x, p.y, p.z)) return meldung("Außerhalb des Bauraums");
+    if (belegt.has(`${p.x},${p.y},${p.z}`)) return meldung("Platz belegt");
+    neu.push(p);
+  }
+  merkeVerlauf();
+  plan.parts.push(...neu);
+  planGeaendert();
+  meldung(`${neu.length} ${tr("Teile")} ${tr("dupliziert (Rückgängig mit Strg+Z)")}`);
+}
+
 function bauKlick(w) {
   const t = trefferBau();
   if (!t) return;
@@ -1465,6 +1590,22 @@ function bauKlick(w) {
     if (t.teil !== undefined) oeffneInspector(t.teil);
     return;
   }
+  if (w === "auswaehlen") {
+    if (t.teil !== undefined) oeffneInspector(t.teil, true);
+    return;
+  }
+  if (w === "duplizieren") {
+    if (!inspAuswahl.length) {
+      // ohne auswahl wählt der klick zuerst das teil aus
+      if (t.teil !== undefined) {
+        oeffneInspector(t.teil);
+        meldung("Ausgewählt: jetzt auf die Zielstelle klicken (mehrere Teile mit Umschalt+Klick)");
+      }
+      return;
+    }
+    dupliziere(t);
+    return;
+  }
   const p = neuesTeil(t);
   const fehler = BAU.pruefePlatz(plan, p);
   if (fehler) return meldung(fehler);
@@ -1472,7 +1613,7 @@ function bauKlick(w) {
   plan.parts.push(p);
   if (!verbunden(p)) meldung("Nicht verbunden: das Teil liegt lose herum");
   planGeaendert();
-  if (["nebel", "duese", "rakete", "servo", "bruch", "fallschirm", "kamera", "steuerflaeche", "scheinwerfer", "propeller", "tank"].includes(p.t)) {
+  if (["nebel", "duese", "rakete", "servo", "bruch", "fallschirm", "kamera", "steuerflaeche", "scheinwerfer", "propeller", "tank", "explosive"].includes(p.t)) {
     oeffneInspector(plan.parts.length - 1);
   }
 }
@@ -1944,6 +2085,7 @@ function baueTastenListe() {
       }
       case "servo": add(p.k.plus, "Motor +"); add(p.k.minus, "Motor −"); break;
       case "bruch": add(p.k.taste, "Trennen"); break;
+      case "explosive": add(p.k.taste, "Sprengen"); break;
     }
   });
   if (hatTank) liste.push(["K", "Treibstoffverbrauch an/aus"]);
@@ -2036,6 +2178,7 @@ function emitEffekte(besitzer, planX, grafik, fx, dt) {
       case "nebel": rate = 55; break;
       case "duese": rate = 160; break;
       case "rakete": rate = 300; break;
+      case "explosive": rate = 900 * staerke; break;
     }
     akku += rate * dt;
     const zufall = s => (Math.random() - 0.5) * s;
@@ -2049,6 +2192,12 @@ function emitEffekte(besitzer, planX, grafik, fx, dt) {
       } else if (p.t === "nebel") {
         tmpVel.copy(tmpD).multiplyScalar(2.2).add(new THREE.Vector3(zufall(0.8), zufall(0.4), zufall(0.8)));
         rauch.emit(pos, tmpVel, tmpFarbe.set(p.k.farbe || "#e8f0ff"), 0.3, 2.6, 3.2 + Math.random() * 1.5, 0.5, 0.25);
+      } else if (p.t === "explosive") {
+        // funken in alle richtungen, dazu etwas rauch
+        tmpVel.set(zufall(2), zufall(2), zufall(2)).normalize().multiplyScalar(6 + Math.random() * 14);
+        pos.addScaledVector(tmpVel, versatz);
+        feuer.emit(pos, tmpVel, tmpFarbe.setHSL(0.1 + Math.random() * 0.05, 1, 0.7 + Math.random() * 0.25), 0.4, 0.05, 0.2, 0.9);
+        if (Math.random() < 0.15) rauch.emit(pos, tmpVel.multiplyScalar(0.3), tmpFarbe.set("#8b8f98"), 0.3, 1.6, 1.6 + Math.random(), 0.4, 0.4);
       } else {
         const rak = p.t === "rakete";
         const v = rak ? 22 : 14;
@@ -2068,17 +2217,25 @@ function emitEffekte(besitzer, planX, grafik, fx, dt) {
 const schirme = new Map();
 
 const lichtPool = [];
+const blitzPool = [];
 function aktualisiereLichter() {
   const kandidaten = [];
+  const blitze = [];
   const sammle = (planX, grafik, fx) => {
     if (!grafik) return;
     for (const [i, linse] of grafik.lampen) {
-      const an = (fx.get(i) ?? 0) > 0;
-      linse.material.emissiveIntensity = an ? 2.2 : 0;
+      const staerke = fx.get(i) ?? 0;
+      const an = staerke > 0;
+      const blitz = planX.parts[i]?.t === "explosive";
+      linse.material.emissiveIntensity = an ? (blitz ? 10 * staerke : 2.2) : 0;
       const e = grafik.emit.get(i);
       if (!an || !e) continue;
       e.obj.updateWorldMatrix(true, false);
       const pos = e.obj.localToWorld(e.punkt.clone());
+      if (blitz) {
+        blitze.push({ pos, farbe: planX.parts[i].k.farbe || "#ffffff", staerke, d: pos.distanceToSquared(camera.position) });
+        continue;
+      }
       const dir = new THREE.Vector3(0, 1, 0).transformDirection(e.obj.matrixWorld);
       kandidaten.push({ pos, dir, farbe: planX.parts[i]?.k.farbe || "#fff6d0", d: pos.distanceToSquared(camera.position) });
     }
@@ -2100,6 +2257,23 @@ function aktualisiereLichter() {
     licht.color.set(k.farbe);
     licht.position.copy(k.pos);
     licht.target.position.copy(k.pos).addScaledVector(k.dir, 10);
+  });
+
+  // blitz der sprengladung: kurzes, sehr helles punktlicht in alle richtungen
+  blitze.sort((a, b) => a.d - b.d);
+  for (let n = 0; n < Math.min(2, blitze.length); n++) {
+    if (!blitzPool[n]) {
+      const licht = new THREE.PointLight("#ffffff", 0, 90, 2);
+      scene.add(licht);
+      blitzPool[n] = licht;
+    }
+  }
+  blitzPool.forEach((licht, n) => {
+    const b = blitze[n];
+    licht.intensity = b ? 40000 * b.staerke : 0;
+    if (!b) return;
+    licht.color.set(b.farbe);
+    licht.position.copy(b.pos);
   });
 }
 

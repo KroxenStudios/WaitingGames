@@ -88,6 +88,7 @@ export const FACE_VEC = {
 
 export const TEILE = {
   block:    { name: "Block", art: "bau", faces: ALLE, masse: 30, gruppe: "Verkleidung" },
+  panzer:   { name: "Panzerblock", art: "bau", faces: ALLE, masse: 150, gruppe: "Verkleidung", sprengfest: true },
   glas:     { name: "Glas", art: "bau", faces: ALLE, masse: 8, gruppe: "Verkleidung" },
   halb:     { name: "Stufe (halb)", art: "bau", faces: ALLE, masse: 16, gruppe: "Verkleidung" },
   keil:     { name: "Schräge", art: "bau", faces: ["ny", "pz", "px", "nx"], masse: 16, gruppe: "Verkleidung" },
@@ -109,7 +110,8 @@ export const TEILE = {
   tank:     { name: "Treibstofftank", art: "bau", faces: ALLE, masse: 25, gruppe: "Antrieb" },
   kamera:   { name: "Kamera", art: "anbau", faces: ["ny"], masse: 4, gruppe: "Mechanik" },
   fallschirm: { name: "Fallschirm", art: "anbau", faces: ["ny"], masse: 10, gruppe: "Mechanik" },
-  bruch:    { name: "Sollbruchstelle", art: "anbau", faces: ["ny", "py"], masse: 8, gruppe: "Mechanik", gelenk: "bruch" }
+  bruch:    { name: "Sollbruchstelle", art: "anbau", faces: ["ny", "py"], masse: 8, gruppe: "Mechanik", gelenk: "bruch" },
+  explosive: { name: "Explosive", art: "anbau", faces: ["ny"], masse: 10, gruppe: "Effekte" }
 };
 
 export const KANAL_TASTEN = {
@@ -120,7 +122,8 @@ export const KANAL_TASTEN = {
 
 export const RAD_GROESSEN = { S: 0.22, M: 0.32, L: 0.45 };
 export const GRENZEN = {
-  winkel: [0, 180], schub: [0, 100000], dauer: [0.1, 3600], flaeche: [0, 1000], fov: [1, 170], kapazitaet: [1, 1000000], tempo: [0, 10000]
+  winkel: [0, 180], schub: [0, 100000], dauer: [0.1, 3600], flaeche: [0, 1000], fov: [1, 170], kapazitaet: [1, 1000000], tempo: [0, 10000],
+  reichweite: [0.5, 50], kraft: [0, 100000]
 };
 export const RAD_TIEFE = 0.05;
 
@@ -135,6 +138,7 @@ export function standardEinstellungen(typ, bauplan) {
     case "rakete": return { taste: "r", schub: 14, dauer: 3 };
     case "fallschirm": return { taste: "p", flaeche: 12, farbe: "#ff6a1a" };
     case "scheinwerfer": return { taste: "l", farbe: "#fff6d0" };
+    case "explosive": return { taste: "z", farbe: "#ffffff", reichweite: 3, kraft: 25 };
     case "propeller": return { plus: "g", minus: "h", schub: 4, tempo: 80 };
     case "tank": return { kapazitaet: 60 };
     case "fluegel": return { flaeche: 4 };
@@ -212,6 +216,8 @@ function bereinigeEinstellungen(typ, k) {
   set("fov", zahl(k.fov, ...GRENZEN.fov));
   set("kapazitaet", zahl(k.kapazitaet, ...GRENZEN.kapazitaet));
   set("tempo", zahl(k.tempo, ...GRENZEN.tempo));
+  set("reichweite", zahl(k.reichweite, ...GRENZEN.reichweite));
+  set("kraft", zahl(k.kraft, ...GRENZEN.kraft));
   set("modus", ["winkel", "dauer"].includes(k.modus) ? k.modus : undefined);
   return out;
 }
@@ -246,6 +252,24 @@ export function analysiere(bauplan) {
   const find = i => (parent[i] === i ? i : (parent[i] = find(parent[i])));
   const union = (a, b) => { parent[find(a)] = find(b); };
   const gelenkKanten = [];
+  const sprengKanten = [];
+
+  // sprengladungen: jedes teil innerhalb der reichweite wird nicht fest verschmolzen,
+  // sondern über eine lösbare verbindung gehalten, die die ladung beim zünden kappt
+  const ladungen = [];
+  parts.forEach((p, i) => {
+    if (p.t !== "explosive") return;
+    ladungen.push({ i, mitte: zellMitte(p), r: p.k?.reichweite ?? 3 });
+  });
+  const imBereich = j => {
+    const c = zellMitte(parts[j]);
+    const ids = [];
+    for (const l of ladungen) {
+      if (Math.hypot(c[0] - l.mitte[0], c[1] - l.mitte[1], c[2] - l.mitte[2]) <= l.r) ids.push(l.i);
+    }
+    return ids;
+  };
+  const bereich = ladungen.length ? parts.map((_, j) => imBereich(j)) : null;
 
   for (let i = 0; i < parts.length; i++) {
     const a = parts[i];
@@ -261,7 +285,10 @@ export function analysiere(bauplan) {
 
       if (aHead) gelenkKanten.push({ owner: i, other: j, dir: d });
       else if (bHead) gelenkKanten.push({ owner: j, other: i, dir: nd });
-      else union(i, j);
+      else if (bereich && !TEILE[a.t].sprengfest && !TEILE[b.t].sprengfest && (bereich[i].length || bereich[j].length)) {
+        const ids = [...new Set([...bereich[i], ...bereich[j]])];
+        sprengKanten.push({ owner: i, other: j, dir: d, ids });
+      } else union(i, j);
     }
   }
 
@@ -289,6 +316,11 @@ export function analysiere(bauplan) {
       bodyB: b,
       dir: k.dir
     });
+  }
+  for (const k of sprengKanten) {
+    const a = bodyOf[k.owner], b = bodyOf[k.other];
+    if (a === b) continue;
+    gelenke.push({ art: "spreng", teil: k.owner, bodyA: a, bodyB: b, dir: k.dir, ladungen: k.ids });
   }
 
   for (const body of bodies) {

@@ -76,6 +76,7 @@ function colliderFuer(R, part, lokal) {
 
   switch (part.t) {
     case "block":
+    case "panzer":
     case "glas":
     case "sitz":
     case "tank":
@@ -131,7 +132,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
     colliderSet: new Set(), motorAn: true, lenkung: 0,
     fx: new Map(), nebelAn: new Map(), raketen: new Map(), schirme: new Map(), ruder: new Map(), servoZiel: new Map(),
     tasteVorher: new Set(), angetrieben: new Set(),
-    licht: new Map(), hebel: new Map(), gruppe: [],
+    licht: new Map(), hebel: new Map(), gruppe: [], sprengung: new Map(),
     tank: { menge: new Map(), aktiv: false }, verbrauch: opts.verbrauch !== false
   };
 
@@ -443,6 +444,18 @@ export function steuere(world, veh, eingabe, dt) {
         if (neu.has(k.taste)) veh.licht.set(i, !veh.licht.get(i));
         if (veh.licht.get(i)) veh.fx.set(i, 1);
         break;
+      case "explosive": {
+        let st = veh.sprengung.get(i);
+        if (!st && neu.has(k.taste)) {
+          st = { zeit: 0 };
+          veh.sprengung.set(i, st);
+          zuende(world, veh, i);
+        } else if (st) {
+          st.zeit += dt;
+        }
+        if (st && st.zeit < BLITZ_DAUER) veh.fx.set(i, 1 - st.zeit / BLITZ_DAUER);
+        break;
+      }
       case "tank":
         veh.fx.set(i, Math.min(1, (veh.tank.menge.get(i) ?? 0) / Math.max(1, k.kapazitaet ?? 60)));
         break;
@@ -493,6 +506,7 @@ export function steuere(world, veh, eingabe, dt) {
   let getrennt = false;
   for (const g of veh.gelenke) {
     if (!g.aktiv) continue;
+    if (g.art === "spreng") continue;
     const k = parts[g.teil].k || {};
     if (g.art === "bruch") {
       if (neu.has(k.taste)) {
@@ -579,6 +593,48 @@ export function trenne(world, veh, g) {
   const stoss = scale(dir, m * 1.2);
   B.rb.applyImpulse(vec(stoss), true);
   A.rb.applyImpulse(vec(scale(stoss, -1)), true);
+}
+
+const BLITZ_DAUER = 0.6;
+const STOSS_DAUER = 0.02;
+
+// kappt alle verbindungen im bereich der ladung und schleudert die teile nach aussen
+function zuende(world, veh, i) {
+  const parts = veh.plan.parts;
+  const p = parts[i];
+  const k = p.k || {};
+  const b0 = veh.bodies[veh.ana.bodyOf[i]];
+  if (!b0) return;
+  const rot0 = b0.rb.rotation();
+  const ursprung = add(arr(b0.rb.translation()), quatRot(rot0, sub(zellMitte(p), b0.ursprung)));
+  const reichweite = k.reichweite ?? 3;
+  const impuls = (k.kraft ?? 25) * 1000 * STOSS_DAUER;
+
+  // verbindungen lösen, bevor die stösse wirken
+  for (const g of veh.gelenke) {
+    if (!g.aktiv || g.art !== "spreng" || !g.ladungen.includes(i)) continue;
+    g.aktiv = false;
+    world.removeImpulseJoint(g.j, true);
+  }
+  berechneGruppen(veh);
+  aktualisiereAntrieb(veh);
+
+  // jedes teil im bereich bekommt einen stoss weg von der ladung, nach aussen schwächer
+  for (let n = 0; n < parts.length; n++) {
+    const q = parts[n];
+    const b = veh.bodies[veh.ana.bodyOf[n]];
+    if (!b) continue;
+    // ein körper mit panzerblock bleibt ruhig liegen: er ist zu schwer und fest verbunden
+    if (b.parts.some(j => TEILE[parts[j].t].sprengfest)) continue;
+    const rot = b.rb.rotation();
+    const punkt = add(arr(b.rb.translation()), quatRot(rot, sub(zellMitte(q), b.ursprung)));
+    const d = sub(punkt, ursprung);
+    const abstand = Math.hypot(...d);
+    if (abstand > reichweite) continue;
+    const richtung = abstand > 0.05 ? scale(d, 1 / abstand) : [0, 1, 0];
+    const faktor = 1 - 0.7 * (abstand / Math.max(reichweite, 0.01));
+    b.rb.applyImpulseAtPoint(vec(scale(richtung, impuls * faktor)), vec(punkt), true);
+  }
 }
 
 export function aktualisiereRaeder(veh, dt, filter) {

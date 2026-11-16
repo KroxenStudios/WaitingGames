@@ -67,6 +67,18 @@ export function teilModell(p) {
     case "block":
       g.add(box(ZELLE - 0.004, ZELLE - 0.004, ZELLE - 0.004, farbe));
       break;
+    case "panzer": {
+      // block mit dunklem stahlrahmen und nieten, damit man ihn vom normalen block unterscheidet
+      const k = ZELLE - 0.004, d = 0.05;
+      const stahl = mat("#3a4048", { metalness: 0.7, roughness: 0.4 });
+      g.add(box(k, k, k, farbe));
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+        g.add(box(k + 0.004, d, d, stahl, 0, sy * (k / 2 - d / 2), sx * (k / 2 - d / 2)));
+        g.add(box(d, k + 0.004, d, stahl, sx * (k / 2 - d / 2), 0, sy * (k / 2 - d / 2)));
+        g.add(box(d, d, k + 0.004, stahl, sx * (k / 2 - d / 2), sy * (k / 2 - d / 2), 0));
+      }
+      break;
+    }
     case "glas": {
       const scheibe = mat(c, { transparent: true, opacity: 0.32, roughness: 0.05, metalness: 0.1, depthWrite: false });
       const rahmen = mat(c, { transparent: true, opacity: 0.85, roughness: 0.3 });
@@ -168,6 +180,7 @@ export function teilModell(p) {
       out.klappe = klappe;
       break;
     }
+    case "explosive":
     case "scheinwerfer": {
       g.add(box(0.3, 0.05, 0.3, mat(DUNKEL), 0, -0.225));
       g.add(box(0.28, 0.16, 0.28, mat("#2b2f36"), 0, -0.12));
@@ -315,7 +328,7 @@ export function fahrzeugGrafik(plan, opts = {}) {
   const leitern = [];
 
   const kopfZiel = new Map();
-  for (const gl of ana.gelenke) kopfZiel.set(gl.teil, gl.bodyB);
+  for (const gl of ana.gelenke) if (gl.art !== "spreng") kopfZiel.set(gl.teil, gl.bodyB);
 
   plan.parts.forEach((p, i) => {
     const bi = ana.bodyOf[i];

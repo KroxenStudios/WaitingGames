@@ -111,8 +111,49 @@ export const TEILE = {
   kamera:   { name: "Kamera", art: "anbau", faces: ["ny"], masse: 4, gruppe: "Mechanik" },
   fallschirm: { name: "Fallschirm", art: "anbau", faces: ["ny"], masse: 10, gruppe: "Mechanik" },
   bruch:    { name: "Sollbruchstelle", art: "anbau", faces: ["ny", "py"], masse: 8, gruppe: "Mechanik", gelenk: "bruch" },
-  explosive: { name: "Explosive", art: "anbau", faces: ["ny"], masse: 10, gruppe: "Effekte" }
+  explosive: { name: "Explosive", art: "anbau", faces: ["ny"], masse: 10, gruppe: "Effekte" },
+  motor:    { name: "Motor", art: "bau", faces: ALLE, masse: 40, gruppe: "Antrieb" },
+  geschuetz: { name: "Geschütz", art: "anbau", faces: ALLE, masse: 30, gruppe: "Kampf", nurFight: true },
+  verschluss: { name: "Geschützverschluss", art: "bau", faces: ALLE, masse: 20, gruppe: "Kampf", nurFight: true },
+  munition: { name: "Munitionslager", art: "bau", faces: ALLE, masse: 45, gruppe: "Kampf", nurFight: true },
+  // schnellfeuerkanone: rohr und verschluss in einem, feuert entlang ihrer oberseite, kleines kaliber (25–40 mm)
+  schnellfeuer: { name: "Schnellfeuerkanone", art: "anbau", faces: ALLE, masse: 35, gruppe: "Kampf", nurFight: true }
 };
+
+// munitionslager: wie viele patronen passen in eine zelle (0,5 m, also 0,125 m³)?
+// patrone: zylinder mit durchmesser = kaliber, länge ca. 5,5 x kaliber (hülse mit geschoss, z.b. 25x137 mm).
+// gelagert wird mit rund 60 % raumnutzung (kisten, abstand, gurte). grösseres kaliber = viel weniger patronen.
+export const LAGER_VOLUMEN = ZELLE * ZELLE * ZELLE;
+export const LAGER_FUELLGRAD = 0.6;
+export function munitionKapazitaet(kaliberMm) {
+  const d = Math.max(GRENZEN.kaliber[0], Math.min(GRENZEN.kaliber[1], Number(kaliberMm) || 75)) / 1000;
+  const patrone = Math.PI / 4 * d * d * (5.5 * d);
+  return Math.max(1, Math.floor((LAGER_VOLUMEN * LAGER_FUELLGRAD) / patrone));
+}
+
+// kampf-bausteine sind vorerst nur am pc in der palette sichtbar, auf handhelds später per schalter aufnehmen
+export const FIGHT_AKTIV_AUF_TOUCH = false;
+export function fightVerfuegbar(touch) {
+  return !touch || FIGHT_AKTIV_AUF_TOUCH;
+}
+
+// kaliber/durchmesser in mm, leistung des motors in einheiten (1 = schwach, 10 = stark)
+export const KALIBER = { min: 25, max: 155 };
+// motorleistung in ps. ohne motor-baustein fährt ein fahrzeug mit dieser standardleistung (alte fahrzeuge),
+// sie entspricht der bisherigen antriebskraft (faktor 1)
+export const STANDARD_MOTOR_PS = 150;
+// alte motoren hatten "leistung" 1..10, ein punkt entspricht 30 ps
+const PS_PRO_LEISTUNG = 30;
+
+// masse eines teils in kg: panzerblöcke werden mit der wandstärke schwerer (100 mm = 150 kg)
+export function teilMasse(p) {
+  const m = TEILE[p.t]?.masse || 0;
+  return p.t === "panzer" ? m * Math.max(20, Math.min(300, p.k?.staerke ?? 100)) / 100 : m;
+}
+// gesamtmasse eines bauplans in kg
+export function planMasse(bauplan) {
+  return bauplan.parts.reduce((s, p) => s + teilMasse(p), 0);
+}
 
 export const KANAL_TASTEN = {
   nick: ["arrowdown", "arrowup"],
@@ -123,8 +164,11 @@ export const KANAL_TASTEN = {
 export const RAD_GROESSEN = { S: 0.22, M: 0.32, L: 0.45 };
 export const GRENZEN = {
   winkel: [0, 180], schub: [0, 100000], dauer: [0.1, 3600], flaeche: [0, 1000], fov: [1, 170], kapazitaet: [1, 1000000], tempo: [0, 10000],
-  reichweite: [0.5, 50], kraft: [0, 100000]
+  reichweite: [0.5, 50], kraft: [0, 100000], ps: [20, 1500], kaliber: [25, 155], durchmesser: [25, 155],
+  haltekraft: [0, 100000], drehkraft: [0, 100000], staerke: [20, 300]
 };
+// geschossarten: he = hochexplosiv, ap = wuchtgeschoss, heat = hohlladung
+export const GESCHOSS_ARTEN = ["he", "ap", "heat"];
 export const RAD_TIEFE = 0.05;
 
 export function standardEinstellungen(typ, bauplan) {
@@ -141,13 +185,20 @@ export function standardEinstellungen(typ, bauplan) {
     case "explosive": return { taste: "z", farbe: "#ffffff", reichweite: 3, kraft: 25 };
     case "propeller": return { plus: "g", minus: "h", schub: 4, tempo: 80 };
     case "tank": return { kapazitaet: 60 };
+    case "motor": return { ps: STANDARD_MOTOR_PS };
+    case "geschuetz": return { kaliber: 75 };
+    case "verschluss": return { taste: "x", durchmesser: 75, geschoss: "he", wechsel: "c" };
+    case "munition": return { kaliber: 75, geschoss: "he" };
+    case "schnellfeuer": return { taste: "y", kaliber: 30 };
+    case "panzer": return { staerke: 100 };
     case "fluegel": return { flaeche: 4 };
     case "steuerflaeche": return { flaeche: 1.5, winkel: 25, kanal: "nick", plus: KANAL_TASTEN.nick[0], minus: KANAL_TASTEN.nick[1], gegenlauf: false };
     case "kamera": {
       const belegt = new Set((bauplan?.parts || []).filter(p => p.t === "kamera").map(p => p.k?.taste));
       return { taste: ["v", "b", "n", "u", "i", "o"].find(t => !belegt.has(t)) || "v", fov: 70 };
     }
-    case "servo": return { plus: "e", minus: "q", winkel: 90, tempo: 90, modus: "winkel" };
+    // haltekraft: wie stark er eine stellung hält, drehkraft: wie stark er dreht (beide in kn, 100 = praktisch unbegrenzt)
+    case "servo": return { plus: "e", minus: "q", winkel: 90, tempo: 90, modus: "winkel", haltekraft: 100, drehkraft: 100 };
     case "bruch": {
       const used = new Set((bauplan?.parts || []).filter(p => p.t === "bruch").map(p => p.k?.taste));
       let n = 1;
@@ -159,8 +210,8 @@ export function standardEinstellungen(typ, bauplan) {
 }
 
 export const FARBEN = [
-  "#e5484d", "#f5a524", "#ffd43b", "#46b96b", "#2f9ee0",
-  "#6e56cf", "#f2f2f2", "#8b8f98", "#2b2f36", "#9a6b3f"
+  "#1a1c20", "#e5484d", "#f5a524", "#ffd43b", "#46b96b",
+  "#2f9ee0", "#6e56cf", "#f2f2f2", "#8b8f98", "#9a6b3f"
 ];
 
 const cellKey = (x, y, z) => `${x},${y},${z}`;
@@ -186,7 +237,7 @@ export function bereinige(raw, opts = {}) {
     const key = cellKey(x, y, z);
     if (used.has(key)) continue;
     const o = Math.trunc(Number(p.o));
-    const c = typeof p.c === "string" && /^#[0-9a-f]{6}$/i.test(p.c) ? p.c : FARBEN[7];
+    const c = typeof p.c === "string" && /^#[0-9a-f]{6}$/i.test(p.c) ? p.c : FARBEN[0];
     const k = { ...standardEinstellungen(p.t), ...bereinigeEinstellungen(p.t, p.k, !!opts.admin) };
     used.add(key);
     parts.push({ t: p.t, x, y, z, o: o >= 0 && o < 24 ? o : 0, c, k });
@@ -223,6 +274,15 @@ function bereinigeEinstellungen(typ, k, admin = false) {
   set("tempo", zahl(k.tempo, ...GRENZEN.tempo));
   set("reichweite", zahl(k.reichweite, GRENZEN.reichweite[0], admin ? ADMIN_REICHWEITE : GRENZEN.reichweite[1]));
   set("kraft", zahl(k.kraft, ...GRENZEN.kraft));
+  // alte motoren mit "leistung" 1..10 werden in ps umgerechnet
+  set("ps", zahl(k.ps ?? (Number.isFinite(Number(k.leistung)) ? Number(k.leistung) * PS_PRO_LEISTUNG : undefined), ...GRENZEN.ps));
+  set("kaliber", zahl(k.kaliber, ...GRENZEN.kaliber));
+  set("durchmesser", zahl(k.durchmesser, ...GRENZEN.durchmesser));
+  set("geschoss", GESCHOSS_ARTEN.includes(k.geschoss) ? k.geschoss : undefined);
+  set("staerke", typ === "panzer" ? zahl(k.staerke, ...GRENZEN.staerke) : undefined);
+  set("wechsel", typ === "verschluss" ? taste(k.wechsel) : undefined);
+  set("haltekraft", zahl(k.haltekraft, ...GRENZEN.haltekraft));
+  set("drehkraft", zahl(k.drehkraft, ...GRENZEN.drehkraft));
   set("modus", ["winkel", "dauer"].includes(k.modus) ? k.modus : undefined);
   // eigene beschriftung für den knopf im handheld-modus (höchstens 10 zeichen)
   const name = typeof k.name === "string" ? k.name.replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 10) : "";
@@ -254,13 +314,14 @@ const sameDir = (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 const hasFace = (part, dir) => weltFlaechen(part).some(f => sameDir(f.dir, dir));
 
 // teile, die eine sprengladung beim zünden als eigene körper ablöst: alles in reichweite,
-// außer starre teile (räder, sitz, gelenke), panzerblöcke und alles, was direkt an einem panzerblock klebt
+// außer starre teile (sitz, gelenke), panzerblöcke und alles, was direkt an einem panzerblock klebt
 // pos(n) liefert die aktuelle weltposition der mitte von teil n (jedes teil zählt mit seinem eigenen ort,
 // auch wenn es an einem verdrehten oder getrennten körper sitzt); ohne pos gelten die bauzellen
-export function sprengZiele(bauplan, ana, i, pos = null) {
+// reichweite überschreibt die einstellung der ladung (z.b. für explodierende tanks)
+export function sprengZiele(bauplan, ana, i, pos = null, reichweite = null) {
   const parts = bauplan.parts;
   const lad = parts[i];
-  const r = lad.k?.reichweite ?? 3;
+  const r = reichweite ?? lad.k?.reichweite ?? 3;
   const mitte = n => (pos ? pos(n) : zellMitte(parts[n]));
   const m0 = mitte(i);
   const map = zellenMap(bauplan);
@@ -270,7 +331,7 @@ export function sprengZiele(bauplan, ana, i, pos = null) {
   parts.forEach((p, n) => {
     const def = TEILE[p.t];
     // die ladung selbst bleibt am fahrzeug, damit die explosion von ihrem aktuellen ort ausgeht
-    if (n === i || def.sprengfest || def.rad || def.gelenk || p.t === "sitz" || gebunden.has(n)) return;
+    if (n === i || def.sprengfest || def.gelenk || p.t === "sitz" || gebunden.has(n)) return;
     const c = mitte(n);
     if (Math.hypot(c[0] - m0[0], c[1] - m0[1], c[2] - m0[2]) > r) return;
     for (const d of DIRS) {
@@ -339,7 +400,7 @@ export function analysiere(bauplan) {
     let m = 0, x = 0, y = 0, z = 0;
     for (const i of body.parts) {
       const p = parts[i];
-      const pm = TEILE[p.t].masse;
+      const pm = teilMasse(p);
       const c = zellMitte(p);
       m += pm; x += c[0] * pm; y += c[1] * pm; z += c[2] * pm;
     }
@@ -434,6 +495,35 @@ function baue(fn) {
 
 export const VORLAGEN = [
   { id: "kart", name: "Kart", bauen: () => bereinige(starterKart()) },
+
+  // einfacher panzer: wanne mit sechs rädern, drehbarer turm (stellmotor senkrecht, q/e), 90-mm-kanone an einem
+  // waagrechten stellmotor (pfeil hoch/runter), geschossart mit c umschaltbar
+  { id: "panzer", name: "Panzer", bauen: () => baue((add, o) => {
+    const oliv = "#5d6b3f", dunkel = "#3f4a2b";
+    for (let z = -3; z <= 3; z++) for (let x = -1; x <= 1; x++) {
+      if (x === 0 && z === 3) add("motor", 0, 0, 3, 0, C.dunkel, { ps: 250 });
+      else add(z === -3 ? "panzer" : "block", x, 0, z, 0, z === -3 ? dunkel : oliv);
+    }
+    for (let x = -1; x <= 1; x++) add("keil", x, 1, -3, 0, dunkel);
+    add("sitz", 0, 1, 2, 0, C.dunkel);
+    add("block", -1, 1, 3, 0, oliv); add("block", 1, 1, 3, 0, oliv); add("block", 0, 1, 3, 0, oliv);
+    add("rad_lenk", -2, 0, -2, o.links, C.dunkel, { winkel: 30 });
+    add("rad_lenk", 2, 0, -2, o.rechts, C.dunkel, { winkel: 30 });
+    add("rad_fest", -2, 0, 0, o.links, C.dunkel); add("rad_fest", 2, 0, 0, o.rechts, C.dunkel);
+    add("rad_fest", -2, 0, 2, o.links, C.dunkel); add("rad_fest", 2, 0, 2, o.rechts, C.dunkel);
+    // turm: senkrechter stellmotor als drehkranz, darüber der turmkörper
+    add("servo", 0, 1, -1, 0, C.grau, { modus: "dauer", plus: "e", minus: "q", tempo: 45 });
+    add("block", 0, 2, -1, 0, oliv); add("block", -1, 2, -1, 0, oliv);
+    add("block", 0, 2, 0, 0, oliv); add("block", -1, 2, 0, 0, oliv);
+    add("kamera", -1, 2, -2, o.vorne, C.rot);
+    // kanone: waagrechter stellmotor hebt und senkt sie, verschluss mit drei munitionslagern, rohr nach vorn
+    add("servo", 1, 2, -1, o.rechts, C.grau, { modus: "winkel", plus: "arrowup", minus: "arrowdown", winkel: 18, tempo: 25 });
+    add("verschluss", 2, 2, -1, 0, C.dunkel, { durchmesser: 90, taste: "x", geschoss: "ap", wechsel: "c" });
+    add("geschuetz", 2, 2, -2, o.vorne, C.grau, { kaliber: 90 });
+    add("munition", 2, 2, 0, 0, C.dunkel, { kaliber: 90, geschoss: "ap" });
+    add("munition", 2, 3, -1, 0, C.dunkel, { kaliber: 90, geschoss: "he" });
+    add("munition", 3, 2, -1, 0, C.dunkel, { kaliber: 90, geschoss: "heat" });
+  }) },
 
   { id: "dragster", name: "Dragster", bauen: () => baue((add, o) => {
     for (let z = -5; z <= 3; z++) add("block", 0, 0, z, 0, z % 3 === 0 ? C.weiss : C.orange);

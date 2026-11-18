@@ -242,7 +242,7 @@ function zeige() {
 export function startModelle() {
   const hud = document.getElementById("hud");
   if (!hud) return;
-  const knopf = el("button", { type: "button", id: "modelleBtn", textContent: "📦", title: L("Hangar", "Hangar"), ariaLabel: L("Hangar", "Hangar"), onclick: () => {
+  const knopf = el("button", { type: "button", id: "modelleBtn", textContent: "Hangar", title: L("Hangar", "Hangar"), ariaLabel: L("Hangar", "Hangar"), onclick: () => {
     hinweis = "";
     if (tab === "pruefen" && !Konto.istAdmin()) tab = "vorlagen";
     zeige();

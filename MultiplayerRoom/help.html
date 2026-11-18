@@ -59,6 +59,12 @@
       <tr><td>Breakaway joint</td><td>Holds both sides firmly together until you press its key (default <kbd>1</kbd>, <kbd>2</kbd>, …). Then the parts separate.</td></tr>
       <tr><td>Explosive</td><td>Detonates once with its key (default <kbd>Z</kbd>): a flash severs every connection within its <em>range</em> (in metres) and pushes the parts away from the charge with the set <em>force</em> (kN).</td></tr>
       <tr><td>Armoured block</td><td>Very heavy and blast-proof: its connections hold even in explosions, and a body containing an armoured block is not thrown away.</td></tr>
+      <tr><td>Engine</td><td>Drives the wheels wherever it sits. Set the power (hp) in the inspector; several engines add up and more power burns more fuel.</td></tr>
+      <tr><td>Cannon</td><td>Barrel with adjustable calibre (25–155 mm), fight mode only. It fires away from the breech.</td></tr>
+      <tr><td>Cannon breech</td><td>Fires through the attached barrel with its key. Thicker than the calibre: the shell goes off inside the barrel. Thinner: slower and less accurate.</td></tr>
+      <tr><td>Ammo rack</td><td>Rounds of one calibre; the breech needs a rack matching its shell diameter on the same rigid part of the vehicle. Right next to the breech it reloads twice as fast. A hit makes the rest explode.</td></tr>
+      <tr><td>Shell types</td><td><b>HE</b> (high explosive) blasts the surroundings. <b>AP</b> (armour piercing) has little area effect but hits one part hard and wears armoured blocks down fast. <b>HEAT</b> (shaped charge) punches through blocks (armoured blocks cost more) but does less damage than AP. Each ammo rack holds one type; the breech uses the type you set, <kbd>C</kbd> cycles it in the game.</td></tr>
+      <tr><td>“Tank” preset</td><td>Hull with six wheels, turret (<kbd>Q</kbd>/<kbd>E</kbd> turns it), 90 mm cannon (<kbd>↑</kbd>/<kbd>↓</kbd> raises and lowers it), fire <kbd>X</kbd>.</td></tr>
     </table>
 
     <h2>Driving</h2>
@@ -79,6 +85,11 @@
 
     <h2>Altitude and space</h2>
     <p class="muted">The air gets thinner with altitude: wings, control surfaces and parachute lose their effect, rockets and engines do not. Between roughly 3000 and 7000 m gravity fades away; above that you are weightless in black space with stars and a small Earth. Your altitude is shown next to your speed. If you sink again, gravity pulls you back from about 3000 m.</p>
+
+    <h2>Fight</h2>
+    <p class="muted">Pick Fight or Test in the mode field above “Play”. In Fight you capture bases (30 seconds; several drivers at once slow or pause it) and collect points. Hits and explosions destroy parts: wheels can fall off, armoured blocks only take so much, full tanks explode.</p>
+    <p class="muted"><b>Maps:</b> “Load / share maps” opens the map window (like the hangar): manage your maps, load other players’ maps, play and upload them. In the map editor you build terrain, buildings, rocks, trees, bases and spawn points and test the map right away. KroxenStudios maintains the official maps.</p>
+    <p class="muted"><b>Queue and NPCs:</b> “Play” in Fight mode (online, official map) puts you in the queue. A match starts with four participants. The longer you wait, the more NPC tanks fill the slots (one every 6 seconds, up to three). The first player in the queue controls the NPCs; if they leave the game, the NPCs vanish. “Start now without waiting” skips the wait.</p>
 
     <h2>Online</h2>
     <p class="muted">Up to 20 players per room (five public rooms and private ones via the 🚪 button), everyone gets a parking lot. Each browser simulates the physics of its own vehicle and sends the position of its parts to the server; the others see them and can drive into them. You set name and look in your <a href="konto.html#charakter">account</a> (no sign-in needed). The name must not equal another account's username. Nothing is stored on the server in the room; an account is optional.</p>

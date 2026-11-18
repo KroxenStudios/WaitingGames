@@ -232,6 +232,71 @@ button.taste.warte { background: #ffd43b; color: #000; }
   font-size: 16px;
   box-shadow: 0 8px 24px #0006;
 }
+/* modus-feld (nur pc): "spielen" oben mit gewähltem modus darunter, im bau-modus statt des play-knopfs unten rechts */
+#modusFeld {
+  position: absolute;
+  z-index: 3;
+  /* unter der leiste oben (sie endet bei ca. 74 px), gleiche breite und rand wie die rechten panels */
+  top: 82px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 268px;
+}
+/* das inspector-panel rückt am pc unter das modus-feld */
+body:not(.touch).bau #inspector { top: 186px; max-height: calc(100% - 270px); }
+#modusFeld button { border: 0; font-weight: 800; box-shadow: 0 8px 24px #0006; cursor: pointer; }
+#btnSpielen { padding: 12px 22px; border-radius: 14px; background: var(--accent); color: #2a1700; font-size: 18px; letter-spacing: 1px; }
+#modusZeile { padding: 7px 12px; border-radius: 10px; background: #ffffffdd; color: #1a1a1a; font-size: 13px; }
+body.touch #modusFeld, body.fahr #modusFeld { display: none; }
+body.touch:not(.fightTouch) .nurFight { display: none; }
+body:not(.touch).bau #btnModus { display: none; }
+#modusSeite {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000a;
+}
+#modusSeite[hidden] { display: none; }
+.modusKasten { display: flex; flex-direction: column; gap: 12px; width: min(420px, 90vw); padding: 22px; border-radius: 18px; background: #1b1e24; color: #fff; }
+.modusKasten h2 { margin: 0 0 4px; font-size: 18px; }
+.modusKachel { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border: 2px solid #ffffff22; border-radius: 14px; background: #262a32; color: #fff; text-align: left; cursor: pointer; }
+.modusKachel b { font-size: 20px; }
+.modusKachel span { font-size: 13px; opacity: 0.75; }
+.modusKachel.aktiv { border-color: var(--accent); }
+#kartenListe { display: flex; gap: 8px; flex-wrap: wrap; }
+#kartenListe button { flex: 1; padding: 10px 12px; border: 2px solid #ffffff22; border-radius: 10px; background: #262a32; color: #fff; font-weight: 700; cursor: pointer; }
+#kartenListe button.aktiv { border-color: var(--accent); }
+#kartenListe button.aktion { flex-basis: 100%; font-weight: 500; background: #1f2329; }
+/* fight-anzeige: kompakte basen-leiste a b c oben in der mitte (blau = du, rot = gegner, weiss = frei, orange = umkämpft) */
+#fightHud {
+  position: absolute;
+  z-index: 3;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  pointer-events: none;
+}
+#fightHud[hidden] { display: none; }
+#fightHud .basis {
+  position: relative;
+  width: 54px;
+  height: 30px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000b;
+  border: 2px solid var(--f, #fff);
+  box-shadow: 0 4px 14px #0006;
+}
+#fightHud .basis b { position: relative; z-index: 1; display: block; text-align: center; font: 800 15px/26px system-ui, sans-serif; color: var(--f, #fff); }
+#fightHud .basis i { position: absolute; left: 0; bottom: 0; height: 4px; opacity: 0.9; }
 #btnNeu { right: auto; left: 50%; transform: translateX(-50%); background: #ffffffdd; font-size: 14px; padding: 9px 16px; }
 #btnNeu[hidden] { display: none; }
 #btnAus { right: auto; left: 50%; margin-left: 74px; transform: none; background: #ffffffdd; font-size: 14px; padding: 9px 16px; }
@@ -456,10 +521,10 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
   cursor: pointer;
 }
 #hud #kontoBtn:hover, #hud #modelleBtn:hover { background: var(--accent-soft); }
-#modelleDialog { width: 100vw; max-width: none; height: 100vh; height: 100dvh; max-height: none; margin: 0; border: 0; border-radius: 0; overflow: auto; padding: 0; background: #0c1522; color: var(--text); }
-#modelleDialog .kontoInhalt { max-width: 1100px; margin: 0 auto; padding: 28px 20px 24px; }
-#modelleDialog .kontoZu { position: fixed; top: 12px; right: 16px; font-size: 22px; z-index: 2; }
-#modelleDialog .modellListe { max-height: none; overflow: visible; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
+#modelleDialog, #kartenDialog { width: 100vw; max-width: none; height: 100vh; height: 100dvh; max-height: none; margin: 0; border: 0; border-radius: 0; overflow: auto; padding: 0; background: #0c1522; color: var(--text); }
+#modelleDialog .kontoInhalt, #kartenDialog .kontoInhalt { max-width: 1100px; margin: 0 auto; padding: 28px 20px 24px; }
+#modelleDialog .kontoZu, #kartenDialog .kontoZu { position: fixed; top: 12px; right: 16px; font-size: 22px; z-index: 2; }
+#modelleDialog .modellListe, #kartenDialog .modellListe { max-height: none; overflow: visible; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
 #kontoDialog {
   width: min(400px, calc(100vw - 24px));
   max-height: calc(100vh - 24px);
@@ -602,5 +667,105 @@ body.touch #chatProtokoll { top: 90px; left: 8px; }
 /* ansicht umschalten (c): kleines symbol in der oberen leiste, nur beim fahren */
 #hud #btnAnsicht { pointer-events: auto; width: 30px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--text); font-size: 14px; line-height: 1; cursor: pointer; }
 #hud #btnAnsicht:hover { background: var(--accent-soft); }
+#hud #btnTon { pointer-events: auto; width: 30px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--text); font-size: 14px; line-height: 1; cursor: pointer; }
+#hud #btnTon:hover { background: var(--accent-soft); }
+/* zielpunkt: wohin das rohr gerade zeigt, rot solange nachgeladen wird */
+#ziel { position: absolute; z-index: 3; width: 0; height: 0; pointer-events: none; }
+#ziel[hidden] { display: none; }
+#ziel i { position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 6px #000a; }
+#ziel i::before, #ziel i::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 4px #000a; }
+#ziel i::before { left: 9px; top: -7px; width: 2px; height: 34px; opacity: 0.55; }
+#ziel i::after { top: 9px; left: -7px; height: 2px; width: 34px; opacity: 0.55; }
+#ziel span { position: absolute; left: 16px; top: -8px; font: 700 12px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 0 4px #000, 0 0 2px #000; white-space: nowrap; }
+#ziel.lade i { border-color: #ff5a4a; }
+#ziel.lade i::before, #ziel.lade i::after { background: #ff5a4a; }
 #hud #btnAnsicht[hidden] { display: none; }
 body.touch #hud #btnAnsicht { width: 26px; height: 24px; font-size: 13px; }
+
+/* warteschlange für fight-matches */
+#wartePanel {
+  position: fixed; left: 50%; top: 84px; transform: translateX(-50%); z-index: 40;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 20px; min-width: 260px;
+  background: rgba(20, 24, 32, 0.92); color: #fff; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 12px;
+  font: 600 14px/1.3 system-ui, sans-serif; text-align: center;
+}
+#wartePanel[hidden] { display: none; }
+#wartePanel b { font-size: 18px; }
+#wartePanel div { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
+#wartePanel button { padding: 7px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.08); color: #fff; font: inherit; cursor: pointer; }
+#wartePanel button:hover { background: rgba(255, 255, 255, 0.18); }
+
+/* ---------------------------------------------------------------------------
+   minimalistisches layout: flach, ruhig, weniger deko
+   --------------------------------------------------------------------------- */
+:root { --panel: #10151cdd; --panel-solid: #10151cf2; --line: #ffffff17; --r: 10px; }
+
+/* kopfzeile: schmal, flach, rechts gruppiert */
+#hud { top: 10px; left: 10px; right: 10px; min-height: 40px; padding: 4px 12px; gap: 6px; border-radius: var(--r); box-shadow: none; backdrop-filter: blur(10px); }
+#hud strong { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; margin-right: 6px; }
+#status { font-size: 12px; margin-right: auto; }
+#status::before { width: 7px; height: 7px; box-shadow: none; }
+#hud a:first-of-type { margin-left: 0; }
+#hud a, #hud #langBtn, #hud #kontoBtn, #hud #modelleBtn, #hud #raumBtn, #hud #btnAnsicht, #hud #btnTon, #hud #spielerZahl {
+  height: 28px; width: auto; display: inline-flex; align-items: center; padding: 0 10px;
+  border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 13px; line-height: 1;
+}
+#hud a:hover, #hud #langBtn:hover, #hud #kontoBtn:hover, #hud #modelleBtn:hover, #hud #raumBtn:hover,
+#hud #btnAnsicht:hover, #hud #btnTon:hover, #hud #spielerZahl:hover { background: #ffffff12; color: var(--text); }
+#hud #kontoBtn { color: var(--text); }
+#hud #spielerZahl::before { content: ""; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #62e6b2; }
+#hud #btnAnsicht[hidden] { display: none; }
+#tacho { font-size: 14px; font-weight: 600; min-width: 64px; text-align: right; }
+
+/* panels: flach, kleinere radien, gleicher abstand */
+.panel { top: 60px; width: 252px; padding: 10px; border-radius: var(--r); box-shadow: none; backdrop-filter: blur(10px); }
+.panel button, .presetBtn { padding: 6px 8px; border-radius: 7px; background: #ffffff0c; }
+.panel button:hover, .presetBtn:hover { background: #ffffff1c; }
+.panel button.an { background: var(--accent); }
+.panel .kopf { margin-bottom: 6px; font-size: 12px; }
+.panel h3 { margin: 12px 0 5px; font-size: 10.5px; letter-spacing: 0.1em; }
+#baupanel { left: 10px; }
+#inspector, #fahrpanel { right: 10px; }
+.ico { margin-right: 5px; opacity: 0.6; font-size: 12px; }
+.zeile { gap: 4px; margin-top: 6px; }
+#hint { top: 58px; }
+#meldung { top: 96px; }
+
+/* spielen-knopf und modus */
+#modusFeld { top: 60px; right: 10px; width: 252px; gap: 4px; }
+body:not(.touch).bau #inspector { top: 160px; max-height: calc(100% - 240px); }
+#modusFeld button { box-shadow: none; }
+#btnSpielen { padding: 11px 16px; border-radius: var(--r); font-size: 15px; font-weight: 700; letter-spacing: 0.08em; }
+#modusZeile { padding: 7px 10px; border-radius: 7px; background: #ffffff14; color: var(--muted); font-weight: 500; font-size: 12.5px; text-align: left; }
+#modusZeile b { color: var(--text); }
+#btnModus, #btnNeu, #btnAus { box-shadow: none; border-radius: var(--r); padding: 10px 18px; font-size: 14px; font-weight: 700; }
+#btnNeu, #btnAus { background: #10151ce6; color: var(--text); border: 1px solid var(--line); font-weight: 500; }
+
+/* chat: unten links, daneben nichts mehr verdecken */
+#chatForm { left: 10px; bottom: 14px; gap: 6px; }
+body.bau #chatForm, body.bau #chatProtokoll { left: 274px; }
+#chatInput { padding: 8px 12px; border-radius: 8px; background: var(--panel-solid); font-size: 13px; }
+#chatForm button { padding: 8px 14px; border-radius: 8px; background: #ffffff14; color: var(--text); font-weight: 500; }
+#chatForm button:hover { background: #ffffff24; }
+#chatProtokoll { top: 60px; left: 12px; }
+#chatProtokoll li { border-radius: 7px; background: #10151c99; backdrop-filter: none; }
+
+/* dialoge und modus-auswahl */
+#kontoDialog, #raumDialog, #spielerDialog, .meldeDialog { border-radius: 12px; box-shadow: 0 12px 40px #0008; }
+.modusKasten { border-radius: 12px; background: #151a22; }
+.modusKachel, #kartenListe button { border-width: 1px; border-radius: 8px; background: #1c222b; }
+.modellBild.leer { font-size: 18px; }
+.modell { border-radius: 8px; }
+.raumListe li { border-radius: 8px; }
+#wartePanel { border-radius: 10px; }
+#fightHud .basis { border-radius: 6px; border-width: 1px; box-shadow: none; }
+
+@media (max-width: 760px) {
+  #hud { gap: 2px; padding: 3px 6px; }
+  #hud a, #hud #langBtn, #hud #kontoBtn, #hud #modelleBtn, #hud #raumBtn, #hud #btnAnsicht, #hud #btnTon { padding: 0 7px; font-size: 12px; }
+  #baupanel { bottom: 66px; }
+}
+body.touch #hud { top: 6px; left: 6px; right: 6px; min-height: 34px; }
+body.touch #chatToggle { border-radius: 8px; width: auto; padding: 0 10px; font-size: 12px; background: var(--panel); color: var(--text); }
+body.touch #chatForm { left: 6px; }
+body.touch #baupanel .zeile button { font-size: 14px; }

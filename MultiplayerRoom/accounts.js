@@ -1,5 +1,5 @@
 
-import { KLEIDUNG, FRISUREN, HAARFARBEN, HAUTFARBEN, KOERPER, MUND, NAMEN, bereinigeLook } from "./look.js";
+import { NAMEN, bereinigeLook } from "./look.js";
 
 const L = (de, en) => (window.WG ? WG.L(de, en) : de);
 const LOOK_FELDER = ["kleidung", "frisur", "haar", "haut", "koerper", "mund"];
@@ -21,6 +21,8 @@ const FEHLER = {
   name_ungueltig: ["Benutzername: 3–20 Zeichen aus a–z, 0–9, _ und -.", "Username: 3–20 characters from a–z, 0–9, _ and -."],
   garage_voll: ["Die Garage ist voll (maximal 12 Fahrzeuge).", "The garage is full (12 vehicles max)."],
   plan_ungueltig: ["Der Bauplan ist ungültig oder zu groß.", "The build is invalid or too large."],
+  karte_ungueltig: ["Die Karte ist ungültig (mindestens 1 Basis und 2 Startpunkte nötig).", "The map is invalid (needs at least 1 base and 2 spawn points)."],
+  zu_viele_karten: ["Du hast die maximale Zahl veröffentlichter Karten erreicht (15).", "You reached the maximum number of published maps (15)."],
   nicht_angemeldet: ["Du bist nicht angemeldet.", "You are not signed in."],
   zu_gross: ["Zu viele Daten.", "Too much data."],
   name_reserviert: ["Dieser Name ist reserviert.", "This name is reserved."],
@@ -187,7 +189,7 @@ function abmelden(server = true) {
 function aktualisiereKnopf() {
   if (!knopf) return;
   const u = store.get(USER_KEY);
-  knopf.textContent = u ? `👤 ${u}` : "👤";
+  knopf.textContent = u ? u : L("Anmelden", "Sign in");
   knopf.title = u ? L("Konto", "Account") : L("Anmelden – Fortschritt auf allen Geräten", "Sign in – use your builds on all devices");
 }
 
@@ -294,7 +296,7 @@ function zeige() {
   const warnung = angemeldet() ? warnungLesen() : null;
   if (warnung) {
     inhalt.append(el("div", { class: "kontoMeldung fehler kontoWarnung", role: "alert" },
-      el("b", { textContent: "⚠ " + L("Achtung: Fehlversuche", "Warning: failed attempts") }),
+      el("b", { textContent: L("Achtung: Fehlversuche", "Warning: failed attempts") }),
       el("span", { textContent: warnungText(warnung) }),
       el("button", { type: "button", textContent: L("Verstanden", "Got it"), onclick: () => { try { sessionStorage.removeItem(WARN_KEY); } catch {} zeige(); } })));
   }
@@ -327,32 +329,6 @@ function charakterEditor() {
   const farbe = el("input", { type: "color", value: z.color, ariaLabel: L("Kleidungsfarbe", "Clothing colour") });
   farbe.addEventListener("input", () => { z.color = farbe.value; melden(); });
 
-  const auswahl = (feld, liste, beschriftung) => {
-    const sel = el("select", { ariaLabel: beschriftung });
-    for (const v of liste) sel.append(el("option", { value: v, textContent: L(...NAMEN[v]), selected: z[feld] === v }));
-    sel.addEventListener("change", () => { z[feld] = sel.value; melden(); });
-    const label = el("label", { class: "feld" }, el("span", { textContent: beschriftung }), sel);
-    label.sel = sel;
-    return label;
-  };
-  const farben = (feld, liste, beschriftung) => {
-    const reihe = el("div", { class: "farbReihe" });
-    const knoepfe = liste.map(c => {
-      const b = el("button", { type: "button", class: "farbKnopf" + (z[feld] === c ? " an" : ""), style: `background:${c}`, ariaLabel: c });
-      b.addEventListener("click", () => { z[feld] = c; knoepfe.forEach(k => k.classList.toggle("an", k === b)); melden(); });
-      reihe.append(b);
-      return b;
-    });
-    return el("div", { class: "feld" }, el("span", { textContent: beschriftung }), reihe);
-  };
-
-  const koerperAuswahl = auswahl("koerper", KOERPER, L("Figur", "Body"));
-  const mundAuswahl = auswahl("mund", MUND, L("Mund", "Mouth"));
-  koerperAuswahl.sel.addEventListener("change", () => {
-    z.mund = z.koerper === "og" ? "keiner" : "laecheln";
-    mundAuswahl.sel.value = z.mund;
-    melden();
-  });
   const speichern = el("button", { type: "submit", class: "primaer", textContent: L("Speichern", "Save") });
   const form = el("form", { class: "kontoForm", onsubmit: async e => {
     e.preventDefault();
@@ -364,24 +340,18 @@ function charakterEditor() {
     setzeHinweis(L("Gespeichert. Im Spiel gilt das Aussehen ab dem nächsten Beitritt.", "Saved. In the game it applies from your next join."), "ok");
   } },
     el("div", { class: "kontoCharakter" }, name, farbe),
-    koerperAuswahl,
-    auswahl("kleidung", KLEIDUNG, L("Kleidung", "Clothing")),
-    auswahl("frisur", FRISUREN, L("Frisur", "Hairstyle")),
-    mundAuswahl,
-    farben("haar", HAARFARBEN, L("Haarfarbe", "Hair colour")),
-    farben("haut", HAUTFARBEN, L("Hautfarbe", "Skin tone")),
     speichern);
   setTimeout(melden, 0);
   return el("div", { class: "kontoBox", id: "charakter" },
     el("h3", { textContent: L("Charakter", "Character") }), form,
-    el("p", { class: "kontoInfo", textContent: L("Name und Aussehen sehen alle im Raum. Ohne Namen wird dein Kontoname benutzt, sonst „Gast“.", "Everyone in the room sees your name and look. Without a name your account name is used, otherwise “Guest”.") }));
+    el("p", { class: "kontoInfo", textContent: L("Name und Outfit-Farbe sehen alle im Raum. Ohne Namen wird dein Kontoname benutzt, sonst „Gast“.", "Everyone in the room sees your name and outfit colour. Without a name your account name is used, otherwise “Guest”.") }));
 }
 
 function charakterBox() {
   if (seite) return charakterEditor();
   return el("div", { class: "kontoBox" },
     el("h3", { textContent: L("Spielfigur", "Player") }),
-    el("a", { class: "kontoSeite", href: "konto.html#charakter", textContent: L("Name, Kleidung und Frisur im Konto anpassen →", "Customise name, clothing and hairstyle in your account →") }));
+    el("a", { class: "kontoSeite", href: "konto.html#charakter", textContent: L("Name und Outfit-Farbe im Konto anpassen →", "Customise name and outfit colour in your account →") }));
 }
 
 function zeigeFormular() {
@@ -550,8 +520,8 @@ function fahrzeugeBox() {
   anfrage("GET", "/models/mine").then(d => {
     liste.replaceChildren(...(d.models.length ? d.models.map(m => el("li", {},
       el("span", { textContent: m.title }),
-      el("small", { textContent: `${m.status === "approved" ? sterneText(m.avg, m.n) + " · ⬇ " + m.downloads : L("In Prüfung", "In review")}` })))
-      : [el("li", { class: "leer", textContent: L("Noch nichts hochgeladen. Im 📦-Dialog im Spiel kannst du Fahrzeuge veröffentlichen.", "Nothing uploaded yet. Use the 📦 dialog in the game to publish vehicles.") })]));
+      el("small", { textContent: `${m.status === "approved" ? sterneText(m.avg, m.n) + " · " + m.downloads + " Downloads" : L("In Prüfung", "In review")}` })))
+      : [el("li", { class: "leer", textContent: L("Noch nichts hochgeladen. Im Hangar im Spiel kannst du Fahrzeuge veröffentlichen.", "Nothing uploaded yet. Use the hangar in the game to publish vehicles.") })]));
   }).catch(() => liste.replaceChildren(el("li", { class: "leer", textContent: fehlerText("") })));
   return el("div", { class: "kontoBox" }, el("h3", { textContent: L("Meine Fahrzeuge", "My vehicles") }), liste);
 }
@@ -572,7 +542,7 @@ function zeigeKonto() {
       el("button", { type: "button", textContent: "⭳", title: L("Als Datei speichern", "Save as file"), ariaLabel: L("Als Datei speichern", "Save as file"), onclick: async () => {
         try { const d = await anfrage("GET", "/garage/" + g.slot); dateiSpeichern(g.name, d.data); } catch (e) { setzeHinweis(fehlerText(e.message)); }
       } }),
-      el("button", { type: "button", textContent: "🗑", ariaLabel: L("Löschen", "Delete"), onclick: async () => {
+      el("button", { type: "button", textContent: "✕", ariaLabel: L("Löschen", "Delete"), onclick: async () => {
         if (!confirm(L(`„${g.name}“ löschen?`, `Delete "${g.name}"?`))) return;
         try { await anfrage("DELETE", "/garage/" + g.slot); garage = garage.filter(x => x.slot !== g.slot); zeige(); } catch (e) { setzeHinweis(fehlerText(e.message)); }
       } })));
@@ -614,11 +584,11 @@ function zeigeKonto() {
   };
 
   inhalt.append(
-    el("h2", { textContent: `👤 ${store.get(USER_KEY) || ""}` }),
+    el("h2", { textContent: `${store.get(USER_KEY) || ""}` }),
     el("p", { class: "kontoInfo", textContent: L("Name, Farbe, Einstellungen und das zuletzt gebaute Fahrzeug werden automatisch synchronisiert.", "Name, colour, settings and your latest build sync automatically.") }),
     meldung(),
     seite ? "" : el("a", { class: "kontoSeite", href: "konto.html", textContent: L("Konto verwalten: Profil, Freunde, Fahrzeuge →", "Manage account: profile, friends, vehicles →") }),
-    (seite && store.get("krox-admin") === "1") ? el("a", { class: "kontoSeite", href: "moderation.html", textContent: L("🛡 Moderation öffnen →", "🛡 Open moderation →") }) : "",
+    (seite && store.get("krox-admin") === "1") ? el("a", { class: "kontoSeite", href: "moderation.html", textContent: L("Moderation öffnen →", "Open moderation →") }) : "",
     ...(seite ? [profilBox(), freundeBox(), blockBox(), fahrzeugeBox()] : []),
     charakterBox(),
     el("h3", { textContent: L("Garage", "Garage") }), liste, speichern,
@@ -677,7 +647,7 @@ export const Konto = {
   plan: () => hooks.getPlan(),
   planSetzen: t => hooks.setPlan(t),
   fehlerText,
-  warnungText: () => { const w = angemeldet() ? warnungLesen() : null; return w ? "⚠ " + warnungText(w) : null; },
+  warnungText: () => { const w = angemeldet() ? warnungLesen() : null; return w ? warnungText(w) : null; },
   basis: BASE,
   blockiert: () => blockiertSet,
   ladeBlockiert,

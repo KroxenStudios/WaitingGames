@@ -6,7 +6,7 @@ document.getElementById("langBtn").onclick = () => WG.set(WG.lang === "en" ? "de
 const app = document.getElementById("app");
 
 const GRUND = { beleidigung: ["Beleidigung", "Insult"], spam: ["Spam / Werbung", "Spam / ads"], unangemessen: ["Unangemessener Inhalt", "Inappropriate content"], betrug: ["Betrug / Täuschung", "Fraud / deception"], sonstiges: ["Sonstiges", "Other"] };
-const ART = { user: ["Konto", "Account"], chat: ["Chat", "Chat"], model: ["Fahrzeug", "Vehicle"], bio: ["Bio", "Bio"] };
+const ART = { user: ["Konto", "Account"], chat: ["Chat", "Chat"], model: ["Fahrzeug", "Vehicle"], map: ["Karte", "Map"], bio: ["Bio", "Bio"] };
 const AKTION = { dismiss: ["verworfen", "dismissed"], mute: ["stummgeschaltet", "muted"], ban: ["gesperrt", "banned"], remove: ["Inhalt entfernt", "content removed"], unmute: ["Stummschaltung aufgehoben", "unmuted"], unban: ["Sperre aufgehoben", "unbanned"] };
 const zeit = t => (t ? new Date(t).toLocaleString(WG?.lang === "en" ? "en-GB" : "de-DE", { dateStyle: "short", timeStyle: "short" }) : "");
 const profilLink = n => el("a", { href: `profil.html?u=${encodeURIComponent(n)}`, textContent: n, target: "_blank", rel: "noopener" });
@@ -38,11 +38,17 @@ async function ladeMeldungen() {
         if (grund !== null) bearbeite(r, { action: "ban", reason: grund });
       } })
     ];
-    if (r.kind === "model" || r.kind === "bio") knoepfe.splice(1, 0, el("button", { type: "button", class: "primaer", textContent: L("Inhalt entfernen", "Remove content"), onclick: () => bearbeite(r, { action: "remove" }) }));
+    if (r.kind === "model" || r.kind === "map" || r.kind === "bio") knoepfe.splice(1, 0, el("button", { type: "button", class: "primaer", textContent: L("Inhalt entfernen", "Remove content"), onclick: () => bearbeite(r, { action: "remove" }) }));
     if (r.kind === "model") {
       knoepfe.unshift(el("button", { type: "button", textContent: L("Fahrzeug ansehen (Datei)", "View vehicle (file)"), onclick: () => aktion(async () => {
         const dl = await Konto.anfrage("POST", `/models/${r.ref}/download`);
         Konto.dateiSpeichern(dl.title || r.refTitle || "fahrzeug", dl.data);
+      }) }));
+    }
+    if (r.kind === "map") {
+      knoepfe.unshift(el("button", { type: "button", textContent: L("Karte ansehen (Datei)", "View map (file)"), onclick: () => aktion(async () => {
+        const dl = await Konto.anfrage("POST", `/maps/${r.ref}/download`);
+        Konto.dateiSpeichern(dl.title || r.refTitle || "karte", dl.data);
       }) }));
     }
     return el("div", { class: "meldeKarte" },
@@ -51,11 +57,12 @@ async function ladeMeldungen() {
         el("span", { class: "meldeGrund", textContent: L(...(GRUND[r.reason] || [r.reason, r.reason])) }),
         el("small", { textContent: zeit(r.created) })),
       el("p", { class: "meldeZeile" }, L("Gemeldet: ", "Reported: "), profilLink(r.target),
-        r.banned ? el("b", { class: "rot", textContent: " 🚫 " + L("gesperrt", "banned") }) : "",
-        r.muted > Date.now() ? el("b", { class: "rot", textContent: " 🔇 " + L("stumm bis ", "muted until ") + zeit(r.muted) }) : "",
+        r.banned ? el("b", { class: "rot", textContent: " " + L("gesperrt", "banned") }) : "",
+        r.muted > Date.now() ? el("b", { class: "rot", textContent: " " + L("stumm bis ", "muted until ") + zeit(r.muted) }) : "",
         ` · ${r.offen} ${L("offene Meldungen insgesamt", "open reports in total")}`),
       el("p", { class: "meldeZeile" }, L("Gemeldet von: ", "Reported by: "), profilLink(r.reporter)),
       r.kind === "model" ? el("p", { class: "meldeZeile", textContent: `${L("Fahrzeug", "Vehicle")}: ${r.refTitle || "?"}` }) : "",
+      r.kind === "map" ? el("p", { class: "meldeZeile", textContent: `${L("Karte", "Map")}: ${r.refTitle || "?"}` }) : "",
       r.kind === "bio" ? el("p", { class: "meldeKontext", textContent: r.bio || L("(Bio ist leer)", "(bio is empty)") }) : "",
       r.context ? el("p", { class: "meldeKontext", textContent: `„${r.context}“ — ${L("vom Melder angegeben, nicht geprüft", "stated by the reporter, unverified")}` }) : "",
       r.note ? el("p", { class: "meldeKontext", textContent: r.note }) : "",
@@ -63,7 +70,7 @@ async function ladeMeldungen() {
   });
   meldungenBox.replaceChildren(
     el("h2", { textContent: `${L("Offene Meldungen", "Open reports")} (${d.reports.length})` }),
-    ...(karten.length ? karten : [el("p", { class: "kontoInfo", textContent: L("Keine offenen Meldungen. 🎉", "No open reports. 🎉") })]));
+    ...(karten.length ? karten : [el("p", { class: "kontoInfo", textContent: L("Keine offenen Meldungen.", "No open reports.") })]));
 }
 async function bearbeite(r, body) {
   await aktion(() => Konto.anfrage("POST", `/admin/reports/${r.id}/resolve`, body), async () => {
@@ -83,7 +90,7 @@ kontenBox.append(el("h2", { textContent: L("Konto suchen", "Find account") }),
 async function suche() {
   await aktion(async () => {
     const d = await Konto.anfrage("GET", `/admin/users?q=${encodeURIComponent(suchFeld.value.trim())}`);
-    suchErgebnis.replaceChildren(...(d.users.length ? d.users.map(u => el("button", { type: "button", class: "link", textContent: `${u.name}${u.banned ? " 🚫" : ""}${u.muted > Date.now() ? " 🔇" : ""}`, onclick: () => zeigeNutzer(u.name) })) : [el("p", { class: "kontoInfo", textContent: L("Nichts gefunden.", "Nothing found.") })]));
+    suchErgebnis.replaceChildren(...(d.users.length ? d.users.map(u => el("button", { type: "button", class: "link", textContent: `${u.name}${u.banned ? "" : ""}${u.muted > Date.now() ? "" : ""}`, onclick: () => zeigeNutzer(u.name) })) : [el("p", { class: "kontoInfo", textContent: L("Nichts gefunden.", "Nothing found.") })]));
   });
 }
 async function zeigeNutzer(name) {
@@ -95,8 +102,8 @@ async function zeigeNutzer(name) {
       el("h3", {}, profilLink(u.name)),
       el("p", { class: "kontoInfo", textContent: `${L("Dabei seit", "Member since")} ${zeit(u.created)} · ${u.models} ${L("Fahrzeuge", "vehicles")} · ${u.offen}/${u.gesamt} ${L("Meldungen offen/gesamt", "reports open/total")}` }),
       u.bio ? el("p", { class: "meldeKontext", textContent: u.bio }) : "",
-      u.banned ? el("p", { class: "kontoMeldung fehler", textContent: `🚫 ${L("Gesperrt", "Banned")}: ${u.banReason || ""}` }) : "",
-      u.muted ? el("p", { class: "kontoMeldung fehler", textContent: `🔇 ${L("Stumm bis", "Muted until")} ${zeit(u.muted)}` }) : "",
+      u.banned ? el("p", { class: "kontoMeldung fehler", textContent: `${L("Gesperrt", "Banned")}: ${u.banReason || ""}` }) : "",
+      u.muted ? el("p", { class: "kontoMeldung fehler", textContent: `${L("Stumm bis", "Muted until")} ${zeit(u.muted)}` }) : "",
       el("div", { class: "modellKnoepfe", style: "justify-content:flex-start" },
         ...tage,
         u.muted ? el("button", { type: "button", textContent: L("Stummschaltung aufheben", "Unmute"), onclick: () => wirke(`/admin/users/${u.name}/unmute`, {}, L(...AKTION.unmute)) }) : "",

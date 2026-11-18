@@ -1,6 +1,7 @@
 
 import {
-  TEILE, ORIENT, ZELLE, RAD_TIEFE, analysiere, zellMitte, teilAchse, radRadius, matVec, sprengZiele
+  TEILE, ORIENT, ZELLE, RAD_TIEFE, analysiere, zellMitte, teilAchse, radRadius, matVec, sprengZiele,
+  STANDARD_MOTOR_PS, munitionKapazitaet, teilMasse
 } from "./bau.js";
 
 export const PHYSIK_TAKT = 1 / 60;
@@ -71,7 +72,7 @@ const ECKE_PUNKTE = [
 function colliderFuer(R, part, lokal) {
   const m = ORIENT[part.o];
   const q = matQuat(m);
-  const masse = TEILE[part.t].masse;
+  const masse = teilMasse(part);
   let desc;
 
   switch (part.t) {
@@ -80,6 +81,8 @@ function colliderFuer(R, part, lokal) {
     case "glas":
     case "sitz":
     case "tank":
+    case "munition":
+    case "verschluss":
       desc = R.ColliderDesc.cuboid(H, H, H);
       break;
     case "halb": {
@@ -134,7 +137,9 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
     tasteVorher: new Set(), angetrieben: new Set(),
     licht: new Map(), hebel: new Map(), gruppe: [], sprengung: new Map(),
     sprengPos: new Map(), R, world, colliderVon: new Map(), neuGetrennt: [], sprengReihe: [], abgeloest: new Set(),
-    tank: { menge: new Map(), aktiv: false }, verbrauch: opts.verbrauch !== false
+    tank: { menge: new Map(), aktiv: false }, verbrauch: opts.verbrauch !== false,
+    // kampf: nur im fight-modus verwundbar (schiessen geht auch im test-modus)
+    kampf: !!opts.kampf, zerstoert: new Set(), nachladen: new Map(), geschossArt: new Map(), schussReihe: [], schussZaehler: 0
   };
 
   for (let bi = 0; bi < ana.bodies.length; bi++) {
@@ -154,7 +159,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
       const def = TEILE[p.t];
 
       if (def.rad && !nurRaeder) {
-        const md = R.ColliderDesc.ball(0.1).setTranslation(...lokal).setMass(def.masse)
+        const md = R.ColliderDesc.ball(0.1).setTranslation(...lokal).setMass(teilMasse(p))
           .setCollisionGroups(0).setSolverGroups(0);
         veh.colliderSet.add(world.createCollider(md, rb).handle);
         continue;
@@ -163,7 +168,7 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
       let cd;
       if (def.rad) {
         cd = R.ColliderDesc.cylinder(0.11, radRadius(p)).setTranslation(...lokal)
-          .setRotation(matQuat(ORIENT[p.o])).setMass(def.masse).setFriction(1.0);
+          .setRotation(matQuat(ORIENT[p.o])).setMass(teilMasse(p)).setFriction(1.0);
       } else {
         cd = colliderFuer(R, p, lokal);
       }
@@ -232,6 +237,8 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
         const w = (teil.k.winkel ?? 90) * Math.PI / 180;
         if (teil.k.modus !== "dauer" && w < Math.PI - 0.01) j.setLimits(-w, w);
         j.configureMotorPosition(0, 600, 60);
+        // maximale haltekraft des stellmotors (kn)
+        j.setMotorMaxForce((teil.k.haltekraft ?? 100) * 1000);
       }
       veh.gelenke.push(gel);
     }
@@ -245,10 +252,42 @@ export function erzeugeFahrzeug(R, world, bauplan, opts = {}) {
     if (parts[i].t === "tank") veh.tank.menge.set(i, parts[i].k.kapazitaet ?? 60);
   }
   veh.tank.aktiv = veh.tank.menge.size > 0;
+  // munitionslager starten voll (patronen nach kaliber)
+  veh.munition = new Map();
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i].t === "munition") veh.munition.set(i, munitionKapazitaet(parts[i].k.kaliber));
+  }
   berechneGruppen(veh);
 
   aktualisiereAntrieb(veh);
   return veh;
+}
+
+// verhältnis der gesamten motorleistung zur standardleistung (1 = wie bisher).
+// ohne motor-baustein gilt der standard, damit alte fahrzeuge weiterfahren.
+// zerstörte oder abgetrennte motoren liefern nichts, sind alle kaputt, ist das ergebnis 0.
+export function motorFaktor(veh) {
+  let hat = false, summe = 0;
+  veh.plan.parts.forEach((p, i) => {
+    if (p.t !== "motor") return;
+    hat = true;
+    const bi = veh.ana.bodyOf[i];
+    if (veh.zerstoert.has(i) || (veh.angetrieben.size && !veh.angetrieben.has(bi))) return;
+    summe += p.k?.ps ?? STANDARD_MOTOR_PS;
+  });
+  return (hat ? summe : STANDARD_MOTOR_PS) / STANDARD_MOTOR_PS;
+}
+
+// gesamtleistung der arbeitenden motoren in ps (für die anzeige)
+export function motorPS(veh) {
+  return Math.round(motorFaktor(veh) * STANDARD_MOTOR_PS);
+}
+
+// masse des fahrzeugs in kg: alles, was noch am sitzkörper hängt (abgesprengte teile zählen nicht mehr)
+export function fahrzeugMasse(veh) {
+  let m = 0;
+  for (const b of veh.bodies) if (!veh.angetrieben.size || veh.angetrieben.has(b.index)) m += b.rb.mass();
+  return m;
 }
 
 function berechneGruppen(veh) {
@@ -366,17 +405,20 @@ export function steuere(world, veh, eingabe, dt) {
   }
 
   const v = tempo(veh);
-  let gas = veh.motorAn ? eingabe.gas : 0;
-  if (gas !== 0) gas *= entnimm(veh, Math.max(0, veh.ana.sitzBody), 0.15 * Math.abs(gas) * dt);
+  // motor-bausteine: summe der leistung, mehr leistung braucht mehr treibstoff
+  const ml = motorFaktor(veh);
+  let gas = veh.motorAn && ml > 0 ? eingabe.gas : 0;
+  if (gas !== 0) gas *= entnimm(veh, Math.max(0, veh.ana.sitzBody), 0.15 * ml * Math.abs(gas) * dt);
 
   const mf = veh.motorFaktor || 1;
+  const hoechst = HOECHST_TEMPO * Math.min(1.5, 0.5 + 0.5 * ml);
   let kraft = 0, bremsen = eingabe.bremse ? BREMSE * mf : 0;
   if (gas > 0) {
     if (v < -0.8) bremsen = Math.max(bremsen, BREMSE * mf * gas);
-    else if (v < HOECHST_TEMPO) kraft = Math.min(MOTOR_KRAFT * mf, (MOTOR_LEISTUNG * mf) / Math.max(Math.abs(v), 1)) * gas;
+    else if (v < hoechst) kraft = Math.min(MOTOR_KRAFT * mf * ml, (MOTOR_LEISTUNG * mf * ml) / Math.max(Math.abs(v), 1)) * gas;
   } else if (gas < 0) {
     if (v > 0.8) bremsen = Math.max(bremsen, BREMSE * mf * -gas);
-    else if (v > -9) kraft = MOTOR_KRAFT * mf * 0.45 * gas;
+    else if (v > -9) kraft = MOTOR_KRAFT * mf * ml * 0.45 * gas;
   } else if (!eingabe.bremse) {
     bremsen = 1.2 * mf;
   }
@@ -446,12 +488,33 @@ export function steuere(world, veh, eingabe, dt) {
         if (neu.has(k.taste)) veh.licht.set(i, !veh.licht.get(i));
         if (veh.licht.get(i)) veh.fx.set(i, 1);
         break;
+      case "verschluss": {
+        if (veh.zerstoert.has(i)) break;
+        const rest = Math.max(0, (veh.nachladen.get(i) ?? 0) - dt);
+        veh.nachladen.set(i, rest);
+        // geschossart durchschalten: he, ap, heat
+        if (k.wechsel && neu.has(k.wechsel)) veh.geschossArt.set(i, (artVon(veh, i) + 1) % ARTEN.length);
+        if (rest <= 0 && tasten.has(k.taste)) {
+          // schwerere geschosse brauchen länger zum nachladen, ein lager direkt am verschluss halbiert die zeit
+          const faktor = schiesse(veh, i);
+          if (faktor) veh.nachladen.set(i, (0.4 + ((k.durchmesser ?? 75) / 155) * 1.6) * faktor);
+        }
+        break;
+      }
+      case "schnellfeuer": {
+        if (veh.zerstoert.has(i)) break;
+        const rest = Math.max(0, (veh.nachladen.get(i) ?? 0) - dt);
+        veh.nachladen.set(i, rest);
+        if (rest <= 0 && tasten.has(k.taste) && schnellSchuss(veh, i)) veh.nachladen.set(i, SCHNELL_TAKT);
+        break;
+      }
       case "explosive": {
         let st = veh.sprengung.get(i);
         if (!st && neu.has(k.taste)) {
           st = { zeit: 0 };
           veh.sprengung.set(i, st);
           sprenge(veh, i);
+          if (veh.kampf) schadenAn(veh, veh.sprengPos.get(i), k.reichweite ?? 3, -1);
         } else if (st) {
           st.zeit += dt;
         }
@@ -518,6 +581,8 @@ export function steuere(world, veh, eingabe, dt) {
     }
     const richtung = (tasten.has(k.plus) ? 1 : 0) - (tasten.has(k.minus) ? 1 : 0);
     const tempoRad = (k.tempo ?? 90) * Math.PI / 180;
+    // beim drehen gilt die drehkraft, im stand die haltekraft (kn)
+    g.j.setMotorMaxForce((richtung !== 0 ? (k.drehkraft ?? 100) : (k.haltekraft ?? 100)) * 1000);
     if (k.modus === "dauer") {
       g.j.configureMotorVelocity(richtung * tempoRad, 40);
     } else {
@@ -604,6 +669,7 @@ const STOSS_DAUER = 0.02;
 function loeseTeil(veh, n) {
   const { R, world } = veh;
   const part = veh.plan.parts[n];
+  if (TEILE[part.t].rad) return loeseRad(veh, n);
   const bi = veh.ana.bodyOf[n];
   const alt = veh.bodies[bi];
   const col = veh.colliderVon.get(n);
@@ -633,10 +699,67 @@ function loeseTeil(veh, n) {
   veh.bodies.push(body);
   alt.parts.splice(alt.parts.indexOf(n), 1);
   veh.ana.bodyOf[n] = body.index;
-  veh.ana.bodies.push({ parts: [n], masse: TEILE[part.t].masse, ursprung: mitte });
+  veh.ana.bodies.push({ parts: [n], masse: teilMasse(part), ursprung: mitte });
   veh.abgeloest.add(n);
   veh.neuGetrennt.push({ teil: n, index: body.index, von: bi });
   return body.index;
+}
+
+// ein rad am fahrwerk eines körpers abreissen: das rad bekommt einen eigenen rollenden körper, die feder am
+// fahrzeug wird stillgelegt (kein antrieb, keine kraft, keine bremse)
+function loeseRad(veh, n) {
+  const { R, world } = veh;
+  const part = veh.plan.parts[n];
+  const bi = veh.ana.bodyOf[n];
+  const alt = veh.bodies[bi];
+  if (!alt || veh.abgeloest.has(n) || alt.parts.length < 2) return bi;
+  const rot = alt.rb.rotation();
+  const mitte = zellMitte(part);
+  const pos = add(arr(alt.rb.translation()), quatRot(rot, sub(mitte, alt.ursprung)));
+  const v = punktGeschw(alt.rb, pos), w = alt.rb.angvel();
+
+  const rec = alt.raeder.find(r => r.teil === n);
+  if (rec && alt.vc) {
+    alt.vc.setWheelEngineForce(rec.w, 0);
+    alt.vc.setWheelBrake(rec.w, 0);
+    alt.vc.setWheelSuspensionStiffness(rec.w, 0);
+    alt.vc.setWheelMaxSuspensionForce(rec.w, 0);
+    alt.vc.setWheelFrictionSlip(rec.w, 0);
+    alt.vc.setWheelSideFrictionStiffness(rec.w, 0);
+  }
+  if (rec) alt.raeder.splice(alt.raeder.indexOf(rec), 1);
+
+  const desc = veh.kin ? R.RigidBodyDesc.kinematicPositionBased() : R.RigidBodyDesc.dynamic();
+  desc.setTranslation(...pos).setRotation(rot).setCanSleep(false);
+  if (!veh.kin) desc.setLinearDamping(0.05).setAngularDamping(0.3).setCcdEnabled(true);
+  const rb = world.createRigidBody(desc);
+  const neu = world.createCollider(
+    R.ColliderDesc.cylinder(0.11, radRadius(part)).setRotation(matQuat(ORIENT[part.o])).setMass(teilMasse(part)).setFriction(1.0), rb);
+  veh.colliderSet.add(neu.handle);
+  veh.colliderVon.set(n, neu);
+  if (!veh.kin) {
+    rb.setLinvel(vec(v), true);
+    rb.setAngvel(w, true);
+  }
+  const body = { rb, index: veh.bodies.length, ursprung: mitte, parts: [n], vc: null, raeder: [], loseRaeder: true };
+  veh.bodies.push(body);
+  alt.parts.splice(alt.parts.indexOf(n), 1);
+  veh.ana.bodyOf[n] = body.index;
+  veh.ana.bodies.push({ parts: [n], masse: teilMasse(part), ursprung: mitte });
+  veh.abgeloest.add(n);
+  veh.neuGetrennt.push({ teil: n, index: body.index, von: bi });
+  return body.index;
+}
+
+// panzerblöcke halten nicht ewig: jeder treffer und jede grosse explosion nutzt sie ab
+const PANZER_HP = 120;
+// wandstärke eines panzerblocks relativ zu 100 mm (haltbarkeit und was eine hohlladung zum durchschlagen braucht)
+export const wandFaktor = p => Math.max(20, Math.min(300, p?.k?.staerke ?? 100)) / 100;
+function panzerAbnutzung(veh, n, schaden) {
+  veh.panzerSchaden ||= new Map();
+  const summe = (veh.panzerSchaden.get(n) ?? 0) + schaden;
+  veh.panzerSchaden.set(n, summe);
+  return summe >= PANZER_HP * wandFaktor(veh.plan.parts[n]);
 }
 
 // zündet eine ladung: löst alle teile im bereich ab und schleudert sie nach aussen.
@@ -649,7 +772,8 @@ function teilWeltPos(veh, n) {
 }
 
 // vorgabe: fertige liste der abzulösenden teile (vom zündenden spieler), damit alle dieselbe trennung sehen
-export function sprenge(veh, i, vorgabe = null) {
+// opts: reichweite/kraft überschreiben die werte der ladung (explodierende tanks, geplatzte geschosse)
+export function sprenge(veh, i, vorgabe = null, opts = null) {
   const parts = veh.plan.parts;
   const p = parts[i];
   const k = p.k || {};
@@ -658,10 +782,20 @@ export function sprenge(veh, i, vorgabe = null) {
   const ursprung = teilWeltPos(veh, i);
   // ort der zündung merken: licht, glühen und rauch bleiben dort stehen
   veh.sprengPos.set(i, ursprung);
-  const reichweite = k.reichweite ?? 3;
-  const impuls = (k.kraft ?? 25) * 1000 * STOSS_DAUER;
+  const reichweite = opts?.reichweite ?? k.reichweite ?? 3;
+  const impuls = (opts?.kraft ?? k.kraft ?? 25) * 1000 * STOSS_DAUER;
 
-  const ziele = vorgabe || sprengZiele(veh.plan, veh.ana, i, n => teilWeltPos(veh, n));
+  const ziele = vorgabe || sprengZiele(veh.plan, veh.ana, i, n => teilWeltPos(veh, n), reichweite);
+  // panzerblöcke in reichweite nutzen sich ab und brechen bei grossen explosionen weg (andere spieler sehen es über die zielliste)
+  if (!vorgabe && !veh.kin) {
+    parts.forEach((q, n) => {
+      if (!TEILE[q.t].sprengfest || veh.abgeloest.has(n) || !veh.bodies[veh.ana.bodyOf[n]]) return;
+      const c = teilWeltPos(veh, n);
+      const d = Math.hypot(c[0] - ursprung[0], c[1] - ursprung[1], c[2] - ursprung[2]);
+      if (d > reichweite) return;
+      if (panzerAbnutzung(veh, n, (opts?.kraft ?? k.kraft ?? 25) * (1 - d / Math.max(reichweite, 0.01)))) ziele.push(n);
+    });
+  }
   // aufzeichnung für andere spieler: ladung, anzahl, teile
   if (!vorgabe) veh.sprengReihe.push(i, ziele.length, ...ziele);
   for (const n of ziele) loeseTeil(veh, n);
@@ -689,6 +823,422 @@ export function sprenge(veh, i, vorgabe = null) {
       const dreh = [Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5];
       b.rb.applyTorqueImpulse(vec(scale(dreh, impuls * faktor * 0.04)), true);
     }
+  }
+}
+
+// ---- kampf (fight-modus) ----
+// geschosse gibt es nur als punkte mit flugbahn: jeder client simuliert alle, aber nur das opfer
+// wertet den treffer auf sein eigenes fahrzeug aus (opfer entscheidet).
+// TREFFER_AUTORITAET: "opfer" (jetzt) oder später "server", dann melden clients nur noch schüsse
+export const TREFFER_AUTORITAET = "opfer";
+export const geschosse = [];
+// einschläge zum abholen für effekte: { p, kal, treffer }
+export const einschlaege = [];
+
+// mündungsgeschwindigkeit in m/s (wie eine panzerkanone, kein paintball); der strahl pro schritt (~13 m) fängt auch dünne ziele ab
+const GESCHOSS_TEMPO = 800;
+const GESCHOSS_LEBEN = 4;
+// masse einer 155-mm-granate in kg, und der anteil des impulses, der als rückstoss beim fahrzeug ankommt
+const GESCHOSS_MASSE_155 = 43;
+const RUECKSTOSS_ANTEIL = 0.06;
+// geschossarten: he (sprengwirkung im umkreis), ap (wuchtgeschoss: wenig umkreis, viel schaden am getroffenen teil und
+// grosser stoss), heat (hohlladung: durchschlägt blöcke, dafür weniger schaden als ap). durch = durchschlagskraft in lagen.
+// art 3: geschoss der schnellfeuerkanone (schnell, wenig wirkung)
+export const ARTEN = ["he", "ap", "heat"];
+export const ART_KURZ = ["HE", "AP", "HEAT", "MK"];
+const ART_WERTE = [
+  { tempo: 1, direkt: 1, radius: 1, impuls: 1 },
+  { tempo: 1.2, direkt: 2.2, radius: 0.45, impuls: 1.7 },
+  { tempo: 0.85, direkt: 1.3, radius: 0.5, impuls: 0.5 },
+  { tempo: 1.2, direkt: 0.35, radius: 0.3, impuls: 0.25 }
+];
+// aktuell gewählte art des verschlusses n (taste oder voreinstellung)
+export function artVon(veh, n) {
+  return veh.geschossArt.get(n) ?? Math.max(0, ARTEN.indexOf(veh.plan.parts[n].k.geschoss));
+}
+const KAMPF_TEILE = new Set(["motor", "geschuetz", "verschluss", "tank", "munition", "schnellfeuer"]);
+// nachladezeit-faktor, wenn die munition aus einem lager direkt am verschluss kommt
+const NAHLAGER_FAKTOR = 0.5;
+
+// direkt angrenzende zelle (flächen berühren sich)?
+function angrenzend(a, b) {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.z - b.z) === 1;
+}
+
+// lager für den schuss: gleicher festverbundener körperverbund, kaliber = geschossdurchmesser, noch patronen übrig.
+// ein direkt am verschluss sitzendes lager wird bevorzugt. gibt den teil-index zurück oder -1.
+function munitionQuelle(veh, iv, dm, art = 0) {
+  const parts = veh.plan.parts;
+  const gid = veh.gruppe[veh.ana.bodyOf[iv]];
+  let beste = -1;
+  for (const [n, rest] of veh.munition) {
+    if (rest <= 0 || veh.zerstoert.has(n) || veh.gruppe[veh.ana.bodyOf[n]] !== gid) continue;
+    if (Math.round(parts[n].k.kaliber ?? 75) !== Math.round(dm)) continue;
+    if (Math.max(0, ARTEN.indexOf(parts[n].k.geschoss)) !== art) continue;
+    if (angrenzend(parts[n], parts[iv])) return n;
+    if (beste < 0) beste = n;
+  }
+  return beste;
+}
+
+// übrige patronen je kaliber (nur lager, die noch ganz sind), für die anzeige
+export function munitionStand(veh) {
+  const out = new Map();
+  for (const [n, rest] of veh.munition) {
+    if (veh.zerstoert.has(n)) continue;
+    const k = veh.plan.parts[n].k;
+    const name = `${Math.round(k.kaliber ?? 75)} mm ${ART_KURZ[Math.max(0, ARTEN.indexOf(k.geschoss))]}`;
+    out.set(name, (out.get(name) || 0) + rest);
+  }
+  return out;
+}
+// unter diesem füllstand (0..1) explodiert ein getroffener tank nicht mehr
+const TANK_MIN = 0.1;
+
+// geschütze, die an diesem verschluss sitzen: das rohr zeigt mit seiner oberseite vom verschluss weg
+function rohreAn(veh, iv) {
+  const v = veh.plan.parts[iv];
+  const out = [];
+  veh.plan.parts.forEach((p, n) => {
+    if (p.t !== "geschuetz") return;
+    const d = teilAchse(p).map(Math.round);
+    if (p.x - d[0] === v.x && p.y - d[1] === v.y && p.z - d[2] === v.z) out.push(n);
+  });
+  return out;
+}
+
+// reichweite der sprengung für andere spieler, die nur teil und ort kennen
+export function sprengReichweite(p) {
+  if (p.t === "tank") return 2.5;
+  if (p.t === "munition") return 3.5;
+  return p.k?.reichweite ?? 3;
+}
+
+function fuellstand(veh, n) {
+  const kap = Math.max(1, veh.plan.parts[n].k?.kapazitaet ?? 60);
+  return Math.min(1, (veh.tank.menge.get(n) ?? 0) / kap);
+}
+
+// macht ein teil kaputt. ein gefüllter tank explodiert dabei, ein leerer nicht.
+function zerstoere(veh, n) {
+  if (veh.zerstoert.has(n) || !KAMPF_TEILE.has(veh.plan.parts[n].t)) return;
+  veh.zerstoert.add(n);
+  const typ = veh.plan.parts[n].t;
+  if (typ !== "tank" && typ !== "munition") return;
+  // munitionslager: die restlichen patronen gehen hoch, stärker als ein tank (sprengstoff statt treibstoff)
+  let fuell, reichweite, kraft;
+  if (typ === "tank") {
+    fuell = fuellstand(veh, n);
+    veh.tank.menge.set(n, 0);
+    reichweite = 1 + 3 * fuell;
+    kraft = 10 + 40 * fuell;
+  } else {
+    const kap = munitionKapazitaet(veh.plan.parts[n].k.kaliber);
+    fuell = Math.min(1, (veh.munition.get(n) ?? 0) / kap);
+    veh.munition.set(n, 0);
+    reichweite = 1 + 3.5 * fuell;
+    kraft = 15 + 60 * fuell;
+  }
+  if (fuell < TANK_MIN) return;
+  veh.sprengung.set(n, { zeit: 0 });
+  sprenge(veh, n, null, { reichweite, kraft });
+  schadenAn(veh, veh.sprengPos.get(n), reichweite, n, kraft);
+}
+
+// zerstört alle kampfteile um einen punkt (und das getroffene teil selbst)
+// kraft: explosionskraft in kN (nutzt panzerblöcke im radius ab), direkt: schaden am direkt getroffenen teil
+export function schadenAn(veh, punkt, radius, treffer, kraft = 0, direkt = 0) {
+  if (!veh.kampf) return;
+  veh.plan.parts.forEach((p, n) => {
+    if (veh.zerstoert.has(n) || !KAMPF_TEILE.has(p.t) || !veh.bodies[veh.ana.bodyOf[n]]) return;
+    const c = teilWeltPos(veh, n);
+    if (n === treffer || Math.hypot(c[0] - punkt[0], c[1] - punkt[1], c[2] - punkt[2]) <= radius) zerstoere(veh, n);
+  });
+  if (!veh.kin && (kraft || direkt)) {
+    const bruch = [];
+    veh.plan.parts.forEach((p, n) => {
+      if (!TEILE[p.t].sprengfest || veh.abgeloest.has(n) || !veh.bodies[veh.ana.bodyOf[n]]) return;
+      const c = teilWeltPos(veh, n);
+      const d = Math.hypot(c[0] - punkt[0], c[1] - punkt[1], c[2] - punkt[2]);
+      const schaden = (n === treffer ? direkt : 0) + (kraft && d <= radius ? kraft * (1 - d / Math.max(radius, 0.01)) : 0);
+      if (schaden > 0 && panzerAbnutzung(veh, n, schaden)) bruch.push(n);
+    });
+    for (const n of bruch) {
+      loeseTeil(veh, n);
+      veh.sprengReihe.push(n, 1, n);
+    }
+    if (bruch.length) berechneGruppen(veh);
+  }
+  aktualisiereAntrieb(veh);
+}
+
+// wirkung eines geschosstreffers auf das eigene fahrzeug (opfer entscheidet):
+// kampfteile im umkreis gehen kaputt, normale teile im umkreis fliegen weg (ausser panzerblöcke),
+// das getroffene fahrzeug bekommt einen stoss in flugrichtung. je grösser das kaliber, desto grösser der radius.
+export function trefferWirkung(veh, punkt, dir, kal, teil, art = 0) {
+  if (!veh.kampf) return;
+  const k = Math.max(0.15, kal / 155);
+  const A = ART_WERTE[art] || ART_WERTE[0];
+  const radius = (0.3 + 1.7 * k) * A.radius;
+  // ein volltreffer nutzt den getroffenen panzerblock stark ab (155 mm: fast ein ganzer block)
+  schadenAn(veh, punkt, radius, teil, 0, 100 * k * k * A.direkt);
+  if (veh.kin) return;
+  const parts = veh.plan.parts;
+  const gebunden = new Set();
+  for (const g of veh.ana.gelenke) { gebunden.add(g.teil); gebunden.add(g.other); }
+  const ziele = [];
+  parts.forEach((p, n) => {
+    const def = TEILE[p.t];
+    if (veh.abgeloest.has(n) || def.sprengfest || def.gelenk || p.t === "sitz" || gebunden.has(n)) return;
+    if (!veh.bodies[veh.ana.bodyOf[n]]) return;
+    const c = teilWeltPos(veh, n);
+    if (Math.hypot(c[0] - punkt[0], c[1] - punkt[1], c[2] - punkt[2]) > radius * 0.7 && n !== teil) return;
+    // teile direkt an einem panzerblock bleiben (wie bei sprengladungen)
+    const cell = parts[n];
+    const map = zellenKarte(veh);
+    for (const d of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
+      const j = map.get(`${cell.x + d[0]},${cell.y + d[1]},${cell.z + d[2]}`);
+      if (j !== undefined && TEILE[parts[j].t].sprengfest) return;
+    }
+    ziele.push(n);
+  });
+  for (const n of ziele) loeseTeil(veh, n);
+  if (ziele.length) {
+    // andere spieler lösen dieselben teile ab (gleiches format wie bei sprengungen: ladung, anzahl, teile)
+    if (teil >= 0) veh.sprengReihe.push(teil, ziele.length, ...ziele);
+    berechneGruppen(veh);
+    aktualisiereAntrieb(veh);
+  }
+  // abgelöste teile fliegen in schussrichtung davon, der rest des fahrzeugs bekommt einen stoss
+  const impuls = GESCHOSS_MASSE_155 * Math.pow(k, 3) * GESCHOSS_TEMPO * 0.08 * A.impuls;
+  for (const n of ziele) {
+    const b = veh.bodies[veh.ana.bodyOf[n]];
+    b.rb.applyImpulse(vec(scale(dir, Math.min(impuls * 0.5, b.rb.mass() * 12))), true);
+    b.rb.applyTorqueImpulse(vec([(Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2].map(x => x * b.rb.mass() * 0.6)), true);
+  }
+  if (teil >= 0) {
+    const b = veh.bodies[veh.ana.bodyOf[teil]];
+    if (b) b.rb.applyImpulseAtPoint(vec(scale(dir, Math.min(impuls, b.rb.mass() * 8))), vec(punkt), true);
+  }
+}
+
+// zellen-karte des plans (zelle -> teil-index), einmal je fahrzeug
+function zellenKarte(veh) {
+  if (!veh.zellenMap) {
+    veh.zellenMap = new Map();
+    veh.plan.parts.forEach((p, i) => veh.zellenMap.set(`${p.x},${p.y},${p.z}`, i));
+  }
+  return veh.zellenMap;
+}
+
+// eine fremde sprengung kann auch das eigene fahrzeug treffen
+export function explosionSchaden(veh, punkt, reichweite) {
+  schadenAn(veh, punkt, reichweite, -1, 8 * reichweite);
+}
+
+// mündungsfeuer zum abholen für effekte (gilt für eigene und fremde schüsse): { p, dir, kal, von }
+export const muendungen = [];
+
+// weltposition der mündung und richtung des rohrs n (oder null, wenn es das nicht mehr gibt)
+export function muendungPos(veh, n) {
+  const b = veh.bodies[veh.ana.bodyOf[n]];
+  if (!b) return null;
+  const dir = quatRot(b.rb.rotation(), teilAchse(veh.plan.parts[n]));
+  return { pos: add(teilWeltPos(veh, n), scale(dir, ZELLE * 0.6)), dir };
+}
+
+// neues geschoss. von: das fahrzeug des schützen (kein selbsttreffer in den ersten momenten)
+export function feuere(von, p, v, kal, art = 0) {
+  // durch: wie viele lagen das geschoss durchschlägt (nur heat)
+  geschosse.push({ p: [...p], v: [...v], kal, art, durch: art === 2 ? 2 + Math.floor(kal / 40) : 0, t: 0, von });
+  const l = Math.hypot(...v) || 1;
+  muendungen.push({ p: [...p], dir: [v[0] / l, v[1] / l, v[2] / l], kal, von });
+}
+
+function schiesse(veh, iv) {
+  const parts = veh.plan.parts;
+  const dm = parts[iv].k.durchmesser ?? 75;
+  const rohre = rohreAn(veh, iv);
+  if (!rohre.length) return 0;
+  // falsches kaliber (oder keine patronen mehr): der verschluss schiesst nicht
+  const art = artVon(veh, iv);
+  const lager = munitionQuelle(veh, iv, dm, art);
+  if (lager < 0) return 0;
+  veh.munition.set(lager, veh.munition.get(lager) - 1);
+  const faktor = angrenzend(parts[lager], parts[iv]) ? NAHLAGER_FAKTOR : 1;
+  const lebend = rohre.filter(n => !veh.zerstoert.has(n));
+  const rohr = lebend.length ? lebend[0] : rohre[0];
+  const kal = parts[rohr].k.kaliber ?? 75;
+
+  // zu dickes geschoss: es geht schon im rohr los und nimmt rohr und verschluss mit
+  if (dm > kal) {
+    veh.zerstoert.add(iv);
+    veh.zerstoert.add(rohr);
+    veh.sprengung.set(iv, { zeit: 0 });
+    sprenge(veh, iv, null, { reichweite: 1 + (dm / 155) * 1.5, kraft: 8 + (dm / 155) * 25 });
+    schadenAn(veh, veh.sprengPos.get(iv), 1 + (dm / 155) * 1.5, -1);
+    return faktor;
+  }
+
+  // dünner als das rohr: langsamer und ungenauer. kaputtes rohr: noch langsamer und streuender.
+  const r = dm / kal;
+  let tempo = GESCHOSS_TEMPO * (0.4 + 0.6 * r) * ART_WERTE[art].tempo;
+  let streu = 0.004 + 0.08 * (1 - r);
+  if (!lebend.length) { tempo *= 0.5; streu += 0.06; }
+
+  const b = veh.bodies[veh.ana.bodyOf[rohr]];
+  const dir = quatRot(b.rb.rotation(), teilAchse(parts[rohr]));
+  const mund = add(teilWeltPos(veh, rohr), scale(dir, ZELLE * 0.6));
+  const zufall = () => (Math.random() * 2 - 1) * streu;
+  const roh = [dir[0] + zufall(), dir[1] + zufall(), dir[2] + zufall()];
+  const len = Math.hypot(...roh) || 1;
+  const vel = add(scale(roh, tempo / len), punktGeschw(b.rb, mund));
+
+  feuere(veh, mund, vel, dm, art);
+  veh.schussZaehler++;
+  // rückstoss: impuls ~ geschossmasse * mündungsgeschwindigkeit, ein grossteil wird von der rohrbremse geschluckt;
+  // er greift am rohr an, das fahrzeug kippt und rutscht deshalb spürbar
+  const gm = GESCHOSS_MASSE_155 * Math.pow(dm / 155, 3);
+  const rueck = Math.min(gm * tempo * RUECKSTOSS_ANTEIL, b.rb.mass() * 6);
+  b.rb.applyImpulseAtPoint(vec(scale(dir, -rueck)), vec(teilWeltPos(veh, rohr)), true);
+  // aufzeichnung für andere spieler: mündung, geschwindigkeit, durchmesser
+  veh.schussReihe.push(mund[0], mund[1], mund[2], vel[0], vel[1], vel[2], dm + 1000 * art);
+  // nur die letzten 8 schüsse behalten (der server relayt höchstens so viele)
+  if (veh.schussReihe.length > 56) veh.schussReihe.splice(0, veh.schussReihe.length - 56);
+  return faktor;
+}
+
+// schnellfeuerkanone: etwa neun schuss pro sekunde aus einem lager mit gleichem kaliber (jede art) am selben festen teil
+const SCHNELL_TAKT = 0.11;
+const SCHNELL_TEMPO = 950;
+function schnellSchuss(veh, n) {
+  const parts = veh.plan.parts;
+  const kal = Math.max(25, Math.min(40, parts[n].k.kaliber ?? 30));
+  const gid = veh.gruppe[veh.ana.bodyOf[n]];
+  let lager = -1;
+  for (const [m, rest] of veh.munition) {
+    if (rest <= 0 || veh.zerstoert.has(m) || veh.gruppe[veh.ana.bodyOf[m]] !== gid) continue;
+    if (Math.round(parts[m].k.kaliber ?? 75) !== Math.round(kal)) continue;
+    lager = m;
+    break;
+  }
+  if (lager < 0) return false;
+  veh.munition.set(lager, veh.munition.get(lager) - 1);
+  const b = veh.bodies[veh.ana.bodyOf[n]];
+  if (!b) return false;
+  const dir = quatRot(b.rb.rotation(), teilAchse(parts[n]));
+  const mund = add(teilWeltPos(veh, n), scale(dir, ZELLE * 0.6));
+  const streu = 0.012;
+  const roh = dir.map(v => v + (Math.random() * 2 - 1) * streu);
+  const len = Math.hypot(...roh) || 1;
+  const vel = add(scale(roh, SCHNELL_TEMPO / len), punktGeschw(b.rb, mund));
+  feuere(veh, mund, vel, kal, 3);
+  veh.schussZaehler++;
+  const gm = GESCHOSS_MASSE_155 * Math.pow(kal / 155, 3);
+  b.rb.applyImpulseAtPoint(vec(scale(dir, -Math.min(gm * SCHNELL_TEMPO * RUECKSTOSS_ANTEIL, b.rb.mass() * 2))), vec(teilWeltPos(veh, n)), true);
+  veh.schussReihe.push(mund[0], mund[1], mund[2], vel[0], vel[1], vel[2], kal + 3000);
+  if (veh.schussReihe.length > 56) veh.schussReihe.splice(0, veh.schussReihe.length - 56);
+  return true;
+}
+
+// wo landet der nächste schuss? simuliert die flugbahn (ohne streuung) des ersten schussbereiten verschlusses
+// oder der ersten schnellfeuerkanone. gibt { punkte, ende, treffer } zurück oder null.
+export function vorhersage(world, veh, maxZeit = 4) {
+  const parts = veh.plan.parts;
+  let start = null, tempo = 0;
+  for (let i = 0; i < parts.length && !start; i++) {
+    if (veh.zerstoert.has(i)) continue;
+    if (parts[i].t === "verschluss") {
+      const rohre = rohreAn(veh, i);
+      if (!rohre.length) continue;
+      const lebend = rohre.filter(n => !veh.zerstoert.has(n));
+      const rohr = lebend[0] ?? rohre[0];
+      const mp = muendungPos(veh, rohr);
+      if (!mp) continue;
+      const dm = parts[i].k.durchmesser ?? 75, kal = parts[rohr].k.kaliber ?? 75;
+      tempo = GESCHOSS_TEMPO * (0.4 + 0.6 * Math.min(1, dm / kal)) * ART_WERTE[artVon(veh, i)].tempo * (lebend.length ? 1 : 0.5);
+      start = mp;
+    } else if (parts[i].t === "schnellfeuer") {
+      const b = veh.bodies[veh.ana.bodyOf[i]];
+      if (!b) continue;
+      const dir = quatRot(b.rb.rotation(), teilAchse(parts[i]));
+      start = { pos: add(teilWeltPos(veh, i), scale(dir, ZELLE * 0.6)), dir };
+      tempo = SCHNELL_TEMPO;
+    }
+  }
+  if (!start || !veh.R) return null;
+  let p = [...start.pos], v = scale(start.dir, tempo);
+  const punkte = [[...p]];
+  const dt = 1 / 30;
+  for (let t = 0; t < maxZeit; t += dt) {
+    v = [v[0], v[1] - 9.81 * dt, v[2]];
+    const weg = scale(v, dt), len = Math.hypot(...weg);
+    const d = scale(weg, 1 / len);
+    const hit = world.castRay(new veh.R.Ray(vec(p), vec(d)), len, true, undefined, undefined, undefined, undefined, col => !veh.colliderSet.has(col.handle));
+    if (hit) {
+      const ende = add(p, scale(d, hit.timeOfImpact ?? hit.toi ?? 0));
+      punkte.push(ende);
+      return { punkte, ende, treffer: true, zeit: t };
+    }
+    p = add(p, weg);
+    punkte.push([...p]);
+  }
+  return { punkte, ende: p, treffer: false, zeit: maxZeit };
+}
+
+// bewegt alle geschosse. eigenes: das fahrzeug dieses clients (opfer). boden(x,z): optionale geländehöhe.
+// eigenes: ein fahrzeug oder eine liste (spieler plus von diesem client gesteuerte npcs)
+export function bewegeGeschosse(world, dt, eigene, boden = null) {
+  const liste = (Array.isArray(eigene) ? eigene : [eigene]).filter(Boolean);
+  for (let g = geschosse.length - 1; g >= 0; g--) {
+    const s = geschosse[g];
+    s.v[1] -= 9.81 * dt;
+    s.t += dt;
+    const weg = scale(s.v, dt);
+    const len = Math.hypot(...weg);
+    let treffer = null, hitPos = null;
+    if (len > 1e-6) {
+      const R = (liste[0] || s.von)?.R;
+      if (R) {
+        const dirN = scale(weg, 1 / len);
+        const hit = world.castRay(
+          new R.Ray(vec(s.p), vec(dirN)), len, true, undefined, undefined, undefined, undefined,
+          // in den ersten momenten das eigene fahrzeug des schützen ignorieren
+          col => !(s.t < 0.25 && s.von && s.von.colliderSet.has(col.handle))
+        );
+        if (hit) {
+          treffer = hit.collider;
+          hitPos = add(s.p, scale(dirN, hit.timeOfImpact ?? hit.toi ?? 0));
+        }
+      }
+    }
+    const neuP = add(s.p, weg);
+    if (!hitPos && boden && neuP[1] < boden(neuP[0], neuP[2])) hitPos = neuP;
+    if (hitPos || s.t > GESCHOSS_LEBEN) {
+      if (hitPos) {
+        let teil = -1;
+        const eigenes = treffer ? liste.find(v => v.colliderSet.has(treffer.handle)) : null;
+        if (eigenes) {
+          for (const [n, col] of eigenes.colliderVon) if (col.handle === treffer.handle) { teil = n; break; }
+          // test-fahrzeuge sind unverwundbar (veh.kampf = false)
+          const dirT = scale(s.v, 1 / (Math.hypot(...s.v) || 1));
+          const hart = teil >= 0 && TEILE[eigenes.plan.parts[teil].t].sprengfest ? 2 * wandFaktor(eigenes.plan.parts[teil]) : 0;
+          trefferWirkung(eigenes, hitPos, dirT, s.kal, teil, s.art);
+          // hohlladung: durch den block hindurch weiterfliegen, panzerblöcke kosten zwei lagen
+          if (s.art === 2 && s.durch > 0) {
+            s.durch -= hart || 1;
+            einschlaege.push({ p: hitPos, kal: s.kal, treffer: true, dir: dirT, art: 2 });
+            s.p = add(hitPos, scale(dirT, ZELLE * 1.05));
+            s.v = scale(s.v, 0.92);
+            continue;
+          }
+        }
+        einschlaege.push({ p: hitPos, kal: s.kal, art: s.art, treffer: teil >= 0, dir: scale(s.v, 1 / (Math.hypot(...s.v) || 1)) });
+      }
+      geschosse.splice(g, 1);
+      continue;
+    }
+    s.p = neuP;
   }
 }
 

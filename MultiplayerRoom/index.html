@@ -29,10 +29,11 @@
     <div id="hud">
       <strong>Bastelkarre</strong>
       <span id="status">Verbinde …</span>
-      <span id="spielerZahl" hidden title="Verbundene Spieler" data-en-title="Connected players">👥 1</span>
+      <span id="spielerZahl" hidden title="Verbundene Spieler" data-en-title="Connected players">1</span>
       <ul id="spielerListe" hidden aria-label="Verbundene Spieler" data-en-aria="Connected players"></ul>
       <span id="tacho" hidden>0 km/h</span>
-      <button id="btnAnsicht" type="button" hidden title="Ansicht umschalten (C)" aria-label="Ansicht umschalten (C)">👁</button>
+      <button id="btnTon" type="button" title="Ton an/aus" data-en-title="Sound on/off" aria-label="Ton an/aus" data-en-aria="Sound on/off">Ton</button>
+      <button id="btnAnsicht" type="button" hidden title="Ansicht umschalten (C)" aria-label="Ansicht umschalten (C)">Ansicht</button>
       <a class="hilfeLink" href="hilfe.html" data-en-href="help.html"><span data-en="Help">Spielhilfe</span></a>
       <a class="nurDesktop" href="konto.html" data-en="Account">Konto</a>
       <a class="nurDesktop" href="../index.html">Waiting Games</a>
@@ -48,25 +49,25 @@
         <span><span data-en="Parking lot">Parkplatz</span> <b id="lotNr">–</b></span>
         <span id="teileZahl">0</span>
       </div>
-      <button type="button" id="btnHangar" class="presetBtn" title="Hangar: Vorlagen und Fahrzeuge anderer" data-en-title="Hangar: presets and vehicles from others"><span class="ico">📦</span><span class="txt" data-en="Hangar">Hangar</span></button>
+      <button type="button" id="btnHangar" class="presetBtn" title="Hangar: Vorlagen und Fahrzeuge anderer" data-en-title="Hangar: presets and vehicles from others"><span class="ico">▤</span><span class="txt" data-en="Hangar">Hangar</span></button>
       <div id="palette"></div>
       <div class="zeile" id="farben"></div>
       <div class="zeile werkzeuge">
         <button type="button" data-tool="setzen" class="an" title="Linksklick" data-en-title="Left click"><span class="ico">✚</span><span class="txt" data-en="Place">Setzen</span></button>
         <button type="button" data-tool="entfernen" title="Rechtsklick" data-en-title="Right click"><span class="ico">✕</span><span class="txt" data-en="Remove">Entfernen</span></button>
-        <button type="button" data-tool="einstellen" title="Mittelklick oder Alt+Klick" data-en-title="Middle click or Alt+click"><span class="ico">⚙</span><span class="txt" data-en="Adjust">Einstellen</span></button>
+        <button type="button" data-tool="einstellen" title="Mittelklick oder Alt+Klick" data-en-title="Middle click or Alt+click"><span class="ico">≡</span><span class="txt" data-en="Adjust">Einstellen</span></button>
         <button type="button" data-tool="auswaehlen" title="Umschalt+Klick (Strg+A: alle)" data-en-title="Shift+click (Ctrl+A: all)"><span class="ico">▣</span><span class="txt" data-en="Select">Auswählen</span></button>
         <button type="button" data-tool="duplizieren" title="Auswahl an die angeklickte Stelle kopieren" data-en-title="Copy the selection to the clicked spot"><span class="ico">⧉</span><span class="txt" data-en="Duplicate">Duplizieren</span></button>
       </div>
       <div class="zeile">
         <button type="button" id="btnDrehen" title="R"><span class="ico">↻</span><span class="txt" data-en="Rotate (R)">Drehen (R)</span></button>
         <button type="button" id="btnKippen" title="T"><span class="ico">⤵</span><span class="txt" data-en="Tilt (T)">Kippen (T)</span></button>
-        <button type="button" id="btnKoerper" title="V"><span class="ico">🔗</span><span class="txt" data-en="Connections (V)">Verbindungen (V)</span></button>
+        <button type="button" id="btnKoerper" title="V"><span class="ico">∞</span><span class="txt" data-en="Connections (V)">Verbindungen (V)</span></button>
         <button type="button" id="btnUndo" title="Strg+Z" data-en-title="Ctrl+Z"><span class="ico">↶</span><span class="txt" data-en="Undo">Rückgängig</span></button>
         <button type="button" id="btnExport" title="JSON"><span class="ico">⭳</span><span class="txt" data-en="Export">Export</span></button>
         <button type="button" id="btnImport" title="JSON"><span class="ico">⭱</span><span class="txt" data-en="Import">Import</span></button>
         <input type="file" id="importDatei" accept=".json,application/json" hidden>
-        <button type="button" id="btnLeeren"><span class="ico">🗑</span><span class="txt" data-en="Clear all">Alles weg</span></button>
+        <button type="button" id="btnLeeren"><span class="ico">⌫</span><span class="txt" data-en="Clear all">Alles weg</span></button>
       </div>
     </aside>
 
@@ -80,10 +81,30 @@
       <div id="tastenListe"></div>
     </aside>
 
+    <div id="modusFeld">
+      <button id="btnSpielen" type="button" data-en="PLAY">SPIELEN</button>
+      <button id="modusZeile" type="button"><span data-en="Mode">Modus</span>: <b id="modusName">Test</b></button>
+    </div>
+    <div id="modusSeite" hidden>
+      <div class="modusKasten">
+        <h2 data-en="Choose a mode">Modus wählen</h2>
+        <button type="button" class="modusKachel" data-modus="fight"><b>Fight</b><span data-en="Fight other players with cannons and explosives. Fuel tanks can explode.">Kämpfe gegen andere Spieler mit Geschützen und Sprengstoff. Volle Tanks können explodieren.</span></button>
+        <button type="button" class="modusKachel" data-modus="test"><b>Test</b><span data-en="Drive freely and try out your vehicle.">Frei fahren und das Fahrzeug ausprobieren.</span></button>
+        <h2 data-en="Fight map">Fight-Karte</h2>
+        <div id="kartenListe"></div>
+      </div>
+    </div>
+    <div id="fightHud" hidden></div>
+    <div id="wartePanel" hidden>
+      <b id="warteText"></b>
+      <span id="warteDetail"></span>
+      <div><button type="button" id="warteJetzt" data-en="Start now without waiting">Jetzt ohne Warteschlange starten</button><button type="button" id="warteAb" data-en="Cancel">Abbrechen</button></div>
+    </div>
+    <div id="ziel" hidden><i></i><span></span></div>
     <button id="btnModus" type="button"><span class="ico">▶</span><span class="txt">Losfahren</span></button>
     <button id="btnNeu" type="button" hidden title="Rücktaste" data-en-title="Backspace"><span class="ico">↻</span><span class="txt" data-en="Restart">Neu starten</span></button>
     <button id="btnAus" type="button" hidden title="X"><span class="ico">⇄</span><span class="txt">Aussteigen (X)</span></button>
-    <button id="chatToggle" type="button" aria-label="Chat">💬</button>
+    <button id="chatToggle" type="button" aria-label="Chat">Chat</button>
 
     <div id="camOverlay" hidden><span id="camText"></span></div>
 

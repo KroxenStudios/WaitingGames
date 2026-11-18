@@ -96,7 +96,7 @@ export async function zeigeProfil(container, name, opts = {}) {
   const f = p.friend;
   if (f === "self") freund.push(el("a", { class: "kontoSeite", href: "konto.html", textContent: L("Mein Konto verwalten →", "Manage my account →") }));
   else if (f === null) freund.push(el("p", { class: "kontoInfo", textContent: L("Melde dich an, um Freunde hinzuzufügen und Fahrzeuge zu bewerten.", "Sign in to add friends and rate vehicles.") }));
-  else if (f === "none") freund.push(el("button", { type: "button", class: "primaer", textContent: L("➕ Freund hinzufügen", "➕ Add friend"), onclick: () => tu("POST", "/friends/request", { name: p.username }) }));
+  else if (f === "none") freund.push(el("button", { type: "button", class: "primaer", textContent: L("Freund hinzufügen", "Add friend"), onclick: () => tu("POST", "/friends/request", { name: p.username }) }));
   else if (f === "pending_out") freund.push(el("span", { class: "kontoInfo", textContent: L("Anfrage gesendet", "Request sent") }), el("button", { type: "button", textContent: L("Zurückziehen", "Cancel"), onclick: () => tu("DELETE", `/friends/${encodeURIComponent(p.username)}`) }));
   else if (f === "pending_in") freund.push(el("button", { type: "button", class: "primaer", textContent: L("Anfrage annehmen", "Accept request"), onclick: () => tu("POST", "/friends/accept", { name: p.username }) }), el("button", { type: "button", textContent: L("Ablehnen", "Decline"), onclick: () => tu("POST", "/friends/decline", { name: p.username }) }));
   else if (f === "friends") freund.push(el("span", { class: "kontoInfo", textContent: "★ " + L("Befreundet", "Friends") }), el("button", { type: "button", textContent: L("Entfernen", "Remove"), onclick: () => { if (confirm(L("Freundschaft beenden?", "End the friendship?"))) tu("DELETE", `/friends/${encodeURIComponent(p.username)}`); } }));
@@ -104,11 +104,11 @@ export async function zeigeProfil(container, name, opts = {}) {
   const sicherheit = [];
   if (f !== "self" && f !== null) {
     const blockiert = Konto.blockiert().has(p.username.toLowerCase());
-    sicherheit.push(el("button", { type: "button", textContent: blockiert ? L("Blockierung aufheben", "Unblock") : L("🚫 Blockieren", "🚫 Block"), onclick: async () => {
+    sicherheit.push(el("button", { type: "button", textContent: blockiert ? L("Blockierung aufheben", "Unblock") : L("Blockieren", "Block"), onclick: async () => {
       if (!blockiert && !confirm(L(`${p.username} blockieren? Du siehst dann keine Chatnachrichten und Fahrzeuge mehr von diesem Konto.`, `Block ${p.username}? You will no longer see their chat messages and vehicles.`))) return;
       try { blockiert ? await Konto.entblocken(p.username) : await Konto.blockieren(p.username); neu(); } catch (e) { alert(Konto.fehlerText(e.message)); }
     } }));
-    sicherheit.push(el("button", { type: "button", textContent: L("⚑ Melden", "⚑ Report"), onclick: () => oeffneMelden({ kind: "user", name: p.username }) }));
+    sicherheit.push(el("button", { type: "button", textContent: L("Melden", "Report"), onclick: () => oeffneMelden({ kind: "user", name: p.username }) }));
     if (p.bio) sicherheit.push(el("button", { type: "button", class: "link", textContent: L("Bio melden", "Report bio"), onclick: () => oeffneMelden({ kind: "bio", name: p.username }) }));
   }
   if (Konto.istAdmin() && f !== "self") sicherheit.push(el("a", { class: "kontoSeite", href: `moderation.html?u=${encodeURIComponent(p.username)}`, textContent: L("Moderation →", "Moderation →") }));
@@ -121,7 +121,7 @@ export async function zeigeProfil(container, name, opts = {}) {
     liste.append(el("li", { class: "modell" },
       el("div", { class: "modellText" },
         el("b", { textContent: m.title }),
-        el("small", {}, sterne(m.avg), ` ${sterneText(m.avg, m.n)} · ⬇ ${m.downloads} · ${m.parts} ${L("Teile", "parts")}`),
+        el("small", {}, sterne(m.avg), ` ${sterneText(m.avg, m.n)} · ${m.downloads} Downloads · ${m.parts} ${L("Teile", "parts")}`),
         m.descr ? el("small", { class: "beschr", textContent: m.descr }) : ""),
       knoepfe));
   }
@@ -131,7 +131,7 @@ export async function zeigeProfil(container, name, opts = {}) {
     el("p", { class: "profilBio", textContent: p.bio || L("Keine Bio.", "No bio.") }),
     el("div", { class: "profilZahlen" },
       el("span", { textContent: `${p.models.length} ${L("Fahrzeuge", "vehicles")}` }),
-      el("span", { textContent: `⬇ ${p.downloads}` }),
+      el("span", { textContent: `${p.downloads} Downloads` }),
       el("span", {}, sterne(p.avg), ` ${sterneText(p.avg, p.n)}`)),
     el("div", { class: "kontoLinks profilFreund" }, ...freund),
     sicherheit.length ? el("div", { class: "kontoLinks profilFreund" }, ...sicherheit) : "",

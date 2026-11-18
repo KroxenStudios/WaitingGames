@@ -8,6 +8,11 @@ import {
 import { lookAus } from "./look.js";
 import { Partikel } from "./partikel.js";
 import { ladeWeltDaten, baueGelaende, hoeheBei } from "./gelaende.js";
+import * as FK from "./fightkarten.js";
+import { erzeugeNpcSteuerung } from "./npc.js";
+import * as TON from "./ton.js";
+import * as KE from "./karteneditor.js";
+import { startKarten, oeffneKarten } from "./karten.js";
 import { Konto } from "./accounts.js";
 import { startModelle } from "./modelle.js";
 import { zeigeProfil } from "./profil.js";
@@ -90,7 +95,7 @@ const TEXTE = {
   "Motor +": "Servo +", "Motor −": "Servo −", "Nicken +": "Pitch +", "Nicken −": "Pitch −", "Rollen +": "Roll +",
   "Rollen −": "Roll −", "Gieren +": "Yaw +", "Gieren −": "Yaw −", "Ruder +": "Rudder +", "Ruder −": "Rudder −",
   "Bremse / Sprung": "Brake / Jump", "Aus/Ein": "Out/In", "Raketen-Treibstoff": "Rocket fuel",
-  "Zum Laden erst in den Baumodus wechseln": "Switch to build mode to load", "Fahrzeug aus dem Konto geladen": "Vehicle loaded from your account", "Fahrzeug geladen": "Vehicle loaded", "du": "you", "Zum Chatten anmelden (👤)": "Sign in to chat (👤)", "gehört einem registrierten Konto. Du heißt hier „Gast“ – melde dich an oder wähle im Konto einen anderen Namen.": "belongs to a registered account. You are called “Guest” here – sign in or pick another name in your account.", "Auch Werte außerhalb des Reglers sind möglich": "Values outside the slider range are possible too", "Wert auf die zulässige Grenze begrenzt": "Value limited to the allowed maximum", "Ansicht umschalten (C)": "Switch view (C)", "Ansicht: Verfolger": "View: chase", "Ansicht: Verfolger nah": "View: chase close", "Ansicht: Ich-Perspektive": "View: first person", "Raum": "Room", "Raum voll": "Room full", "Du bist vom Moderator stummgeschaltet": "You have been muted by a moderator", "Zum Chatten musst du angemeldet sein": "You need to be signed in to chat", "Zum Chatten bitte anmelden (👤)": "Sign in to chat (👤)", "Nachricht (Enter)": "Message (Enter)", "Profil ansehen": "View profile", "Gast ohne Konto": "Guest without account",
+  "Zum Laden erst in den Baumodus wechseln": "Switch to build mode to load", "Fahrzeug aus dem Konto geladen": "Vehicle loaded from your account", "Fahrzeug geladen": "Vehicle loaded", "du": "you", "Zum Chatten anmelden": "Sign in to chat", "gehört einem registrierten Konto. Du heißt hier „Gast“ – melde dich an oder wähle im Konto einen anderen Namen.": "belongs to a registered account. You are called “Guest” here – sign in or pick another name in your account.", "Auch Werte außerhalb des Reglers sind möglich": "Values outside the slider range are possible too", "Wert auf die zulässige Grenze begrenzt": "Value limited to the allowed maximum", "Ansicht umschalten (C)": "Switch view (C)", "Ansicht: Verfolger": "View: chase", "Ansicht: Verfolger nah": "View: chase close", "Ansicht: Ich-Perspektive": "View: first person", "Raum": "Room", "Raum voll": "Room full", "Du bist vom Moderator stummgeschaltet": "You have been muted by a moderator", "Zum Chatten musst du angemeldet sein": "You need to be signed in to chat", "Zum Chatten bitte anmelden (👤)": "Sign in to chat", "Nachricht (Enter)": "Message (Enter)", "Profil ansehen": "View profile", "Gast ohne Konto": "Guest without account",
   "Offline": "Offline", "Verbinde …": "Connecting …", "Online": "Online",
   "Offline – du kannst trotzdem bauen und fahren": "Offline – you can still build and drive",
   "frei": "free", "Aussteigen (X)": "Get out (X)", "Einsteigen (X)": "Get in (X)", "schwerelos": "weightless",
@@ -114,6 +119,27 @@ const TEXTE = {
     "Pushes like a propeller: the throttle keys set the power and it stays set. Thrust falls in thin air; there is none in space.",
   "Treibstoff für Triebwerke, Propeller und den Motor (Raketen haben eigenen). Mit Tank geht ohne Treibstoff nichts, ohne Tank ist der Verbrauch aus. K schaltet den Verbrauch aus und an.":
     "Fuel for jet engines, propellers and the drive motor (rockets have their own). With a tank nothing runs without fuel, without a tank fuel use is off. K switches fuel use off and on.",
+  // fight: kampf-bausteine, karten und tasten
+  "Munitionsart wechseln": "Switch ammo type", "Geschossart": "Shell type",
+  "HE (hochexplosiv)": "HE (high explosive)", "AP (Wuchtgeschoss)": "AP (armour piercing)", "HEAT (Hohlladung)": "HEAT (shaped charge)",
+  "Panzer": "Tank",
+  "Warteschlange": "Queue", "Spieler": "player(s)", "nächster NPC in": "next NPC in", "Match gestartet": "Match started",
+  "Schnellfeuerkanone": "Rapid-fire cannon", "Dauerfeuer": "Rapid fire", "Wandstärke": "Wall thickness",
+  "Schnellfeuerkanone: Rohr und Verschluss in einem, feuert entlang ihrer Oberseite rund neun Schuss pro Sekunde, solange du die Taste hältst. Kaliber 25–40 mm, die Geschosse schlagen kaum durch und machen wenig Schaden, treffen aber oft. Sie braucht ein Munitionslager mit gleichem Kaliber am selben festen Fahrzeugteil (jede Geschossart).":
+    "Rapid-fire cannon: barrel and breech in one, fires along its top face at about nine rounds per second while you hold the key. Calibre 25–40 mm; the rounds barely penetrate and do little damage, but hit often. It needs an ammo rack of the same calibre on the same rigid part of the vehicle (any shell type). Fight mode only.",
+  "Kampf": "Combat", "Motor": "Engine", "Geschütz": "Cannon", "Geschützverschluss": "Cannon breech", "Munitionslager": "Ammo rack",
+  "Leistung": "Power", "Kaliber": "Calibre", "Geschossdurchmesser": "Shell diameter", "Fasst": "Holds", "Schuss": "rounds",
+  "Schiessen": "Fire", "Haltekraft": "Holding force", "Drehkraft": "Turning force",
+  "Karten laden / teilen": "Load / share maps", "Karteneditor": "Map editor", "Gewählte Karte bearbeiten": "Edit selected map",
+  "Dünen": "Dunes", "Felsental": "Rock valley", "Hügelland": "Hill country",
+  "Treibt die Räder an, egal wo er im Fahrzeug sitzt. Die Leistung stellst du in PS ein (150 PS entsprechen dem bisherigen Antrieb). Mehrere Motoren addieren ihre Leistung, mehr Leistung verbraucht mehr Treibstoff. Bei einem Treffer im Fight-Modus ist er kaputt. Ohne Motor-Baustein fährt das Fahrzeug mit Standardleistung.":
+    "Drives the wheels wherever it sits in the vehicle. Set the power in hp (150 hp equals the old drive). Several engines add their power; more power burns more fuel. In fight mode a hit breaks it. Without an engine block the vehicle runs at default power.",
+  "Rohr eines Geschützes. Es feuert von seinem Verschluss weg (Verschluss an die Rückseite bauen). Kaliber 25–155 mm. Ist das Rohr zerstört, fliegen Geschosse langsamer und streuen mehr.":
+    "Barrel of a cannon. It fires away from its breech (build the breech on the back). Calibre 25–155 mm. If the barrel is destroyed, shells fly slower and spread more. Fight mode only.",
+  "Schiesst durch das Rohr, das an ihm sitzt. Ist das Geschoss dicker als das Kaliber, geht es im Rohr los; ist es dünner, fliegt es langsamer und ungenauer. Bei einem Treffer ist er kaputt, dann geht kein Schuss mehr. Die Geschossart (HE, AP, HEAT) stellst du ein, eine zweite Taste schaltet sie im Spiel um.":
+    "Fires through the barrel attached to it. If the shell is thicker than the calibre it goes off inside the barrel; if it is thinner it flies slower and less accurately. A hit breaks it and nothing can be fired any more. You set the shell type (HE, AP, HEAT) and a second key switches it in the game. Fight mode only.",
+  "Lager für Patronen eines Kalibers (eine Zelle, 0,125 m³). Je grösser das Kaliber, desto weniger Schuss passen hinein. Ein Verschluss schiesst nur, wenn ein Lager am selben festen Fahrzeugteil genau sein Geschossdurchmesser-Kaliber hat. Sitzt das Lager direkt am Verschluss, lädt er doppelt so schnell nach. Bei einem Treffer explodiert der Rest der Munition. Ein Lager enthält genau eine Geschossart: HE sprengt im Umkreis, AP schlägt hart in ein einzelnes Teil, HEAT durchschlägt Blöcke, macht aber weniger Schaden als AP.":
+    "Storage for rounds of one calibre (one cell, 0.125 m³). The larger the calibre, the fewer rounds fit. A breech only fires if a rack on the same rigid part of the vehicle matches its shell diameter exactly. A rack right next to the breech doubles its reload speed. A hit makes the remaining ammo explode. A rack holds exactly one shell type: HE blasts the surroundings, AP hits one part hard, HEAT punches through blocks but does less damage than AP. Fight mode only.",
 };
 window.bastelkarreTr = s => tr(s);
 function tr(s) {
@@ -322,6 +348,8 @@ function asphaltTextur() {
   return t;
 }
 
+// beim aufbau einer karte sammelt dies alle neuen objekte und kollider, damit die karte später wieder abgebaut werden kann
+let sammler = null;
 function statischeBox(pos, halb, quat, farbe, { schatten = true, kollision = true } = {}) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(halb[0] * 2, halb[1] * 2, halb[2] * 2), mat(farbe, { roughness: 0.85 }));
   mesh.position.copy(pos);
@@ -329,10 +357,12 @@ function statischeBox(pos, halb, quat, farbe, { schatten = true, kollision = tru
   mesh.castShadow = schatten;
   mesh.receiveShadow = true;
   scene.add(mesh);
+  sammler?.obj.push(mesh);
   if (!kollision) return mesh;
   const desc = RAPIER.ColliderDesc.cuboid(...halb).setTranslation(pos.x, pos.y, pos.z).setFriction(0.9);
   if (quat) desc.setRotation(quat);
-  world.createCollider(desc);
+  const kol = world.createCollider(desc);
+  sammler?.kol.push(kol);
   return mesh;
 }
 
@@ -604,7 +634,17 @@ function baueWelt() {
 }
 
 const WELTDATEN = await ladeWeltDaten("welt.json");
-const bodenHoehe = (x, z) => (WELTDATEN ? hoeheBei(WELTDATEN, x, z) : 0);
+// gebaute fight-karten (werden erst beim ersten fight-start erzeugt)
+const gebauteKarten = [];
+const bodenHoehe = (x, z) => {
+  for (const k of gebauteKarten) {
+    if (Math.abs(x - k.mitte[0]) <= FK.KARTEN_GROESSE / 2 && Math.abs(z - k.mitte[1]) <= FK.KARTEN_GROESSE / 2) return k.hoehe(x, z);
+  }
+  return WELTDATEN ? hoeheBei(WELTDATEN, x, z) : 0;
+};
+// rauch und feuer folgen dem gelände (hügel der fight-karten)
+rauch.boden = bodenHoehe;
+feuer.boden = bodenHoehe;
 const lotSchilder = [];
 const pylonen = [];
 baueWelt();
@@ -619,6 +659,28 @@ try {
 if (!plan || !plan.parts.length) plan = BAU.bereinige(BAU.starterKart());
 
 let modus = "bau";
+// spielmodus: "test" (frei fahren) oder "fight" (kampf); auf handhelds vorerst immer "test"
+let spielModus = "test";
+try { if (localStorage.getItem("bastelkarre-spielmodus") === "fight") spielModus = "fight"; } catch {}
+if (BAU.FIGHT_AKTIV_AUF_TOUCH) document.body.classList.add("fightTouch");
+// gewählte fight-karte (kartenplatz: 0..2 offiziell, 3 = geladene eigene karte) und letzter zustand der basen vom server
+const alleKarten = () => [...FK.KARTEN, FK.EIGENE];
+let fightKarte = 0;
+// id der eigenen karte in der lokalen ablage (null, wenn sie nicht gespeichert wurde)
+let eigeneId = null;
+function merkeKarte() {
+  try { localStorage.setItem("bastelkarre-fightkarte2", fightKarte === FK.EIGENER_PLATZ ? "lokal:" + (eigeneId || "") : FK.KARTEN[fightKarte].id); } catch {}
+}
+try {
+  const gemerkt = localStorage.getItem("bastelkarre-fightkarte2") || "";
+  const offiziell = FK.KARTEN.findIndex(k => k.id === gemerkt);
+  if (offiziell >= 0) fightKarte = offiziell;
+  else if (gemerkt.startsWith("lokal:")) {
+    const eintrag = KE.ladeLokal().find(e => e.id === gemerkt.slice(6));
+    if (eintrag && FK.EIGENE.setze(eintrag.dok)) { eigeneId = eintrag.id; fightKarte = FK.EIGENER_PLATZ; }
+  }
+} catch {}
+const fightZustand = { fb: [], pt: {} };
 let meinLot = 0;
 let meineId = null;
 let spawnZaehler = 0;
@@ -692,7 +754,8 @@ function baueBauansicht() {
   if (modus === "bau") {
     setzeFigurInSitz(meineFigur, null, lotPos(meinLot).add(new THREE.Vector3(6.9, 0, -6.9)));
   }
-  $("#teileZahl").textContent = `${plan.parts.length}`;
+  // teilezahl und gesamtmasse des fahrzeugs
+  $("#teileZahl").textContent = `${plan.parts.length} · ${Math.round(BAU.planMasse(plan))} kg`;
 }
 
 function planGeaendert(merken = true) {
@@ -740,12 +803,16 @@ for (const [typ, def] of Object.entries(BAU.TEILE)) (gruppen[def.gruppe] ||= [])
 for (const [name, typen] of Object.entries(gruppen)) {
   const h = document.createElement("h3");
   h.textContent = tr(name);
+  // kampf-bausteine sind vorerst nur am pc sichtbar (siehe css .nurFight und BAU.FIGHT_AKTIV_AUF_TOUCH)
+  const nurFight = typen.every(t => BAU.TEILE[t].nurFight);
+  if (nurFight) h.classList.add("nurFight");
   palette.append(h);
   const box = document.createElement("div");
-  box.className = "gruppe";
+  box.className = nurFight ? "gruppe nurFight" : "gruppe";
   for (const typ of typen) {
     const b = document.createElement("button");
     b.type = "button";
+    if (BAU.TEILE[typ].nurFight) b.classList.add("nurFight");
     b.textContent = tr(BAU.TEILE[typ].name);
     b.title = tr(BAU.TEILE[typ].name);
     b.dataset.typ = typ;
@@ -997,6 +1064,7 @@ function zeigeInspector() {
     };
   };
 
+  const ARTEN_LISTE = [["he", "HE (hochexplosiv)"], ["ap", "AP (Wuchtgeschoss)"], ["heat", "HEAT (Hohlladung)"]];
   const auswahl = (label, key, optionen) => {
     const s = document.createElement("select");
     for (const [v, t] of optionen) {
@@ -1119,6 +1187,34 @@ function zeigeInspector() {
     case "tank":
       regler("Kapazität", "kapazitaet", 10, 300, 10, "");
       break;
+    case "motor":
+      regler("Leistung", "ps", 20, 1500, 10, " PS");
+      break;
+    case "geschuetz":
+      regler("Kaliber", "kaliber", 25, 155, 5, " mm");
+      break;
+    case "verschluss":
+      taste("Schiessen", "taste");
+      taste("Munitionsart wechseln", "wechsel");
+      auswahl("Geschossart", "geschoss", ARTEN_LISTE);
+      regler("Geschossdurchmesser", "durchmesser", 25, 155, 5, " mm");
+      break;
+    case "schnellfeuer":
+      taste("Schiessen", "taste");
+      regler("Kaliber", "kaliber", 25, 40, 5, " mm");
+      break;
+    case "panzer":
+      regler("Wandstärke", "staerke", 20, 300, 10, " mm");
+      break;
+    case "munition": {
+      auswahl("Geschossart", "geschoss", ARTEN_LISTE);
+      regler("Kaliber", "kaliber", 25, 155, 5, " mm");
+      const kap = document.createElement("p");
+      kap.style.cssText = "margin:6px 0 0";
+      kap.textContent = `${tr("Fasst")}: ${BAU.munitionKapazitaet(p.k.kaliber)} ${tr("Schuss")}`;
+      inspInhalt.append(kap);
+      break;
+    }
     case "kamera":
       taste("Ansicht umschalten", "taste");
       regler("Blickfeld", "fov", 30, 120, 5, "°");
@@ -1134,6 +1230,8 @@ function zeigeInspector() {
       auswahl("Modus", "modus", [["winkel", "Winkel halten"], ["dauer", "Dauerdrehung"]]);
       if (p.k.modus !== "dauer") regler("Max. Winkel", "winkel", 10, 180, 5, "°");
       regler("Tempo", "tempo", 10, 360, 10, "°/s");
+      regler("Haltekraft", "haltekraft", 0.5, 200, 0.5, " kN");
+      regler("Drehkraft", "drehkraft", 0.5, 200, 0.5, " kN");
       break;
     case "bruch":
       taste("Trennen", "taste");
@@ -1183,6 +1281,11 @@ function zeigeInspector() {
     bruch: "Hält fest, bis du die Taste drückst. Dann trennt sie die Teile.",
     panzer: "Sehr schwer und explosionssicher: Seine Verbindungen halten auch bei Sprengungen, und ein Körper mit Panzerblock wird nicht weggeschleudert.",
     explosive: "Einmal zünden: ein Blitz trennt alle Verbindungen im Umkreis (Reichweite in Metern) und drückt die Teile mit der eingestellten Kraft von der Ladung weg. Nach einem Neustart ist sie wieder scharf.",
+    motor: "Treibt die Räder an, egal wo er im Fahrzeug sitzt. Die Leistung stellst du in PS ein (150 PS entsprechen dem bisherigen Antrieb). Mehrere Motoren addieren ihre Leistung, mehr Leistung verbraucht mehr Treibstoff. Bei einem Treffer im Fight-Modus ist er kaputt. Ohne Motor-Baustein fährt das Fahrzeug mit Standardleistung.",
+    geschuetz: "Rohr eines Geschützes. Es feuert von seinem Verschluss weg (Verschluss an die Rückseite bauen). Kaliber 25–155 mm. Ist das Rohr zerstört, fliegen Geschosse langsamer und streuen mehr.",
+    verschluss: "Schiesst durch das Rohr, das an ihm sitzt. Ist das Geschoss dicker als das Kaliber, geht es im Rohr los; ist es dünner, fliegt es langsamer und ungenauer. Bei einem Treffer ist er kaputt, dann geht kein Schuss mehr. Die Geschossart (HE, AP, HEAT) stellst du ein, eine zweite Taste schaltet sie im Spiel um.",
+    schnellfeuer: "Schnellfeuerkanone: Rohr und Verschluss in einem, feuert entlang ihrer Oberseite rund neun Schuss pro Sekunde, solange du die Taste hältst. Kaliber 25–40 mm, die Geschosse schlagen kaum durch und machen wenig Schaden, treffen aber oft. Sie braucht ein Munitionslager mit gleichem Kaliber am selben festen Fahrzeugteil (jede Geschossart).",
+    munition: "Lager für Patronen eines Kalibers (eine Zelle, 0,125 m³). Je grösser das Kaliber, desto weniger Schuss passen hinein. Ein Verschluss schiesst nur, wenn ein Lager am selben festen Fahrzeugteil genau sein Geschossdurchmesser-Kaliber hat. Sitzt das Lager direkt am Verschluss, lädt er doppelt so schnell nach. Bei einem Treffer explodiert der Rest der Munition. Ein Lager enthält genau eine Geschossart: HE sprengt im Umkreis, AP schlägt hart in ein einzelnes Teil, HEAT durchschlägt Blöcke, macht aber weniger Schaden als AP.",
     gemischt: "Gemischte Teile: nur Farbe und Entfernen gelten für alle."
   }[hinweisText] || "");
   if (hinweis.textContent) inspInhalt.append(hinweis);
@@ -1260,10 +1363,13 @@ const tippt = () => document.activeElement === chatInput;
 function setzeTouch(an) {
   touchModus = an;
   document.body.classList.toggle("touch", an);
+  if (typeof zeigeSpielModus === "function") zeigeSpielModus();
   zeigeHinweis();
 }
 
 function zeigeHinweis() {
+  // am pc gibt es keine dauerhafte hilfe-notiz (steuerung steht im panel und in der spielhilfe)
+  if (!touchModus) { hintEl.hidden = true; return; }
   let text;
   if (modus === "bau") {
     text = touchModus
@@ -1529,7 +1635,7 @@ function neuesTeil(treffer) {
   const o = def.art === "anbau" ? BAU.orientFromUp(treffer.normal, drehAnbau) : BAU.orientFromYawTilt(drehY, kippX);
   const p = { t: auswahlTyp, x: zelle[0], y: zelle[1], z: zelle[2], o, c: auswahlFarbe, k: BAU.standardEinstellungen(auswahlTyp, plan) };
   if (auswahlTyp.startsWith("rad") || ["auspuff", "duese", "rakete", "servo"].includes(auswahlTyp)) {
-    if (auswahlFarbe === BAU.FARBEN[0]) p.c = auswahlTyp.startsWith("rad") ? "#2b2f36" : "#8b8f98";
+    if (auswahlFarbe === BAU.FARBEN[0]) p.c = auswahlTyp.startsWith("rad") ? "#3a3e45" : BAU.FARBEN[0];
   }
   return p;
 }
@@ -2006,7 +2112,8 @@ function erzeugeEigenes() {
   if (meinFahrzeug) PH.entferneFahrzeug(world, meinFahrzeug);
   entferneGrafik(meineGrafik);
   const lift = BAU.bodenAbstand(plan, BAU.RAD_TIEFE) + 0.03;
-  meinFahrzeug = PH.erzeugeFahrzeug(RAPIER, world, plan, { basis: lotBasis(meinLot, lift).toArray(), verbrauch: verbrauchAn });
+  const start = startBasis(meinLot, lift);
+  meinFahrzeug = PH.erzeugeFahrzeug(RAPIER, world, plan, { basis: start.basis.toArray(), drehung: start.dreh, verbrauch: verbrauchAn, kampf: fightAktiv() });
   meineGrafik = fahrzeugGrafik(plan, { ana: meinFahrzeug.ana });
   for (const g of meineGrafik.groups) scene.add(g);
   if (ichSitz && ichSitz.o === "ich") {
@@ -2045,6 +2152,7 @@ function wechsleModus() {
     }
   } else {
     modus = "bau";
+    npcs?.stop();
     aktiveKamera = null;
     setzeFov(fov);
     $("#camOverlay").hidden = true;
@@ -2070,9 +2178,377 @@ function wechsleModus() {
   setBtn("#btnModus", modus === "bau" ? "▶" : "◀", tr(modus === "bau" ? "Losfahren" : "Zum Parkplatz"));
   $("#btnModus").blur();
   zeigeHinweis();
+  aktualisiereFight();
   sendePose(true);
 }
 $("#btnModus").onclick = wechsleModus;
+
+// kampf gilt nur im gewählten fight-modus und dort, wo er freigeschaltet ist (pc)
+function fightAktiv() {
+  return spielModus === "fight" && BAU.fightVerfuegbar(touchModus);
+}
+function zeigeSpielModus() {
+  const fight = fightAktiv();
+  $("#modusName").textContent = fight ? `Fight · ${tr(alleKarten()[fightKarte].name) || "?"}` : "Test";
+  for (const k of document.querySelectorAll(".modusKachel")) k.classList.toggle("aktiv", k.dataset.modus === (fight ? "fight" : "test"));
+  const liste = $("#kartenListe");
+  liste.replaceChildren();
+  const knopf = (text, klick, klasse = "") => {
+    const k = document.createElement("button");
+    k.type = "button";
+    k.textContent = text;
+    if (klasse) k.className = klasse;
+    k.onclick = klick;
+    return k;
+  };
+  alleKarten().forEach((k, i) => {
+    if (i === FK.EIGENER_PLATZ && !k.dokument()) return;
+    const b = knopf(i === FK.EIGENER_PLATZ ? `★ ${k.name}` : tr(k.name), () => { fightKarte = i; merkeKarte(); setzeSpielModus("fight"); });
+    b.dataset.i = i;
+    b.classList.toggle("aktiv", i === fightKarte);
+    liste.append(b);
+  });
+  liste.append(
+    knopf(tr("Karten laden / teilen"), () => { $("#modusSeite").hidden = true; oeffneKarten(); }, "aktion"),
+    knopf(tr("Karteneditor"), () => oeffneKartenEditor(null), "aktion"),
+    knopf("✎ " + tr("Gewählte Karte bearbeiten"), () => {
+      const k = alleKarten()[fightKarte];
+      const dok = k?.dokument?.();
+      if (dok) oeffneKartenEditor(JSON.parse(JSON.stringify(dok)), k.offiziell ? { art: "offiziell", slot: k.id } : eigeneId ? { art: "lokal", id: eigeneId } : { art: "neu" });
+    }, "aktion")
+  );
+}
+
+// ton-schalter oben in der leiste
+function zeigeTonSchalter() {
+  $("#btnTon").textContent = TON.tonAn() ? tr("Ton") : tr("Stumm");
+}
+$("#btnTon").onclick = () => { TON.starte(); TON.setzeTon(!TON.tonAn()); zeigeTonSchalter(); $("#btnTon").blur(); };
+zeigeTonSchalter();
+
+// zielpunkt: der strahl aus dem ersten heilen rohr trifft gelände oder fahrzeug; dort steht das fadenkreuz.
+// rot, solange kein verschluss schussbereit ist. nur im fight beim fahren.
+// einschlagvorhersage: flugbahn als leuchtende linie, ring am landepunkt, das zielkreuz sitzt dort (mit entfernung)
+const bahnMax = 130;
+const bahnLinie = new THREE.Line(
+  new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(new Float32Array(bahnMax * 3), 3)),
+  new THREE.LineDashedMaterial({ color: 0xffd36b, dashSize: 2.5, gapSize: 1.6, transparent: true, opacity: 0.75, depthTest: false })
+);
+bahnLinie.renderOrder = 20;
+bahnLinie.frustumCulled = false;
+bahnLinie.visible = false;
+scene.add(bahnLinie);
+const landeRing = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.1, 32), new THREE.MeshBasicMaterial({ color: 0xffd36b, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false }));
+landeRing.renderOrder = 21;
+landeRing.visible = false;
+scene.add(landeRing);
+function aktualisiereZiel() {
+  const el = $("#ziel");
+  let sicht = false;
+  const veh = meinFahrzeug;
+  const v = modus === "fahr" && veh ? PH.vorhersage(world, veh) : null;
+  bahnLinie.visible = landeRing.visible = !!v;
+  if (v) {
+    // linie entlang der flugbahn (die ersten meter vor der mündung weglassen, sonst verdeckt sie das rohr)
+    const pos = bahnLinie.geometry.attributes.position;
+    const n = Math.min(bahnMax, v.punkte.length);
+    for (let i = 0; i < n; i++) pos.setXYZ(i, v.punkte[i][0], v.punkte[i][1], v.punkte[i][2]);
+    pos.needsUpdate = true;
+    bahnLinie.geometry.setDrawRange(1, n - 1);
+    bahnLinie.computeLineDistances();
+    const [x, y, z] = v.ende;
+    const dist = Math.hypot(x - v.punkte[0][0], y - v.punkte[0][1], z - v.punkte[0][2]);
+    // ring flach aufs gelände, wächst mit der entfernung, damit er sichtbar bleibt
+    landeRing.position.set(x, y + 0.15, z);
+    landeRing.rotation.set(-Math.PI / 2, 0, 0);
+    landeRing.scale.setScalar(Math.max(1, dist / 60));
+    landeRing.material.color.set(v.treffer ? 0xffd36b : 0x9aa0a6);
+    camera.updateMatrixWorld();
+    const proj = tmpD.set(x, y, z).project(camera);
+    if (proj.z < 1 && Math.abs(proj.x) < 1.1 && Math.abs(proj.y) < 1.1) {
+      sicht = true;
+      el.style.left = `${(proj.x * 0.5 + 0.5) * game.clientWidth}px`;
+      el.style.top = `${(-proj.y * 0.5 + 0.5) * game.clientHeight}px`;
+      el.querySelector("span").textContent = `${Math.round(dist)} m · ${v.zeit.toFixed(1)} s`;
+      const bereit = plan.parts.some((p, i) => (p.t === "verschluss" || p.t === "schnellfeuer") && !veh.zerstoert.has(i) && (veh.nachladen.get(i) ?? 0) <= 0);
+      el.classList.toggle("lade", !bereit);
+    }
+  }
+  el.hidden = !sicht;
+}
+
+// spielernamen kommen von anderen: vor dem einsetzen in html unschädlich machen
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// ---- fight-karten: gelände, spawn, basen ----
+// erzeugt die gewählte karte einmalig (gelände, kollision, deckung) samt anzeige der basen
+function sichereKarte(ki) {
+  const k = alleKarten()[ki];
+  const f = k.erzeuge();
+  if (!f) return null;
+  if (gebauteKarten.includes(f)) return f;
+  // alles, was beim aufbau entsteht, merken: so lässt sich die karte beim überschreiben oder wechseln wieder abbauen
+  const mein = { obj: [], kol: [] };
+  sammler = mein;
+  try {
+    baueGelaende({
+      d: f.daten, RAPIER, scene: { add: (...o) => { scene.add(...o); mein.obj.push(...o); } }, box: statischeBox,
+      world: { createCollider: d => { const c = world.createCollider(d); mein.kol.push(c); return c; } }
+    });
+  } finally {
+    sammler = null;
+  }
+  f.sammler = mein;
+  k.gebaut = f;
+  gebauteKarten.push(f);
+  f.visuell = f.basen.map(([x, z]) => {
+    const g = new THREE.Group();
+    g.position.set(x, f.hoehe(x, z), z);
+    const stoff = () => new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(FK.BASIS_RADIUS - 0.8, FK.BASIS_RADIUS, 64), stoff());
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.35;
+    // die scheibe wächst mit dem einnahme-fortschritt
+    const scheibe = new THREE.Mesh(new THREE.CircleGeometry(FK.BASIS_RADIUS - 1, 48), stoff());
+    scheibe.rotation.x = -Math.PI / 2;
+    scheibe.position.y = 0.3;
+    scheibe.scale.setScalar(0.001);
+    scheibe.material.opacity = 0.35;
+    const strahl = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 70, 12, 1, true), stoff());
+    strahl.position.y = 35;
+    strahl.material.opacity = 0.3;
+    g.add(ring, scheibe, strahl);
+    g.visible = false;
+    scene.add(g);
+    return { g, ring, scheibe, strahl };
+  });
+  return f;
+}
+
+// eine gebaute karte wieder aus welt und physik nehmen (beim überschreiben oder wechseln der eigenen karte)
+function baueKarteAb(k) {
+  const f = k.gebaut;
+  if (!f) return;
+  k.gebaut = null;
+  const i = gebauteKarten.indexOf(f);
+  if (i >= 0) gebauteKarten.splice(i, 1);
+  for (const o of f.sammler?.obj || []) {
+    scene.remove(o);
+    o.geometry?.dispose?.();
+    for (const m of [].concat(o.material || [])) { m.map?.dispose?.(); m.dispose?.(); }
+    if (o.isInstancedMesh) o.dispose();
+  }
+  for (const c of f.sammler?.kol || []) { try { world.removeCollider(c, true); } catch {} }
+  for (const v of f.visuell || []) scene.remove(v.g);
+}
+
+// eigene karte einsetzen (aus editor, datei, hangar oder lokaler ablage) und anwählen
+function waehleEigene(dok, id = null, name = "") {
+  baueKarteAb(FK.EIGENE);
+  if (!FK.EIGENE.setze(dok, name)) return false;
+  eigeneId = id;
+  fightKarte = FK.EIGENER_PLATZ;
+  merkeKarte();
+  zeigeSpielModus();
+  return true;
+}
+
+// offizielle karten, die kroxenstudios im editor überarbeitet hat, kommen vom server
+async function ladeOffizielleKarten() {
+  try {
+    const d = await Konto.anfrage("GET", "/maps/official");
+    for (const m of d.maps || []) {
+      const k = FK.KARTEN.find(x => x.id === m.slot);
+      if (!k) continue;
+      baueKarteAb(k);
+      k.ueberschreibe(m.data);
+    }
+    zeigeSpielModus();
+  } catch {}
+}
+
+let kartenEditor = null;
+function oeffneKartenEditor(dok, herkunft = { art: "neu" }) {
+  if (modus === "fahr") wechsleModus();
+  $("#modusSeite").hidden = true;
+  kartenEditor ||= KE.erzeugeKartenEditor({
+    renderer,
+    schnittstelle: {
+      zu: () => {},
+      istAdmin: () => Konto.istAdmin(),
+      test: k => {
+        kartenEditor.schliesse();
+        waehleEigene(k, null, k.name);
+        setzeSpielModus("fight");
+        if (modus === "bau") wechsleModus();
+      },
+      offiziellSpeichern: async (slot, k) => {
+        const ziel = FK.KARTEN.find(x => x.id === slot);
+        if (!ziel) throw new Error("unbekannte karte: " + slot);
+        await Konto.anfrage("PUT", `/admin/maps/official/${slot}`, { data: JSON.stringify(k) });
+        baueKarteAb(ziel);
+        ziel.ueberschreibe(k);
+        zeigeSpielModus();
+      }
+    }
+  });
+  kartenEditor.oeffne(dok || FK.neueKarte(), herkunft);
+}
+
+// startpunkt und ausrichtung des eigenen fahrzeugs: im fight an einem spawnpunkt der karte, sonst auf dem parkplatz
+function startBasis(lot, lift) {
+  if (!fightAktiv()) return { basis: lotBasis(lot, lift), dreh: undefined };
+  const f = sichereKarte(fightKarte) || sichereKarte(0);
+  const n = f.spawns.length;
+  const sp = f.spawns[((lot % n) + n) % n];
+  // nase zur kartenmitte (vorwärts ist -z)
+  const w = Math.atan2(-(f.mitte[0] - sp.x), -(f.mitte[1] - sp.z));
+  return {
+    basis: new THREE.Vector3(sp.x, f.hoehe(sp.x, sp.z) + lift, sp.z),
+    dreh: { x: 0, y: Math.sin(w / 2), z: 0, w: Math.cos(w / 2) }
+  };
+}
+
+const basenNamen = ["A", "B", "C", "D"];
+function fightSpieler(id) {
+  if (id === meineId) return { name: spielerName, color: spielerFarbe };
+  const r = andere.get(id);
+  return r ? { name: r.name, color: r.color } : { name: "?", color: "#ffffff" };
+}
+
+// farbe einer base nach besitzer: blau = du (später auch dein team), rot = gegner, weiss = frei
+const BASIS_BLAU = "#3b8cff", BASIS_ROT = "#ff4a4a", BASIS_FREI = "#ffffff";
+function basisFarbe(id) {
+  if (id == null) return BASIS_FREI;
+  return id === meineId ? BASIS_BLAU : BASIS_ROT;
+}
+
+// basen-anzeige: eine kompakte leiste a b c oben, dazu ringe und lichtstrahlen auf der karte (nur im fight beim fahren)
+function aktualisiereFight() {
+  const an = modus === "fahr" && fightAktiv();
+  const hud = $("#fightHud");
+  hud.hidden = !an;
+  for (const f of gebauteKarten) for (const v of f.visuell || []) v.g.visible = false;
+  if (!an) return;
+  const f = sichereKarte(fightKarte);
+  if (!f) return;
+  let html = "";
+  f.basen.forEach((pos, nr) => {
+    const [o, p, c, pause] = fightZustand.fb[fightKarte]?.[nr] || [null, 0, null, 0];
+    const b = { nr };
+    const v = f.visuell[nr];
+    v.g.visible = true;
+    // umkämpft: orange, sonst besitzerfarbe
+    const farbe = pause ? "#ff9a1f" : basisFarbe(o);
+    v.ring.material.color.set(farbe);
+    v.strahl.material.color.set(farbe);
+    v.scheibe.material.color.set(basisFarbe(c));
+    v.scheibe.scale.setScalar(Math.max(0.001, p));
+    // der balken in der leiste zeigt den einnahme-fortschritt in der farbe des einnehmers
+    html += `<span class="basis" style="--f:${farbe}"><b>${basenNamen[b.nr] || b.nr + 1}</b><i style="width:${Math.round(p * 100)}%;background:${basisFarbe(c)}"></i></span>`;
+  });
+  // der server schickt ~30x pro sekunde: nur bei änderung neu zeichnen
+  if (hud.dataset.stand !== html) {
+    hud.dataset.stand = html;
+    hud.innerHTML = html;
+  }
+}
+// ---- warteschlange für fight-spiele und npcs ----
+// der server startet ein match ab 4 teilnehmern; npcs füllen nach und nach auf. der erste wartende steuert sie.
+let wartet = false;
+let npcPlanCache = null;
+const npcPlan = () => (npcPlanCache ||= BAU.VORLAGEN.find(v => v.id === "panzer").bauen());
+let npcs = null;
+function npcSteuerung() {
+  return (npcs ||= erzeugeNpcSteuerung({
+    R: RAPIER, world, plan: npcPlan(), url: socketUrl,
+    startBasis: (lot, lift) => { const s = startBasis(lot, lift); return { basis: s.basis.toArray(), dreh: s.dreh }; },
+    umgebung: () => {
+      const ziele = [];
+      const mitte = fz => { const b = PH.sitzKoerper(fz) || fz.bodies[0]; return b ? b.rb.translation() : null; };
+      if (meinFahrzeug?.kampf) { const t = mitte(meinFahrzeug); if (t) ziele.push({ id: meineId, pos: [t.x, t.y, t.z], npc: false }); }
+      for (const r of andere.values()) {
+        if (r.m !== "fahr" || !r.fm || !r.kin) continue;
+        const t = mitte(r.kin);
+        if (t) ziele.push({ id: r.id, pos: [t.x, t.y, t.z], npc: !!r.npc });
+      }
+      return { ziele, basen: sichereKarte(fightKarte)?.basen || [], fb: fightZustand.fb[fightKarte] || [] };
+    }
+  }));
+}
+// grafik der von diesem client gesteuerten npcs
+const npcGrafiken = new Map();
+function zeigeNpcs() {
+  const liste = npcs.fahrzeuge();
+  for (const [v, g] of npcGrafiken) if (!liste.includes(v)) { entferneGrafik(g); npcGrafiken.delete(v); }
+  for (const v of liste) {
+    let g = npcGrafiken.get(v);
+    if (!g) {
+      g = fahrzeugGrafik(npcPlan(), { ana: v.ana });
+      for (const gr of g.groups) scene.add(gr);
+      npcGrafiken.set(v, g);
+    }
+    v.bodies.forEach((b, i) => {
+      const gr = g.groups[i];
+      if (!gr) return;
+      gr.position.copy(b.rb.translation());
+      gr.quaternion.copy(b.rb.rotation());
+    });
+    setzeRaeder(g, npcs.radZ(v));
+    pflegeTrennungen(v, g);
+    for (const i of v.zerstoert) markiereZerstoert(g, i);
+  }
+}
+
+function warteBeitreten() {
+  wartet = true;
+  socket.send(JSON.stringify({ type: "warte", an: true, karte: fightKarte }));
+  zeigeWarte({ menschen: 1, npc: 0, ziel: 4, naechster: 6000 });
+}
+function warteAbbrechen() {
+  if (!wartet) return;
+  wartet = false;
+  try { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "warte", an: false })); } catch {}
+  $("#wartePanel").hidden = true;
+}
+function zeigeWarte(d) {
+  $("#wartePanel").hidden = false;
+  $("#warteText").textContent = `${tr("Warteschlange")}: ${d.menschen + d.npc}/${d.ziel}`;
+  $("#warteDetail").textContent = `${d.menschen} ${tr("Spieler")} + ${d.npc} NPC` + (d.npc + d.menschen < d.ziel ? ` · ${tr("nächster NPC in")} ${Math.ceil((d.naechster || 0) / 1000)} s` : "");
+}
+// der server hat ein match gebildet: auf die karte wechseln, der host stellt die npcs
+function matchStart(m) {
+  wartet = false;
+  $("#wartePanel").hidden = true;
+  fightKarte = Math.max(0, Math.min(FK.EIGENER_PLATZ - 1, Number(m.karte) || 0));
+  merkeKarte();
+  setzeSpielModus("fight");
+  if (modus === "bau") wechsleModus();
+  else neuStarten();
+  if (m.host === meineId && m.npc > 0) npcSteuerung().start(m.npc);
+  else npcs?.stop();
+  meldung(tr("Match gestartet"));
+}
+$("#warteAb").onclick = () => warteAbbrechen();
+$("#warteJetzt").onclick = () => { warteAbbrechen(); wechsleModus(); };
+
+function setzeSpielModus(m) {
+  spielModus = m === "fight" ? "fight" : "test";
+  if (spielModus !== "fight") { npcs?.stop(); warteAbbrechen(); }
+  try { localStorage.setItem("bastelkarre-spielmodus", spielModus); } catch {}
+  zeigeSpielModus();
+  $("#modusSeite").hidden = true;
+}
+$("#btnSpielen").onclick = () => {
+  $("#btnSpielen").blur();
+  // fight online auf einer offiziellen karte: erst in die warteschlange, npcs füllen leere plätze auf
+  if (modus === "bau" && fightAktiv() && fightKarte < FK.EIGENER_PLATZ && socket?.readyState === WebSocket.OPEN && !wartet) return warteBeitreten();
+  wechsleModus();
+};
+$("#modusZeile").onclick = () => { $("#modusSeite").hidden = false; };
+$("#modusSeite").onclick = e => { if (e.target === $("#modusSeite")) $("#modusSeite").hidden = true; };
+for (const k of document.querySelectorAll(".modusKachel")) k.onclick = () => setzeSpielModus(k.dataset.modus);
+zeigeSpielModus();
 $("#btnNeu").onclick = () => { neuStarten(); $("#btnNeu").blur(); };
 $("#btnAus").onclick = () => { ausEinsteigen(); $("#btnAus").blur(); };
 $("#btnAnsicht").onclick = () => { schalteAnsicht(); $("#btnAnsicht").blur(); };
@@ -2116,6 +2592,8 @@ function baueTastenListe() {
       case "servo": add(p.k.plus, "Motor +", p.k.name, " +"); add(p.k.minus, "Motor −", p.k.name, " −"); break;
       case "bruch": add(p.k.taste, "Trennen", p.k.name); break;
       case "explosive": add(p.k.taste, "Sprengen", p.k.name); break;
+      case "schnellfeuer": add(p.k.taste, "Dauerfeuer", p.k.name); break;
+      case "verschluss": add(p.k.taste, "Schiessen", p.k.name); if (p.k.wechsel) add(p.k.wechsel, "Munitionsart wechseln", p.k.name); break;
     }
   });
   if (hatTank) liste.push(["K", "Treibstoffverbrauch an/aus"]);
@@ -2191,6 +2669,310 @@ function eingabe() {
 const fxAkku = new Map();
 const tmpV = new THREE.Vector3(), tmpD = new THREE.Vector3(), tmpVel = new THREE.Vector3();
 const tmpFarbe = new THREE.Color();
+
+// einmaliger knall an einem ort (explodierende tanks, einschläge, geplatzte geschosse); r = grösse in metern
+function knall(pos, r, ton = true) {
+  const mitte = new THREE.Vector3(pos[0], pos[1], pos[2]);
+  if (ton) TON.explosion(r, camera.position.distanceTo(mitte));
+  // grosse explosionen rütteln an der kamera, je näher desto stärker
+  ruckeKamera(mitte, 0.05 + 0.04 * r, 60);
+  blitz(pos, 0xffa040, 6 + r * 10, 12 + r * 10, 0.25 + r * 0.05);
+  if (r >= 0.8) druckring(pos, r * 2);
+  // glühende splitter fliegen davon
+  for (let j = 0; j < Math.min(14, 2 + r * 3); j++) brocken1(pos, [zuf(12 + r * 4), 4 + Math.random() * (6 + r * 3), zuf(12 + r * 4)], j % 3 ? "#2b2b2b" : "#5a4a3a", 0.08 + Math.random() * 0.12 * Math.min(3, r), 2 + Math.random() * 2);
+  const n = Math.min(260, Math.round(40 + r * 70));
+  const zu = s => (Math.random() - 0.5) * s;
+  for (let j = 0; j < n; j++) {
+    tmpVel.set(zu(2), zu(2), zu(2)).normalize().multiplyScalar(Math.min(2 * r, 40) * (0.3 + Math.random() * 0.9));
+    const heiss = Math.random();
+    feuer.emit(mitte.clone(), tmpVel, tmpFarbe.setHSL(0.04 + heiss * 0.09, 1, 0.5 + heiss * 0.45), Math.min(0.3 + r * 0.2, 6), 0.05, 0.6 + Math.random() * 0.9, 0.95);
+    if (Math.random() < 0.4) {
+      rauch.emit(mitte.clone(), tmpVel.multiplyScalar(0.2), tmpFarbe.set(Math.random() < 0.5 ? "#3a3d42" : "#8b8f98"), Math.min(0.3 + r * 0.12, 5), Math.min(1 + r * 0.8, 20), 3 + Math.random() * 3, 0.55, 0.35);
+    }
+  }
+}
+
+// zerstörte teile werden dunkel (russschwarz) dargestellt
+function markiereZerstoert(grafik, i) {
+  const obj = grafik?.teilObj?.get(i);
+  if (!obj || obj.userData.zerstoert) return;
+  obj.userData.zerstoert = true;
+  if (brennende.length < 40) brennende.push({ obj, t: 0, dauer: 18 + Math.random() * 12, akku: 0 });
+  obj.traverse(o => {
+    if (!o.material) return;
+    const dunkel = m => { const c = m.clone(); c.color?.multiplyScalar(0.2); c.emissive?.set(0x000000); return c; };
+    o.material = Array.isArray(o.material) ? o.material.map(dunkel) : dunkel(o.material);
+  });
+}
+
+// mündungsfeuer: feuerstoss und rauchwolke beim schuss (zerstört nichts), danach qualmt das rohr noch einige sekunden
+const rohrRauch = [];
+function muendungsfeuer(m) {
+  const k = Math.max(0.15, m.kal / 155);
+  const pos = new THREE.Vector3(...m.p);
+  const dir = new THREE.Vector3(...m.dir);
+  // abschussknall und kamerarütteln (am stärksten beim eigenen schuss)
+  TON.schuss(m.kal, camera.position.distanceTo(pos));
+  ruckeKamera(pos, m.von === meinFahrzeug ? 0.06 + 0.3 * k : 0.02 + 0.1 * k, m.von === meinFahrzeug ? 1e9 : 80);
+  const zu = s => (Math.random() - 0.5) * s;
+  // feuerstoss nach vorn, grösser mit dem kaliber
+  const n = Math.round(30 + 120 * k);
+  for (let j = 0; j < n; j++) {
+    const speed = (10 + Math.random() * 60) * (0.5 + k);
+    tmpVel.copy(dir).multiplyScalar(speed).add(new THREE.Vector3(zu(speed * 0.5), zu(speed * 0.5), zu(speed * 0.5)));
+    const heiss = Math.random();
+    feuer.emit(pos.clone().addScaledVector(dir, Math.random() * 0.4), tmpVel, tmpFarbe.setHSL(0.04 + heiss * 0.1, 1, 0.5 + heiss * 0.45), 0.25 + 0.8 * k, 0.05, 0.12 + Math.random() * 0.3, 0.95);
+  }
+  // kurzer rückschlag-blitz seitlich und nach hinten
+  for (let j = 0; j < 10 + 30 * k; j++) {
+    tmpVel.set(zu(14), zu(14), zu(14)).addScaledVector(dir, -4 * Math.random());
+    feuer.emit(pos.clone(), tmpVel, tmpFarbe.setHSL(0.1, 1, 0.8), 0.2 + 0.4 * k, 0.05, 0.1 + Math.random() * 0.15, 0.9);
+  }
+  // pulverqualm: dicke wolke, die sich vor dem rohr ausbreitet
+  for (let j = 0; j < 10 + 30 * k; j++) {
+    tmpVel.copy(dir).multiplyScalar(2 + Math.random() * 14).add(new THREE.Vector3(zu(4), Math.random() * 2, zu(4)));
+    rauch.emit(pos.clone(), tmpVel, tmpFarbe.set(Math.random() < 0.5 ? "#6b6e73" : "#a4a7ac"), 0.3 + 0.9 * k, 1.5 + 4 * k, 2 + Math.random() * 2, 0.5, 0.35);
+  }
+  blitz(m.p, 0xffc070, 8 + 30 * k, 10 + 30 * k, 0.08 + 0.1 * k);
+  // ausgeworfene hülse: seitlich und nach hinten, messing
+  const seite = new THREE.Vector3(dir.z, 0, -dir.x).normalize();
+  if (Math.random() < (k < 0.3 ? 0.6 : 1)) brocken1(m.p, [seite.x * 3 - dir.x * 2 + zuf(1), 2.5 + Math.random() * 2, seite.z * 3 - dir.z * 2 + zuf(1)], "#c9a24a", 0.05 + 0.25 * k, 3, true);
+  // das rohr qualmt nach: das rohr merken, dessen mündung am nächsten liegt (folgt dem fahrzeug)
+  let rohr = -1, best = 2;
+  m.von?.plan.parts.forEach((p, i) => {
+    if (p.t !== "geschuetz") return;
+    const mp = PH.muendungPos(m.von, i);
+    const d = mp ? Math.hypot(mp.pos[0] - m.p[0], mp.pos[1] - m.p[1], mp.pos[2] - m.p[2]) : 1e9;
+    if (d < best) { best = d; rohr = i; }
+  });
+  rohrRauch.push({ veh: m.von, rohr, p: [...m.p], dir: [...m.dir], k, t: 0, dauer: 3 + 4 * k, akku: 0 });
+}
+
+function rohrQualm(dt) {
+  for (let i = rohrRauch.length - 1; i >= 0; i--) {
+    const r = rohrRauch[i];
+    r.t += dt;
+    if (r.t > r.dauer) { rohrRauch.splice(i, 1); continue; }
+    let p = r.p, d = r.dir;
+    if (r.rohr >= 0 && r.veh) {
+      const mp = PH.muendungPos(r.veh, r.rohr);
+      if (!mp) { rohrRauch.splice(i, 1); continue; }
+      p = mp.pos; d = mp.dir;
+    }
+    // am anfang dichter, dann dünner
+    r.akku += (10 + 30 * r.k) * (1 - r.t / r.dauer) * dt;
+    while (r.akku >= 1) {
+      r.akku -= 1;
+      const pos = new THREE.Vector3(p[0] + zuf(0.05), p[1] + zuf(0.05), p[2] + zuf(0.05));
+      tmpVel.set(d[0], d[1], d[2]).multiplyScalar(0.8 + Math.random() * 2).add(new THREE.Vector3(zuf(0.5), 0.3 + Math.random() * 0.6, zuf(0.5)));
+      rauch.emit(pos, tmpVel, tmpFarbe.set(Math.random() < 0.5 ? "#7a7d82" : "#9a9da2"), 0.12 + 0.3 * r.k, 0.8 + 2 * r.k, 1.4 + Math.random() * 1.6, 0.35, 0.5);
+    }
+  }
+}
+const zuf = s => (Math.random() - 0.5) * s;
+
+// geschosse als kleine leuchtende kugeln darstellen, einschläge als knall
+const geschossMeshes = new Map();
+const UP = new THREE.Vector3(0, 1, 0);
+const tracerGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 6);
+const tracerMats = [0xffc766, 0xe8f4ff, 0xff7a3d, 0xff5a5a].map(c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
+function zeigeGeschosse(dt = 0) {
+  for (const m of PH.muendungen.splice(0)) muendungsfeuer(m);
+  rohrQualm(dt);
+  for (const [g, m] of geschossMeshes) {
+    if (!PH.geschosse.includes(g)) { scene.remove(m); geschossMeshes.delete(g); }
+  }
+  for (const g of PH.geschosse) {
+    const k = Math.max(0.15, g.kal / 155);
+    let m = geschossMeshes.get(g);
+    if (!m) {
+      // leuchtspur: ein langer, heller strich in flugrichtung, dicker bei grossem kaliber
+      m = new THREE.Mesh(tracerGeo, tracerMats[g.art || 0]);
+      const laenge = 4 + 10 * k;
+      m.scale.set(0.06 + 0.22 * k, laenge, 0.06 + 0.22 * k);
+      m.userData.letzte = [...g.p];
+      scene.add(m);
+      geschossMeshes.set(g, m);
+    }
+    const richtung = tmpD.set(g.v[0], g.v[1], g.v[2]).normalize();
+    m.quaternion.setFromUnitVectors(UP, richtung);
+    // der strich zieht hinter dem geschoss her
+    m.position.set(g.p[0], g.p[1], g.p[2]).addScaledVector(richtung, -m.scale.y * 0.45);
+    // schweif: feuerfunken und dünner rauch entlang des weges seit dem letzten bild
+    const l = m.userData.letzte;
+    const weg = Math.hypot(g.p[0] - l[0], g.p[1] - l[1], g.p[2] - l[2]);
+    const schritte = Math.min(12, Math.ceil(weg / 5));
+    for (let j = 0; j < schritte; j++) {
+      const t = (j + 1) / schritte;
+      const pos = new THREE.Vector3(l[0] + (g.p[0] - l[0]) * t, l[1] + (g.p[1] - l[1]) * t, l[2] + (g.p[2] - l[2]) * t);
+      tmpVel.set(zuf(1.5), zuf(1.5), zuf(1.5));
+      feuer.emit(pos, tmpVel, tmpFarbe.setHSL(0.08 + Math.random() * 0.05, 1, 0.65), 0.1 + 0.3 * k, 0.04, 0.12 + Math.random() * 0.12, 0.9);
+      if (j % 2 === 0) rauch.emit(pos.clone(), tmpVel.set(zuf(0.8), 0.2, zuf(0.8)), tmpFarbe.set("#b9bcc1"), 0.1 + 0.2 * k, 0.6 + 1.2 * k, 0.9 + Math.random() * 0.7, 0.22, 0.2);
+    }
+    m.userData.letzte = [...g.p];
+  }
+  for (const e of PH.einschlaege.splice(0)) einschlagEffekt(e);
+  pflegeEffekte(dt);
+}
+
+// einschlag: funken (auf fahrzeugen) oder staub und erdbrocken (im gelände), knall, ton, kamerarütteln
+function einschlagEffekt(e) {
+  const k = Math.max(0.15, e.kal / 155);
+  const pos = new THREE.Vector3(e.p[0], e.p[1], e.p[2]);
+  const abstand = camera.position.distanceTo(pos);
+  const art = e.art || 0;
+  // he: grosser feuerball, ap und heat kleiner, schnellfeuer nur funken
+  if (art !== 3) knall(e.p, (0.3 + k * 1.2) * (art === 0 ? 1.4 : 0.8), false);
+  else blitz(e.p, 0xffd080, 3, 6, 0.06);
+  const vor = new THREE.Vector3(e.dir[0], e.dir[1], e.dir[2]);
+  if (art === 2) {
+    // hohlladung: heller stachel aus metall in flugrichtung
+    blitz(e.p, 0xbfe3ff, 14 + 20 * k, 14, 0.15);
+    for (let j = 0; j < 40 + 60 * k; j++) {
+      tmpVel.copy(vor).multiplyScalar(30 + Math.random() * 60).add(new THREE.Vector3(zuf(8), zuf(8), zuf(8)));
+      feuer.emit(pos.clone(), tmpVel, tmpFarbe.setHSL(0.58 + Math.random() * 0.05, 0.6, 0.85), 0.08 + 0.12 * k, 0.02, 0.12 + Math.random() * 0.2, 1);
+    }
+  } else if (art === 1 && e.treffer) {
+    // wuchtgeschoss: lange funkenschauer und metallsplitter
+    for (let j = 0; j < 30 + 40 * k; j++) {
+      tmpVel.set(zuf(2), Math.random(), zuf(2)).normalize().multiplyScalar(20 + Math.random() * 40).addScaledVector(vor, 10);
+      feuer.emit(pos.clone(), tmpVel, tmpFarbe.setHSL(0.11, 1, 0.75), 0.05 + 0.06 * k, 0.01, 0.3 + Math.random() * 0.4, 1);
+    }
+    for (let j = 0; j < 6; j++) brocken1(e.p, [zuf(14), 3 + Math.random() * 6, zuf(14)], "#6b6f75", 0.06 + 0.1 * k, 2.5);
+  }
+  if (!e.treffer && art !== 3) {
+    brandfleck(e.p, 0.8 + 3 * k * (art === 0 ? 1.5 : 1));
+    // erdbrocken
+    for (let j = 0; j < 4 + 10 * k; j++) brocken1(e.p, [zuf(10), 5 + Math.random() * 9, zuf(10)], Math.random() < 0.5 ? "#6b5a42" : "#4f4232", 0.1 + 0.25 * k, 2 + Math.random());
+  }
+  TON.einschlag(e.kal, abstand, e.treffer);
+  // wer getroffen wird, spürt es am stärksten
+  ruckeKamera(pos, e.treffer ? 0.15 + 0.5 * k : 0.02 + 0.12 * k, e.treffer ? 1e9 : 70);
+  const rueck = new THREE.Vector3(-e.dir[0], -e.dir[1], -e.dir[2]);
+  for (let j = 0; j < 12 + 40 * k; j++) {
+    tmpVel.copy(rueck).multiplyScalar(4 + Math.random() * 22).add(new THREE.Vector3(zuf(14), Math.random() * 8, zuf(14)));
+    feuer.emit(pos.clone(), tmpVel, tmpFarbe.setHSL(0.1 + Math.random() * 0.05, 0.9, 0.7), 0.06 + 0.1 * k, 0.02, 0.15 + Math.random() * 0.35, 0.95);
+  }
+  if (!e.treffer) {
+    for (let j = 0; j < 8 + 20 * k; j++) {
+      tmpVel.set(zuf(5), 1 + Math.random() * 5, zuf(5));
+      rauch.emit(pos.clone(), tmpVel, tmpFarbe.set(Math.random() < 0.5 ? "#7a6a52" : "#9a8a70"), 0.4 + 0.8 * k, 2 + 5 * k, 1.5 + Math.random() * 1.8, 0.5, 0.25);
+    }
+  }
+}
+
+// ---- zusatzeffekte: lichtblitze, hülsen und splitter, druckringe, brandflecken, brennende wracks ----
+// drei punktlichter bleiben immer in der szene (sonst müssten die shader neu gebaut werden), sie leuchten nur kurz auf
+const blitzLichter = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xffb060, 0, 30, 2); scene.add(l); return { l, t: 1, dauer: 1, staerke: 0 }; });
+function blitz(pos, farbe, staerke, weite, dauer = 0.12) {
+  // das schwächste oder älteste licht übernehmen
+  const b = blitzLichter.reduce((a, x) => (x.t / x.dauer > a.t / a.dauer ? x : a));
+  b.l.position.set(pos[0], pos[1], pos[2]);
+  b.l.color.set(farbe);
+  b.l.distance = weite;
+  b.staerke = staerke;
+  b.t = 0;
+  b.dauer = dauer;
+}
+const brocken = [];
+const brockenGeo = new THREE.BoxGeometry(1, 1, 1);
+const huelseGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 8);
+const brockenMat = new Map();
+const brockenFarbe = f => { if (!brockenMat.has(f)) brockenMat.set(f, new THREE.MeshStandardMaterial({ color: f, roughness: 0.6, metalness: f === "#c9a24a" ? 0.8 : 0.1, transparent: true })); return brockenMat.get(f); };
+// ein fliegendes teilchen mit schwerkraft: hülse, erdbrocken oder metallsplitter. es prallt am boden ab und verblasst.
+function brocken1(pos, vel, farbe, groesse, leben = 2.5, huelse = false) {
+  if (brocken.length > 160) { const alt = brocken.shift(); scene.remove(alt.m); }
+  const m = new THREE.Mesh(huelse ? huelseGeo : brockenGeo, brockenFarbe(farbe).clone());
+  m.scale.set(groesse * (huelse ? 0.35 : 1), groesse * (huelse ? 1.4 : 0.7 + Math.random() * 0.6), groesse * (huelse ? 0.35 : 1));
+  m.position.set(pos[0], pos[1], pos[2]);
+  m.castShadow = true;
+  scene.add(m);
+  // boden unter dem startpunkt einmal ermitteln
+  const hit = world.castRay(new RAPIER.Ray({ x: pos[0], y: pos[1] + 0.5, z: pos[2] }, { x: 0, y: -1, z: 0 }), 80, true);
+  const boden = hit ? pos[1] + 0.5 - (hit.timeOfImpact ?? hit.toi ?? 80) : pos[1] - 80;
+  brocken.push({ m, v: [...vel], dreh: [zuf(18), zuf(18), zuf(18)], t: 0, leben, boden });
+}
+const ringe = [];
+const ringGeo = new THREE.RingGeometry(0.85, 1, 48);
+// flacher druckring, der sich schnell ausbreitet und verblasst
+function druckring(pos, r) {
+  const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xfff1d6, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+  m.position.set(pos[0], pos[1] + 0.2, pos[2]);
+  m.rotation.x = -Math.PI / 2;
+  scene.add(m);
+  ringe.push({ m, t: 0, r });
+}
+const flecken = [];
+const fleckGeo = new THREE.CircleGeometry(1, 20);
+// russfleck am boden nach einem einschlag im gelände
+function brandfleck(pos, r) {
+  if (flecken.length > 60) { const alt = flecken.shift(); scene.remove(alt.m); alt.m.material.dispose(); }
+  const m = new THREE.Mesh(fleckGeo, new THREE.MeshBasicMaterial({ color: 0x15120f, transparent: true, opacity: 0.6, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
+  m.position.set(pos[0], pos[1] + 0.06, pos[2]);
+  m.rotation.set(-Math.PI / 2, 0, Math.random() * 6);
+  m.scale.set(r * (0.8 + Math.random() * 0.4), r, 1);
+  scene.add(m);
+  flecken.push({ m, t: 0 });
+}
+// zerstörte teile brennen eine weile und qualmen danach
+const brennende = [];
+function pflegeEffekte(dt) {
+  for (const b of blitzLichter) {
+    b.t += dt;
+    b.l.intensity = b.t < b.dauer ? b.staerke * Math.pow(1 - b.t / b.dauer, 2) : 0;
+  }
+  for (let i = brocken.length - 1; i >= 0; i--) {
+    const b = brocken[i];
+    b.t += dt;
+    b.v[1] -= 9.81 * dt;
+    b.m.position.x += b.v[0] * dt; b.m.position.y += b.v[1] * dt; b.m.position.z += b.v[2] * dt;
+    b.m.rotation.x += b.dreh[0] * dt; b.m.rotation.y += b.dreh[1] * dt; b.m.rotation.z += b.dreh[2] * dt;
+    if (b.m.position.y < b.boden) {
+      b.m.position.y = b.boden;
+      b.v = [b.v[0] * 0.45, Math.abs(b.v[1]) * 0.3, b.v[2] * 0.45];
+      b.dreh = b.dreh.map(x => x * 0.5);
+    }
+    const rest = b.leben - b.t;
+    if (rest < 0.6) b.m.material.opacity = Math.max(0, rest / 0.6);
+    if (rest <= 0) { scene.remove(b.m); b.m.material.dispose(); brocken.splice(i, 1); }
+  }
+  for (let i = ringe.length - 1; i >= 0; i--) {
+    const r = ringe[i];
+    r.t += dt;
+    const k = r.t / 0.55;
+    r.m.scale.setScalar(0.5 + r.r * 2.2 * Math.sqrt(k));
+    r.m.material.opacity = 0.55 * (1 - k);
+    if (k >= 1) { scene.remove(r.m); r.m.material.dispose(); ringe.splice(i, 1); }
+  }
+  for (let i = flecken.length - 1; i >= 0; i--) {
+    const f = flecken[i];
+    f.t += dt;
+    if (f.t > 30) f.m.material.opacity = Math.max(0, 0.6 * (1 - (f.t - 30) / 10));
+    if (f.t > 40) { scene.remove(f.m); f.m.material.dispose(); flecken.splice(i, 1); }
+  }
+  for (let i = brennende.length - 1; i >= 0; i--) {
+    const b = brennende[i];
+    b.t += dt;
+    if (b.t > b.dauer || !b.obj.parent) { brennende.splice(i, 1); continue; }
+    b.obj.getWorldPosition(tmpV);
+    const flammen = b.t < b.dauer * 0.6;
+    b.akku += (flammen ? 22 : 6) * dt;
+    while (b.akku >= 1) {
+      b.akku -= 1;
+      const pos = tmpV.clone().add(new THREE.Vector3(zuf(0.3), 0.1, zuf(0.3)));
+      if (flammen) feuer.emit(pos, tmpVel.set(zuf(0.6), 1.5 + Math.random() * 1.5, zuf(0.6)), tmpFarbe.setHSL(0.05 + Math.random() * 0.06, 1, 0.55), 0.35, 0.05, 0.5 + Math.random() * 0.4, 0.9, 0.6);
+      rauch.emit(pos.clone(), tmpVel.set(zuf(0.5), 1.2 + Math.random(), zuf(0.5)), tmpFarbe.set(flammen ? "#2a2b2e" : "#55585d"), 0.3, 1.6 + Math.random(), 2.5 + Math.random() * 2, 0.45, 0.5);
+    }
+  }
+}
+
+// kamerarütteln: stärke fällt mit dem abstand (grenze in metern) bis null
+let kameraRuck = 0;
+function ruckeKamera(pos, staerke, grenze) {
+  const abstand = camera.position.distanceTo(pos);
+  if (abstand >= grenze) return;
+  kameraRuck = Math.max(kameraRuck, staerke * (1 - abstand / grenze));
+}
 
 function emitEffekte(besitzer, planX, grafik, fx, dt) {
   if (!grafik) return;
@@ -2560,7 +3342,7 @@ function chatHinweis() {
   const an = Konto.angemeldet();
   chatInput.readOnly = !an;
   chatInput.classList.toggle("gesperrt", !an);
-  chatInput.placeholder = an ? tr("Nachricht (Enter)") : tr("Zum Chatten anmelden (👤)");
+  chatInput.placeholder = an ? tr("Nachricht (Enter)") : tr("Zum Chatten anmelden");
   if (!an) chatInput.value = "";
   const senden = document.querySelector("#chatForm button[type=submit]");
   if (senden) senden.disabled = !an;
@@ -2641,7 +3423,7 @@ function zeigeSpielerZahl() {
   if (!el) return;
   const online = socket?.readyState === WebSocket.OPEN;
   el.hidden = !online;
-  el.textContent = `👥 ${andere.size + 1}`;
+  el.textContent = `${andere.size + 1}`;
   const liste = document.getElementById("spielerListe");
   if (!liste) return;
   if (!online) { liste.hidden = true; spielerListeKey = ""; return; }
@@ -2754,6 +3536,9 @@ async function verbinde() {
     }
     statusEl.textContent = tr("Offline – du kannst trotzdem bauen und fahren");
     statusEl.dataset.state = "offline";
+    wartet = false;
+    $("#wartePanel").hidden = true;
+    npcs?.stop();
     for (const id of [...andere.keys()]) entferneAnderen(id);
     zeigeSpielerZahl();
     if (wiederverbinden++ < 20) setTimeout(verbinde, Math.min(30000, 3000 * wiederverbinden));
@@ -2786,16 +3571,27 @@ function empfange(m) {
       const da = new Set();
       for (const p of m.players || []) {
         const id = String(p.id);
-        if (id === meineId) continue;
+        if (id === meineId || npcs?.ids().includes(id)) continue;
         da.add(id);
         aktualisiereAnderen(id, p);
       }
       for (const id of [...andere.keys()]) if (!da.has(id)) entferneAnderen(id);
       chatItems = Array.isArray(m.chat) ? m.chat : chatItems;
+      // fight: zustand der basen und punktestand vom server
+      fightZustand.fb = Array.isArray(m.fb) ? m.fb : [];
+      fightZustand.pt = m.pt && typeof m.pt === "object" ? m.pt : {};
+      aktualisiereFight();
       aktualisiereSchilder();
       zeigeSpielerZahl();
       break;
     }
+    case "warteStand":
+      if (m.karte < 0) break;
+      if (wartet) zeigeWarte(m);
+      break;
+    case "match":
+      if (wartet) matchStart(m);
+      break;
     case "chat":
       if (m.item) { chatItems.push(m.item); chatProtokollNeu(m.item); }
       break;
@@ -2843,6 +3639,15 @@ function sendePose(sofort = false) {
     for (const [i, s] of meinFahrzeug.fx) msg.fx.push([i, r3(s * 10)]);
     meinFahrzeug.gelenke.forEach((g, i) => { if (!g.aktiv) msg.g.push(i); });
     msg.sp = meinFahrzeug.sprengReihe;
+    // fight: kampfmodus, letzte schüsse (zähler zuerst) und zerstörte teile
+    msg.fm = meinFahrzeug.kampf;
+    // basen der gewählten karte (kartenplatz, dann x z je base), der server übernimmt sie vom ersten spieler des platzes
+    if (msg.fm) {
+      const f = alleKarten()[fightKarte]?.erzeuge();
+      if (f) msg.kb = [fightKarte, ...f.basen.flatMap(([x, z]) => [Math.round(x * 10) / 10, Math.round(z * 10) / 10])];
+    }
+    msg.sh = [meinFahrzeug.schussZaehler, ...meinFahrzeug.schussReihe];
+    msg.zs = [...meinFahrzeug.zerstoert];
   }
   if (modus === "fahr") {
     if (fussRb) msg.f = [r3(meineFigur.position.x), r3(meineFigur.position.y), r3(meineFigur.position.z), r3(meineFigur.rotation.y)];
@@ -2914,6 +3719,7 @@ function aktualisiereAnderen(id, p) {
     r.fPuffer = [];
     r.neu = true;
   }
+  r.npc = p.npc === 1;
   r.sit = Array.isArray(p.sit) ? [String(p.sit[0]), Number(p.sit[1])] : null;
   if (r.m === "fahr" && Array.isArray(p.f) && p.f.length === 4) {
     (r.fPuffer ||= []).push({ t: performance.now(), f: p.f });
@@ -2921,6 +3727,9 @@ function aktualisiereAnderen(id, p) {
   }
   if (r.m === "fahr" && Array.isArray(p.b) && p.b.length) {
     r.spZiel = Array.isArray(p.sp) ? p.sp.filter(Number.isInteger).slice(0, 4096) : [];
+    r.fm = p.fm === true;
+    r.shL = Array.isArray(p.sh) ? p.sh : [];
+    r.zsL = Array.isArray(p.zs) ? p.zs.filter(Number.isInteger) : [];
     r.puffer.push({ t: performance.now(), b: p.b, w: p.w || [], fx: p.fx || [] });
     if (r.puffer.length > 30) r.puffer.shift();
   }
@@ -2933,6 +3742,7 @@ function baueAnderen(r) {
   r.grafik = null;
   r.kin = null;
   r.spN = 0;
+  r.shN = undefined;
   const steh = lotPos(r.lot).add(new THREE.Vector3(6.9, 0, -6.9));
   r.angebunden = null;
   if (!r.plan || !r.plan.parts.length) {
@@ -3014,12 +3824,35 @@ function bewegeAndere(jetzt, dt) {
         if (r.spN + 2 + anzahl > r.spZiel.length) break;
         const liste = r.spZiel.slice(r.spN + 2, r.spN + 2 + anzahl);
         r.spN += 2 + anzahl;
-        if (r.plan?.parts[i]?.t === "explosive" && liste.every(n => r.plan.parts[n])) {
+        // aufgezeichnet werden sprengungen (ladung, tank, lager, geplatzter verschluss) und treffer auf beliebige teile
+        if (r.plan?.parts[i] && liste.every(n => r.plan.parts[n])) {
           PH.sprenge(r.kin, i, liste);
           pflegeTrennungen(r.kin, r.grafik);
+          const typ = r.plan.parts[i].t;
+          const ort = r.kin.sprengPos.get(i);
+          const sprengend = ["explosive", "tank", "verschluss", "munition"].includes(typ);
+          if (sprengend && ort) {
+            if (typ === "explosive") TON.explosion(r.plan.parts[i].k.reichweite ?? 3, camera.position.distanceTo(tmpV.set(ort[0], ort[1], ort[2])));
+            else knall(ort, 2.5);
+            // fremde sprengung im fight: das opfer prüft selbst, ob es getroffen wurde
+            if (r.fm && meinFahrzeug?.kampf) PH.explosionSchaden(meinFahrzeug, ort, PH.sprengReichweite(r.plan.parts[i]));
+            if (r.fm) for (const v of npcs?.fahrzeuge() || []) PH.explosionSchaden(v, ort, PH.sprengReichweite(r.plan.parts[i]));
+          }
         }
       }
     }
+    // schüsse des anderen spielers nachbauen: jeder client simuliert sie, das opfer wertet den treffer
+    if (r.kin && r.fm && r.shL?.length) {
+      const n = r.shL[0], l = r.shL.slice(1);
+      const anzahl = Math.floor(l.length / 7);
+      const neuAnz = r.shN === undefined ? 0 : Math.max(0, Math.min(n - r.shN, anzahl));
+      for (let j = anzahl - neuAnz; j < anzahl; j++) {
+        PH.feuere(r.kin, l.slice(j * 7, j * 7 + 3), l.slice(j * 7 + 3, j * 7 + 6), l[j * 7 + 6] % 1000, Math.min(3, Math.floor(l[j * 7 + 6] / 1000)));
+      }
+      r.shN = n;
+    }
+    // zerstörte teile des anderen spielers anzeigen
+    if (r.kin && r.zsL) for (const i of r.zsL) { r.kin.zerstoert.add(i); markiereZerstoert(r.grafik, i); }
     const zeit = jetzt - 100;
     let von = r.puffer[0], bis = r.puffer[0];
     for (const s of r.puffer) {
@@ -3081,6 +3914,12 @@ function schleife(zeit) {
   const dt = letzteZeit ? Math.min((zeit - letzteZeit) / 1000, 0.05) : 0;
   letzteZeit = zeit;
 
+  // der karteneditor hat eigene szene und kamera, das spiel pausiert solange
+  if (kartenEditor?.aktiv()) {
+    kartenEditor.frame(dt);
+    return;
+  }
+
   bewegeAndere(zeit, dt);
 
   akku += dt;
@@ -3094,11 +3933,28 @@ function schleife(zeit) {
   }
   while (akku >= PH.PHYSIK_TAKT && schritte < 4) {
     if (meinFahrzeug) PH.schritt(world, meinFahrzeug, ein, PH.PHYSIK_TAKT);
+    if (npcs?.aktiv) npcs.schritt(PH.PHYSIK_TAKT);
+    PH.bewegeGeschosse(world, PH.PHYSIK_TAKT, modus === "fahr" ? [meinFahrzeug, ...(npcs?.fahrzeuge() || [])] : null);
     world.step();
     akku -= PH.PHYSIK_TAKT;
     schritte++;
   }
   pflegeTrennungen(meinFahrzeug, meineGrafik);
+  if (npcs) { npcs.nachSchritt(dt); zeigeNpcs(); }
+  zeigeGeschosse(dt);
+  if (meinFahrzeug && meineGrafik) {
+    // explodierte tanks/verschlüsse: einmal knall, dann zerstörte teile dunkel färben
+    for (const [i, st] of meinFahrzeug.sprengung) {
+      if (st.knall) continue;
+      st.knall = true;
+      const ort = meinFahrzeug.sprengPos.get(i);
+      if (!ort) continue;
+      // die sprengladung hat ihre eigene grafik, sie bekommt nur den ton
+      if (plan.parts[i]?.t === "explosive") TON.explosion(plan.parts[i].k.reichweite ?? 3, camera.position.distanceTo(tmpV.set(ort[0], ort[1], ort[2])));
+      else knall(ort, 2.5);
+    }
+    for (const i of meinFahrzeug.zerstoert) markiereZerstoert(meineGrafik, i);
+  }
   if (schritte && modus === "fahr") {
     plan.parts.forEach((p, i) => {
       if (p.t === "kamera" && angetippt.has(p.k.taste)) aktiveKamera = aktiveKamera === i ? null : i;
@@ -3136,7 +3992,14 @@ function schleife(zeit) {
     const tankText = ts.aktiv ? ` · ${ts.kap <= 0 ? tr("Kein Tank verbunden") : ts.menge <= 0.01 ? tr("Tank leer") : `${tr("Tank")} ${Math.round((ts.menge / ts.kap) * 100)}%`}` : "";
     const tb = document.getElementById("tankBalken");
     if (tb) tb.style.width = `${ts.kap ? (ts.menge / ts.kap) * 100 : 0}%`;
-    $("#tacho").textContent = `${kmh.toFixed(0)} km/h · ${Math.round(hoehe)} m${tankText}${PH.gravFaktor(hoehe) < 0.02 ? " · " + tr("schwerelos") : ""}${meinFahrzeug.motorAn ? "" : " · " + tr("Motor aus")}`;
+    // fight: übrige patronen je kaliber
+    const muni = meinFahrzeug.munition.size
+      ? " · " + [...PH.munitionStand(meinFahrzeug)].map(([name, n]) => `${name}: ${n}`).join(", ")
+      : "";
+    // masse des fahrzeugs (ohne abgesprengte teile) und gesamtleistung der motoren
+    const ps = plan.parts.some(p => p.t === "motor") ? ` · ${PH.motorPS(meinFahrzeug)} PS` : "";
+    const masseText = ` · ${Math.round(PH.fahrzeugMasse(meinFahrzeug))} kg`;
+    $("#tacho").textContent = `${kmh.toFixed(0)} km/h · ${Math.round(hoehe)} m${masseText}${ps}${tankText}${muni}${PH.gravFaktor(hoehe) < 0.02 ? " · " + tr("schwerelos") : ""}${meinFahrzeug.motorAn ? "" : " · " + tr("Motor aus")}`;
     if (sb && sb.rb.translation().y < -30) neuStarten();
 
     const balken = document.getElementById("treibstoffBalken");
@@ -3193,14 +4056,28 @@ function schleife(zeit) {
   }
 
   const fokus = modus === "fahr" ? fahrKamera.blick : bauKamera.ziel;
-  sonne.target.position.set(fokus.x, 0, fokus.z);
-  sonne.position.set(fokus.x - 18, 34, fokus.z + 14);
+  // die sonne folgt auch der höhe, sonst liegt hügeliges gelände (fight-karten) ausserhalb des schattenbereichs
+  const fokusY = Number.isFinite(fokus.y) ? fokus.y : 0;
+  sonne.target.position.set(fokus.x, fokusY, fokus.z);
+  sonne.position.set(fokus.x - 18, fokusY + 34, fokus.z + 14);
 
   aktualisiereBlasen();
   sendePose();
   aktualisiereLichter();
   aktualisiereHimmel(zeit);
+  // kamerarütteln gilt nur für dieses bild, die kamera selbst bleibt ruhig
+  const kameraRuhig = camera.position.clone();
+  if (kameraRuck > 0.002) {
+    camera.position.x += zuf(kameraRuck * 2);
+    camera.position.y += zuf(kameraRuck * 2);
+    camera.position.z += zuf(kameraRuck * 2);
+    kameraRuck *= Math.exp(-dt * 9);
+  } else {
+    kameraRuck = 0;
+  }
+  aktualisiereZiel();
   renderer.render(scene, camera);
+  camera.position.copy(kameraRuhig);
 }
 
 function kameraFahr(dt) {
@@ -3286,6 +4163,12 @@ startRaeume({ httpBasis: serverBasis(), aktuell: () => raumId, wechseln: wechsle
   if (warnung) meldung(warnung, 12000);
 }
 startModelle();
+startKarten({
+  waehle: (dok, id, name) => { if (waehleEigene(dok, id, name)) { setzeSpielModus("fight"); return true; } return false; },
+  bearbeite: (dok, herkunft) => oeffneKartenEditor(dok, herkunft),
+  aktuelleKarte: () => ({ eigeneId, dok: alleKarten()[fightKarte]?.dokument?.() || null })
+});
+ladeOffizielleKarten();
 requestAnimationFrame(schleife);
 
 if (/^https?:$/.test(location.protocol) && !["localhost", "127.0.0.1"].includes(location.hostname)) {

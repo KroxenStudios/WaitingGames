@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { DEKO, baueDeko } from "./deko.js";
 
 export async function ladeWeltDaten(url) {
   try {
@@ -79,14 +80,88 @@ function wegTextur() {
   return t;
 }
 
-const HAUS_FARBEN = ["#d8cfc0", "#c9b79c", "#b8a58a", "#9fa8b3", "#c97b63", "#e0dacd", "#e5484d"];
+export // gute geländetexturen (pc): vier prozedurale kacheln, per vertex-gewicht gemischt. handhelds behalten das einfache material.
+const handheld = () => typeof document !== "undefined" && document.body.classList.contains("touch");
+let detailTexturen = null;
+function detailKachel(art) {
+  const s = 256, c = document.createElement("canvas");
+  c.width = c.height = s;
+  const ctx = c.getContext("2d"), bild = ctx.createImageData(s, s);
+  let seed = 17 + art * 101;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  // kachelbares wertrauschen auf gittern der kantenlängen 4..64
+  const gitter = n => Array.from({ length: n * n }, rnd);
+  const g = [4, 8, 16, 32, 64].map(gitter);
+  const rausch = (x, y) => {
+    let v = 0, a = 0.5, n = 0;
+    g.forEach((gi, o) => {
+      const m = 4 << o, fx = (x / s) * m, fy = (y / s) * m, ix = Math.floor(fx), iy = Math.floor(fy);
+      const tx = fx - ix, ty = fy - iy, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+      const h = (i, j) => gi[((j % m) * m) + (i % m)];
+      const w = h(ix, iy) * (1 - sx) * (1 - sy) + h(ix + 1, iy) * sx * (1 - sy) + h(ix, iy + 1) * (1 - sx) * sy + h(ix + 1, iy + 1) * sx * sy;
+      v += w * a; n += a; a *= 0.6;
+    });
+    return v / n;
+  };
+  for (let y = 0; y < s; y++) {
+    for (let x = 0; x < s; x++) {
+      const r = rausch(x, y);
+      let l;
+      if (art === 0) l = 0.55 + (r - 0.5) * 0.9 + (rausch(x * 4 % s, y) - 0.5) * 0.25;          // gras: längliche halme
+      else if (art === 1) l = 0.6 + (r - 0.5) * 0.7 + (rnd() - 0.5) * 0.25;                       // erde: körnig
+      else if (art === 2) l = 0.5 + (Math.abs(r - 0.5) < 0.05 ? -0.3 : 0) + (r - 0.5) * 0.8;      // fels: risse
+      else l = 0.82 + (r - 0.5) * 0.35 + (rnd() - 0.5) * 0.06;                                    // schnee/sand: weich
+      const v = Math.max(0, Math.min(255, l * 255));
+      const i = (y * s + x) * 4;
+      bild.data[i] = bild.data[i + 1] = bild.data[i + 2] = v;
+      bild.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(bild, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
+function geländeMaterial() {
+  detailTexturen ||= [0, 1, 2, 3].map(detailKachel);
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+  mat.onBeforeCompile = sh => {
+    detailTexturen.forEach((t, i) => { sh.uniforms["tex" + i] = { value: t }; });
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", `#include <common>
+attribute vec4 splat;
+varying vec4 vSplat;
+varying vec2 vTW;`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>
+vSplat = splat; vTW = position.xz;`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", `#include <common>
+uniform sampler2D tex0, tex1, tex2, tex3;
+varying vec4 vSplat;
+varying vec2 vTW;`)
+      .replace("#include <color_fragment>", `#include <color_fragment>
+        vec2 u1 = vTW / 7.0, u2 = vTW / 41.0 + 0.37;
+        vec4 w = vSplat / max(0.001, dot(vSplat, vec4(1.0)));
+        vec3 nah = texture2D(tex0, u1).rgb * w.x + texture2D(tex1, u1).rgb * w.y + texture2D(tex2, u1 * 0.6).rgb * w.z + texture2D(tex3, u1).rgb * w.w;
+        vec3 fern = texture2D(tex0, u2).rgb * w.x + texture2D(tex1, u2).rgb * w.y + texture2D(tex2, u2).rgb * w.z + texture2D(tex3, u2).rgb * w.w;
+        diffuseColor.rgb *= nah * fern * 2.6;`);
+  };
+  return mat;
+}
+
+export const HAUS_FARBEN = ["#d8cfc0", "#c9b79c", "#b8a58a", "#9fa8b3", "#c97b63", "#e0dacd", "#e5484d"];
 
 export function baueGelaende({ d, RAPIER, world, scene, box }) {
   const n = d.n, s = d.schritt;
 
+  const gut = d.gut ?? !handheld();
+  const splat = gut ? new Float32Array(n * n * 4) : null;
   const pos = new Float32Array(n * n * 3), farben = new Float32Array(n * n * 3), uv = new Float32Array(n * n * 2);
   const f = new THREE.Color();
-  const gras = new THREE.Color("#5f9f50"), wald = new THREE.Color("#3f7d44"), fels = new THREE.Color("#8d8a84"), schnee = new THREE.Color("#eef2f7"), trocken = new THREE.Color("#a6a86a");
+  // karten (fight) können eine eigene farbpalette mitbringen
+  const pal = d.palette || {};
+  const gras = new THREE.Color(pal.gras || "#5f9f50"), wald = new THREE.Color(pal.wald || "#3f7d44"), fels = new THREE.Color(pal.fels || "#8d8a84"), schnee = new THREE.Color(pal.schnee || "#eef2f7"), trocken = new THREE.Color(pal.trocken || "#a6a86a");
   for (let ix = 0; ix < n; ix++) {
     for (let iz = 0; iz < n; iz++) {
       const k = ix * n + iz;
@@ -101,6 +176,14 @@ export function baueGelaende({ d, RAPIER, world, scene, box }) {
       f.lerp(fels, Math.min(1, Math.max(0, (neigung - 0.28) / 0.25)));
       f.lerp(fels, Math.min(1, Math.max(0, (y - 300) / 200)) * 0.7);
       f.lerp(schnee, Math.min(1, Math.max(0, (y - 520) / 160)) * (1 - Math.min(1, Math.max(0, (neigung - 0.7) / 0.6))));
+      if (splat) {
+        const fl = Math.min(1, Math.max(0, (neigung - 0.28) / 0.25)), hoch = Math.min(1, Math.max(0, (y - 300) / 200)), sch = Math.min(1, Math.max(0, (y - 520) / 160));
+        const fels_ = Math.max(fl, hoch * 0.7), trock = 0.18 + 0.12 * wechsel;
+        splat[k * 4 + 2] = fels_;
+        splat[k * 4 + 3] = sch * (1 - fels_);
+        splat[k * 4 + 1] = (1 - fels_) * trock * 1.6;
+        splat[k * 4] = Math.max(0.02, (1 - fels_) * (1 - trock * 1.6));
+      }
       farben[k * 3] = f.r; farben[k * 3 + 1] = f.g; farben[k * 3 + 2] = f.b;
     }
   }
@@ -117,17 +200,21 @@ export function baueGelaende({ d, RAPIER, world, scene, box }) {
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   geo.setAttribute("color", new THREE.BufferAttribute(farben, 3));
   geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  if (splat) geo.setAttribute("splat", new THREE.BufferAttribute(splat, 4));
   geo.setIndex(new THREE.BufferAttribute(index, 1));
   geo.computeVertexNormals();
   geo.computeBoundingSphere();
-  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, map: rauschTextur(), roughness: 1 }));
+  const mesh = new THREE.Mesh(geo, gut ? geländeMaterial() : new THREE.MeshStandardMaterial({ vertexColors: true, map: rauschTextur(), roughness: 1 }));
   mesh.receiveShadow = true;
   scene.add(mesh);
 
-  world.createCollider(
-    RAPIER.ColliderDesc.heightfield(n - 1, n - 1, d.h, { x: d.groesse, y: 1, z: d.groesse })
-      .setTranslation(d.mitte[0], 0, d.mitte[1]).setFriction(0.95)
-  );
+  // der karteneditor baut nur die anzeige (world = null)
+  if (world) {
+    world.createCollider(
+      RAPIER.ColliderDesc.heightfield(n - 1, n - 1, d.h, { x: d.groesse, y: 1, z: d.groesse })
+        .setTranslation(d.mitte[0], 0, d.mitte[1]).setFriction(0.95)
+    );
+  }
 
   const wt = wegTextur();
   const wegMat = new THREE.MeshStandardMaterial({ map: wt, roughness: 0.92, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
@@ -206,8 +293,27 @@ export function baueGelaende({ d, RAPIER, world, scene, box }) {
       q.setFromEuler(e);
       m4.compose(new THREE.Vector3(x, hoeheBei(d, x, z) + sc * 0.25, z), q, new THREE.Vector3(sc, sc * 0.65, sc * 0.9));
       steine.setMatrixAt(k, m4);
+      // auf fight-karten sind felsen echte deckung
+      if (d.felsenKollision && world) {
+        world.createCollider(RAPIER.ColliderDesc.ball(sc * 0.7).setTranslation(x, hoeheBei(d, x, z) + sc * 0.25, z).setFriction(0.9));
+      }
     }
     steine.frustumCulled = false;
     scene.add(steine);
+  }
+  // dekoobjekte (fight-karten): modell aufs gelände stellen, feste arten bekommen quader-kollider
+  for (const [x, z, typ, sc, rot] of d.deko || []) {
+    const y0 = hoeheBei(d, x, z);
+    const g = baueDeko(typ, sc);
+    g.position.set(x, y0 - 0.05, z);
+    g.rotation.y = -rot;
+    scene.add(g);
+    const fest = DEKO[typ]?.solide;
+    if (!fest || !world) continue;
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -rot);
+    for (const [mx, my, mz, hx, hy, hz] of fest) {
+      const v = new THREE.Vector3(mx * sc, my * sc, mz * sc).applyQuaternion(q);
+      world.createCollider(RAPIER.ColliderDesc.cuboid(hx * sc, hy * sc, hz * sc).setTranslation(x + v.x, y0 + v.y, z + v.z).setRotation(q).setFriction(0.8));
+    }
   }
 }

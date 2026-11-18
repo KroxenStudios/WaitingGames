@@ -61,6 +61,8 @@ export class Partikel {
     this.points.renderOrder = additiv ? 6 : 5;
     scene.add(this.points);
     this.tmp = new THREE.Color();
+    // geländehöhe an (x, z): partikel sinken nicht darunter (auf hügeligen karten liegt der boden nicht bei 0)
+    this.boden = () => 0;
   }
 
   setzeSkala(hoehePixel, fov) {
@@ -104,8 +106,8 @@ export class Partikel {
       this.vel[i * 3 + 1] = this.vel[i * 3 + 1] * drag + this.auftrieb[i] * dt;
       this.vel[i * 3 + 2] *= drag;
       this.pos[i * 3] += this.vel[i * 3] * dt;
-      this.pos[i * 3 + 1] = Math.max(0.05, this.pos[i * 3 + 1] + this.vel[i * 3 + 1] * dt);
       this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
+      this.pos[i * 3 + 1] = Math.max(this.boden(this.pos[i * 3], this.pos[i * 3 + 2]) + 0.05, this.pos[i * 3 + 1] + this.vel[i * 3 + 1] * dt);
       this.size[i] = this.s0[i] + (this.s1[i] - this.s0[i]) * k;
       this.alpha[i] = this.a0[i] * (1 - k) * Math.min(1, this.life[i] * 12);
     }

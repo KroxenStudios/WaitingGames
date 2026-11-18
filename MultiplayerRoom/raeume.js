@@ -3,7 +3,7 @@ import { el } from "./profil.js";
 const L = (de, en) => (window.WG ? WG.L(de, en) : de);
 
 export const OEFFENTLICH = ["r1", "r2", "r3", "r4", "r5"];
-export const raumTitel = id => (OEFFENTLICH.includes(id) ? `${L("Raum", "Room")} ${id.slice(1)}` : `🔒 ${id.slice(2)}`);
+export const raumTitel = id => (OEFFENTLICH.includes(id) ? `${L("Raum", "Room")} ${id.slice(1)}` : `# ${id.slice(2)}`);
 
 export function raumName(v) {
   const r = String(v || "").trim().toLowerCase();
@@ -23,7 +23,7 @@ export function startRaeume({ httpBasis, aktuell, wechseln }) {
   dialog.addEventListener("click", e => { if (e.target === dialog) dialog.close(); });
   document.body.append(dialog);
 
-  const beschriftung = () => { knopf.textContent = `🚪 ${raumTitel(aktuell())}`; };
+  const beschriftung = () => { knopf.textContent = raumTitel(aktuell()); };
   beschriftung();
 
   async function ladeBelegung() {
@@ -56,7 +56,7 @@ export function startRaeume({ httpBasis, aktuell, wechseln }) {
       const hier = id === aktuell();
       liste.append(el("li", { class: hier ? "hier" : "" },
         el("span", { class: "raumName", textContent: raumTitel(id) }),
-        el("span", { class: "raumZahl" + (voll ? " voll" : ""), textContent: info ? `👥 ${info.count}/${info.max}` : "…" }),
+        el("span", { class: "raumZahl" + (voll ? " voll" : ""), textContent: info ? `${info.count}/${info.max}` : "…" }),
         el("button", { type: "button", class: hier ? "" : "primaer", disabled: hier || voll, textContent: hier ? L("Hier", "Here") : voll ? L("Voll", "Full") : L("Beitreten", "Join"), onclick: () => wahl(id) })));
     }
 
@@ -71,8 +71,8 @@ export function startRaeume({ httpBasis, aktuell, wechseln }) {
 
     const link = () => `${location.origin}${location.pathname}?raum=${encodeURIComponent(aktuell())}`;
     const einladung = () => {
-      const name = raumTitel(aktuell()).replace(/^🔒 /, "");
-      return L(`🚗 Komm in meinen Bastelkarre-Raum „${name}“ und fahr mit! ${link()}`, `🚗 Join my Bastelkarre room "${name}" and drive with me! ${link()}`);
+      const name = raumTitel(aktuell()).replace(/^# /, "");
+      return L(`Komm in meinen Bastelkarre-Raum „${name}“ und fahr mit! ${link()}`, `Join my Bastelkarre room "${name}" and drive with me! ${link()}`);
     };
     const vorschau = el("p", { class: "meldeKontext", textContent: einladung() });
     const kopieren = el("button", { type: "button", class: "primaer", textContent: L("Einladung kopieren", "Copy invitation"), onclick: async () => {
